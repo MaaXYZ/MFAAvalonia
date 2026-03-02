@@ -1132,6 +1132,10 @@ public partial class MaaInterface
 
         [ObservableProperty] [JsonIgnore] private string _displayName = string.Empty;
 
+        [ObservableProperty] [JsonIgnore] private bool _hasDescription;
+
+        [ObservableProperty] [JsonIgnore] private string _displayDescription = string.Empty;
+
         [ObservableProperty] [JsonIgnore] private string? _resolvedIcon;
 
         [ObservableProperty] [JsonIgnore] private bool _hasIcon;
@@ -1147,6 +1151,17 @@ public partial class MaaInterface
         private void UpdateDisplayName()
         {
             DisplayName = LanguageHelper.GetLocalizedDisplayName(Label, Name ?? string.Empty);
+            try
+            {
+                DisplayDescription = LanguageHelper.GetLocalizedString(Description.ResolveContentAsync().Result);
+                HasDescription = !string.IsNullOrWhiteSpace(DisplayDescription);
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Warning($"Failed to resolve preset description for '{Name}': {ex.Message}");
+                DisplayDescription = string.Empty;
+                HasDescription = false;
+            }
             if (!string.IsNullOrWhiteSpace(Icon))
             {
                 var iconValue = LanguageHelper.GetLocalizedString(Icon);

@@ -8,6 +8,7 @@
              xmlns:fluent="clr-namespace:FluentIcons.Avalonia.Fluent;assembly=FluentIcons.Avalonia.Fluent"
              xmlns:helper="clr-namespace:MFAAvalonia.Helper"
              xmlns:markup="https://codewf.com"
+             xmlns:userControls="clr-namespace:MFAAvalonia.Views.UserControls"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="MFAAvalonia.Views.UserControls.InstanceTabBar"
              x:DataType="other:InstanceTabBarViewModel">
@@ -81,6 +82,7 @@
             <Setter Property="ToolTip.Tip" Value="{markup:I18n {x:Static helper:LangKeys.InstanceAddTooltip}}" />
         </Style>
         <!-- 预设菜单项按钮样式（与 DropdownItem 保持一致） -->
+        <!-- 预设菜单项按钮样式 -->
         <Style Selector="Button.PresetMenuItem">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -89,12 +91,19 @@
             <Setter Property="Margin" Value="3,0,3,3" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         </Style>
-        <Style Selector="Button.PresetMenuItem:pointerover /template/ ContentPresenter">
+
+        <!-- 强制模板里的内容承载器拉伸 -->
+        <Style Selector="Button.PresetMenuItem /template/ ContentPresenter">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+
+        <!-- 悬停背景画在按钮本体，不画在 ContentPresenter -->
+        <Style Selector="Button.PresetMenuItem:pointerover">
             <Setter Property="Background" Value="{DynamicResource SukiLightBorderBrush}" />
-            <Setter Property="CornerRadius" Value="6" />
         </Style>
+
     </UserControl.Styles>
 
     <Grid RowDefinitions="Auto,*">
@@ -167,28 +176,44 @@
                         <suki:GlassCard Margin="-1"
                                         CornerRadius="{DynamicResource SmallCornerRadius}"
                                         IsAnimated="False" />
-                        <StackPanel Margin="0,3,0,3">
+                        <StackPanel Margin="0,3,0,3" HorizontalAlignment="Stretch">
                             <!-- 跟随最右侧配置 -->
                             <Button Classes="PresetMenuItem"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
                                     Command="{Binding AddInstanceWithPresetCommand}"
                                     CommandParameter="{x:Null}">
-                                <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.InstanceAddFollowLast}}"
+                                <TextBlock HorizontalAlignment="Stretch"
+                                           Text="{markup:I18n {x:Static helper:LangKeys.InstanceAddFollowLast}}"
                                            Foreground="{DynamicResource SukiText}"
                                            Margin="2,5,2,5" />
                             </Button>
-                            <Separator Margin="3,3" />
+                            <Separator Margin="6,3" />
                             <!-- 预设列表 -->
                             <ItemsControl ItemsSource="{Binding InstancePresets}"
                                           HorizontalAlignment="Stretch">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Button Classes="PresetMenuItem"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Stretch"
                                                 Command="{Binding $parent[UserControl].((other:InstanceTabBarViewModel)DataContext).AddInstanceWithPresetCommand}"
                                                 CommandParameter="{Binding}">
-                                            <TextBlock Text="{Binding DisplayName}"
-                                                       Foreground="{DynamicResource SukiText}"
-                                                       Margin="2,5,2,5"
-                                                       TextTrimming="CharacterEllipsis" />
+
+                                            <Grid ColumnDefinitions="Auto,*,Auto" Margin="2,5,2,5"
+                                                  HorizontalAlignment="Stretch">
+                                                <userControls:DisplayIcon IconSource="{Binding ResolvedIcon}"
+                                                                          IconSize="20" IsVisible="{Binding HasIcon}"
+                                                                          Margin="0,0,6,0" />
+                                                <TextBlock Grid.Column="1" Margin="0,0,6,0"
+                                                           Text="{Binding DisplayName}"
+                                                           Foreground="{DynamicResource SukiText}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <userControls:TooltipBlock Grid.Column="2"
+                                                                           IsVisible="{Binding HasDescription}"
+                                                                           TooltipText="{Binding DisplayDescription }" />
+                                            </Grid>
+
                                         </Button>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
