@@ -37,7 +37,7 @@ public partial class RootViewModel : ViewModelBase
             // var minor = version.Minor >= 0 ? version.Minor : 0;
             // var patch = version.Build >= 0 ? version.Build : 0;
             // return $"v{SemVersion.Parse($"{major}.{minor}.{patch}")}";
-            return "v2.9.1-beta.1"; // Hardcoded version for now, replace with dynamic versioning later
+            return "v2.9.1-beta.2"; // Hardcoded version for now, replace with dynamic versioning later
         }
     }
 
