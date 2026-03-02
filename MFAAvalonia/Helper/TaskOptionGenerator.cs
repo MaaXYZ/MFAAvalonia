@@ -239,11 +239,11 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         // 初始化 SelectedCases（任务 9）
         option.SelectedCases ??= new List<string>(interfaceOption.DefaultCases ?? new List<string>());
 
-        // WrapPanel of ToggleButtons
+        // WrapPanel of ToggleButtons（等宽按钮，自然换行）
         var wrapPanel = new WrapPanel
         {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 2, 0, 2)
+            Margin = new Thickness(0, 2, 0, 2),
+            HorizontalAlignment = HorizontalAlignment.Left
         };
 
         // Sub-options container（显示所有被勾选 case 的子选项）
@@ -287,41 +287,43 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
                 var toggleBtn = new ToggleButton
                 {
                     IsChecked = isChecked,
-                    Margin = new Thickness(2),
-                    Padding = new Thickness(8, 4, 8, 4),
+                    Margin = new Thickness(2,2,6,6),
+                    Padding = new Thickness(6, 4, 6, 4),
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Center,
                 };
 
-                // 按钮内容：图标 + 文字 [+ TooltipBlock（有描述时）]
-                var btnContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+                // 按钮内容：图标 + 滚动文字（用 Grid 让 MarqueeTextBlock 自适应剩余宽度）
+                var btnContent = new Grid
+                {
+                    ColumnDefinitions =
+                    {
+                        new ColumnDefinition { Width = GridLength.Auto },
+                        new ColumnDefinition { Width = GridLength.Star },
+                        new ColumnDefinition { Width = GridLength.Auto },
+                    }
+                };
 
                 var iconDisplay = new DisplayIcon
                 {
                     IconSize = 16,
+                    Margin = new Thickness(0, 0, 4, 0),
                     VerticalAlignment = VerticalAlignment.Center
                 };
                 iconDisplay.Bind(DisplayIcon.IconSourceProperty, new Binding(nameof(MaaInterface.MaaInterfaceOptionCase.ResolvedIcon)) { Source = caseOption });
                 iconDisplay.Bind(Visual.IsVisibleProperty, new Binding(nameof(MaaInterface.MaaInterfaceOptionCase.HasIcon)) { Source = caseOption });
+                Grid.SetColumn(iconDisplay, 0);
 
-                var textBlock = new TextBlock
+                var marqueeText = new MarqueeTextBlock
                 {
-                    VerticalAlignment = VerticalAlignment.Center,
-                    TextTrimming = TextTrimming.CharacterEllipsis
+                    VerticalContentAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
                 };
-                textBlock.Bind(TextBlock.TextProperty, new ResourceBindingWithFallback(caseOption.DisplayName, caseOption.Name));
+                marqueeText.Bind(MarqueeTextBlock.TextProperty, new ResourceBindingWithFallback(caseOption.DisplayName, caseOption.Name));
+                Grid.SetColumn(marqueeText, 1);
 
                 btnContent.Children.Add(iconDisplay);
-                btnContent.Children.Add(textBlock);
-
-                // 有描述时在文字旁追加 TooltipBlock（与 ComboBox 项、LabelPanel 保持一致）
-                if (caseOption.HasDescription)
-                {
-                    var tooltipBlock = new TooltipBlock();
-                    tooltipBlock.Bind(TooltipBlock.TooltipTextProperty,
-                        new Binding(nameof(MaaInterface.MaaInterfaceOptionCase.DisplayDescription)) { Source = caseOption });
-                    tooltipBlock.Margin = new Thickness(4, 0, 0, 0);
-                    btnContent.Children.Add(tooltipBlock);
-                }
-
+                btnContent.Children.Add(marqueeText);
                 toggleBtn.Content = btnContent;
 
                 BindIdleEnabled(toggleBtn);
@@ -342,7 +344,51 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
                     saveConfigurationAction();
                 };
 
+                // TooltipBlock 放在 ToggleButton 内部（btnContent 末尾），
+                // TooltipBlock 会自动检测父级 Button 并通过 PointerMoved 坐标追踪来显示 Flyout，
+                // 绕过 SukiUI 按钮模板 ContentPresenter 的 IsHitTestVisible="False" 限制。
+                if (caseOption.HasDescription)
+                {
+                    var tooltipBlock = new TooltipBlock
+                    {
+                        Margin = new Thickness(2, 0, 0, 0),
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    tooltipBlock.Bind(TooltipBlock.TooltipTextProperty,
+                        new Binding(nameof(MaaInterface.MaaInterfaceOptionCase.DisplayDescription)) { Source = caseOption });
+                    Grid.SetColumn(tooltipBlock, 2);
+                    btnContent.Children.Add(tooltipBlock);
+                }
+
                 wrapPanel.Children.Add(toggleBtn);
+            }
+        }
+
+        // 首次布局后测量所有按钮自然宽度，取最大值统一设置 MinWidth（等宽效果）
+        if (wrapPanel.Children.Count > 0)
+        {
+            wrapPanel.LayoutUpdated += EqualizeOnce;
+            void EqualizeOnce(object? s, EventArgs ev)
+            {
+                wrapPanel.LayoutUpdated -= EqualizeOnce;
+                double maxWidth = 0;
+                foreach (var child in wrapPanel.Children)
+                {
+                    if (child is ToggleButton btn)
+                    {
+                        btn.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                        if (btn.DesiredSize.Width > maxWidth)
+                            maxWidth = btn.DesiredSize.Width;
+                    }
+                }
+                if (maxWidth > 0)
+                {
+                    foreach (var child in wrapPanel.Children)
+                    {
+                        if (child is ToggleButton btn)
+                            btn.MinWidth = maxWidth;
+                    }
+                }
             }
         }
 
