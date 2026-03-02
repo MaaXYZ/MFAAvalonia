@@ -258,6 +258,24 @@ public partial class TaskQueueView : UserControl
         ToastHelper.Info(LangKeys.Tip.ToLocalization(), LangKeys.TaskAddedToast.ToLocalizationFormatted(false, output.Name));
     }
 
+    private void CopyTask(object? sender, RoutedEventArgs e)
+    {
+        var menuItem = sender as MenuItem;
+        if (menuItem?.DataContext is DragItemViewModel taskItemViewModel)
+        {
+            CopyTaskToClipboard(taskItemViewModel);
+        }
+    }
+
+    private void PasteTask(object? sender, RoutedEventArgs e)
+    {
+        var menuItem = sender as MenuItem;
+        if (menuItem?.DataContext is DragItemViewModel taskItemViewModel)
+        {
+            _ = PasteTaskFromClipboardAsync(TaskListBox, taskItemViewModel);
+        }
+    }
+
     private void Delete(object? sender, RoutedEventArgs e)
     {
         var menuItem = sender as MenuItem;

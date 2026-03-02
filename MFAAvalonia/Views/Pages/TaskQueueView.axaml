@@ -39,9 +39,18 @@
             <MenuItem IsEnabled="{Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
                       Click="RunCheckedFromCurrent"
                       Header="{markup:I18n {x:Static helper:LangKeys.RunCheckedFromCurrent}}" />
+            <Separator />
+            <MenuItem Click="CopyTask"
+                      InputGesture="Ctrl+C"
+                      Header="{markup:I18n {x:Static helper:LangKeys.Copy}}" />
+            <MenuItem Click="PasteTask"
+                      InputGesture="Ctrl+V"
+                      Header="{markup:I18n {x:Static helper:LangKeys.Paste}}" />
+            <Separator />
             <MenuItem Click="EditTaskRemark"
                       Header="{markup:I18n {x:Static helper:LangKeys.TaskRemarkMenu}}" />
             <MenuItem Click="Delete"
+                      InputGesture="Delete"
                       Header="{markup:I18n {x:Static helper:LangKeys.Delete}}" />
         </ContextMenu>
     </UserControl.Resources>
