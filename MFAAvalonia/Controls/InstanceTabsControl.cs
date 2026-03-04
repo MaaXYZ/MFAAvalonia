@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
@@ -32,6 +33,9 @@ public class InstanceTabsControl : TabControl
     private int _overflowCount;
     private Button? _overflowButton;
     private TextBlock? _overflowText;
+    private Border? _clipBoundsSource;
+    private bool _suspendComplexTabClips;
+    private int _lastClipLayoutStamp = int.MinValue;
 
     public static readonly DirectProperty<InstanceTabsControl, int> OverflowCountProperty =
         AvaloniaProperty.RegisterDirect<InstanceTabsControl, int>(
@@ -137,6 +141,7 @@ public class InstanceTabsControl : TabControl
     /// </summary>
     public void SetExternalTabBarBackground(Border border)
     {
+        AttachClipBoundsSource(border);
         _tabBarBackground = border;
         InvalidateClip();
     }
@@ -145,21 +150,94 @@ public class InstanceTabsControl : TabControl
        base.OnApplyTemplate(e);
        if (_tabBarBackground == null)
            _tabBarBackground = e.NameScope.Find<Border>("PART_TabBarBackground");
+       if (_tabBarBackground != null)
+           AttachClipBoundsSource(_tabBarBackground);
        _overflowButton = e.NameScope.Find<Button>("PART_OverflowButton");
        _overflowText = e.NameScope.Find<TextBlock>("PART_OverflowText");
        if (_overflowButton != null)
            _overflowButton.Click += (_, _) => OverflowButtonClicked?.Invoke();
+       LayoutUpdated -= OnLayoutUpdated;
        LayoutUpdated += OnLayoutUpdated;
+       InvalidateClip();
    }
 
-    private void InvalidateClip() => _clipDirty = true;
+    private void InvalidateClip()
+    {
+        _clipDirty = true;
+        Dispatcher.UIThread.Post(ApplyClipIfDirty, DispatcherPriority.Render);
+    }
 
-    private void OnLayoutUpdated(object? sender, EventArgs e)
+    private void ApplyClipIfDirty()
     {
         if (!_clipDirty) return;
         _clipDirty = false;
         UpdateTabBarBackgroundClip();
         UpdateNonSelectedTabClips();
+    }
+
+    private void AttachClipBoundsSource(Border source)
+    {
+        if (ReferenceEquals(_clipBoundsSource, source))
+            return;
+
+        if (_clipBoundsSource != null)
+            _clipBoundsSource.PropertyChanged -= ClipBoundsSourceOnPropertyChanged;
+
+        _clipBoundsSource = source;
+        _clipBoundsSource.PropertyChanged += ClipBoundsSourceOnPropertyChanged;
+    }
+
+    private void ClipBoundsSourceOnPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == BoundsProperty)
+            InvalidateClip();
+    }
+
+    private void OnLayoutUpdated(object? sender, EventArgs e)
+    {
+        var stamp = ComputeClipLayoutStamp();
+        if (stamp != _lastClipLayoutStamp)
+        {
+            _lastClipLayoutStamp = stamp;
+            _clipDirty = true;
+        }
+
+        ApplyClipIfDirty();
+    }
+
+    private int ComputeClipLayoutStamp()
+    {
+        var h = new HashCode();
+        h.Add(Items.Count);
+        h.Add(SelectedIndex);
+        h.Add(_suspendComplexTabClips);
+
+        if (_tabBarBackground != null)
+        {
+            h.Add((int)Math.Round(_tabBarBackground.Bounds.X));
+            h.Add((int)Math.Round(_tabBarBackground.Bounds.Y));
+            h.Add((int)Math.Round(_tabBarBackground.Bounds.Width));
+            h.Add((int)Math.Round(_tabBarBackground.Bounds.Height));
+        }
+        else
+        {
+            h.Add(0);
+        }
+
+        foreach (var tab in DragTabItems(false))
+        {
+            h.Add(tab.IsVisible);
+            h.Add((int)Math.Round(tab.Bounds.X));
+            h.Add((int)Math.Round(tab.Bounds.Y));
+            h.Add((int)Math.Round(tab.Bounds.Width));
+            h.Add((int)Math.Round(tab.Bounds.Height));
+            h.Add((int)Math.Round(tab.X));
+            h.Add((int)Math.Round(tab.Y));
+            h.Add(tab.LogicalIndex);
+            h.Add(tab.IsSelected);
+        }
+
+        return h.ToHashCode();
     }
 
     /// <summary>
@@ -190,6 +268,10 @@ public class InstanceTabsControl : TabControl
             Dispatcher.UIThread.Post(UpdateAllTabsCanClose, DispatcherPriority.Loaded);
             InvalidateClip();
         }
+        else if (change.Property == BoundsProperty)
+        {
+            InvalidateClip();
+        }
         else if (change.Property == AdjacentHeaderItemOffsetProperty)
         {
             _tabsPanel.ItemOffset = AdjacentHeaderItemOffset;
@@ -215,6 +297,8 @@ public class InstanceTabsControl : TabControl
         _overflowButton.IsVisible = count > 0;
         if (_overflowText != null)
             _overflowText.Text = $"+{count}";
+        _tabsPanel.InvalidateMeasure();
+        InvalidateClip();
     }
 
     /// <summary>
@@ -324,7 +408,11 @@ public class InstanceTabsControl : TabControl
     /// </summary>
     private void UpdateNonSelectedTabClips()
     {
-        if (_tabBarBackground == null) return;
+        if (_suspendComplexTabClips || _tabBarBackground == null)
+        {
+            ClearAllTabClips();
+            return;
+        }
 
         DragTabItem? selectedTab = null;
         if (SelectedItem != null)
@@ -335,6 +423,18 @@ public class InstanceTabsControl : TabControl
         }
 
         var hoveredTab = _hoveredTab != null && _hoveredTab != selectedTab ? _hoveredTab : null;
+        if (hoveredTab != null && !hoveredTab.IsVisible)
+        {
+            hoveredTab = null;
+            _hoveredTab = null;
+        }
+
+        // 布局尚未稳定时不做复杂裁剪，避免出现错误几何。
+        if (selectedTab != null && (selectedTab.Bounds.Width <= 0 || selectedTab.Bounds.Height <= 0))
+        {
+            ClearAllTabClips();
+            return;
+        }
 
         foreach (var tab in DragTabItems())
         {
@@ -362,9 +462,7 @@ public class InstanceTabsControl : TabControl
             {
                 var selectedShape = CreateTabShapeGeometry(selectedTab, tab, tabH);
                 if (selectedShape != null)
-                {
                     clipGeo = new CombinedGeometry(GeometryCombineMode.Exclude, tabFullRect, selectedShape);
-                }
             }
 
             // 用 hover 标签的曲线形状裁剪（hover 标签自身不裁剪）
@@ -392,9 +490,17 @@ public class InstanceTabsControl : TabControl
         }
     }
 
+    private void ClearAllTabClips()
+    {
+        foreach (var tab in DragTabItems(false))
+            tab.Clip = null;
+    }
+
     private void ItemDragStarted(object? sender, DragTabDragStartedEventArgs e)
     {
         _draggedItem = e.TabItem;
+        _hoveredTab = null;
+        _suspendComplexTabClips = false;
         e.Handled = true;
 
         _draggedItem.IsSelected = true;
@@ -433,6 +539,9 @@ public class InstanceTabsControl : TabControl
 
     private void ItemDragCompleted(object? sender, DragTabDragCompletedEventArgs e)
     {
+        _hoveredTab = null;
+        _suspendComplexTabClips = true;
+        ClearAllTabClips();
         foreach (var item in DragTabItems(false))
         {
             item.IsDragging = false;
@@ -466,10 +575,18 @@ public class InstanceTabsControl : TabControl
         Dispatcher.UIThread.Post(() =>
         {
             MoveTabModelsIfNeeded();
+            _tabsPanel.InvalidateMeasure();
+            _tabsPanel.InvalidateArrange();
+            ClearAllTabClips();
             _draggedItem = null;
             _hasDragged = false;
             _pendingMoveIndex = -1;
             InvalidateClip();
+            Dispatcher.UIThread.Post(() =>
+            {
+                _suspendComplexTabClips = false;
+                InvalidateClip();
+            }, DispatcherPriority.Render);
         });
     }
 
@@ -485,10 +602,15 @@ public class InstanceTabsControl : TabControl
             int currentIndex = list.IndexOf(item);
             if (_pendingMoveIndex != currentIndex)
             {
-                list.Remove(item);
-                list.Insert(Math.Min(_pendingMoveIndex, list.Count), item);
+                int targetIndex = Math.Min(_pendingMoveIndex, list.Count - 1);
+                if (!TryMoveListItem(list, currentIndex, targetIndex))
+                {
+                    list.Remove(item);
+                    list.Insert(Math.Min(targetIndex, list.Count), item);
+                }
 
                 SelectedItem = item;
+                Dispatcher.UIThread.Post(() => SelectedItem = item, DispatcherPriority.Loaded);
 
                 int i = 0;
                 foreach (var dragTabItem in DragTabItems(false))
@@ -497,6 +619,24 @@ public class InstanceTabsControl : TabControl
                 TabOrderChanged?.Invoke();
             }
         }
+    }
+
+    private static bool TryMoveListItem(IList list, int oldIndex, int newIndex)
+    {
+        if (oldIndex == newIndex || oldIndex < 0 || newIndex < 0)
+            return true;
+
+        var moveMethod = list.GetType().GetMethod(
+            "Move",
+            BindingFlags.Instance | BindingFlags.Public,
+            binder: null,
+            types: [typeof(int), typeof(int)],
+            modifiers: null);
+
+        if (moveMethod == null) return false;
+
+        moveMethod.Invoke(list, [oldIndex, newIndex]);
+        return true;
     }
 
     /// <summary>
