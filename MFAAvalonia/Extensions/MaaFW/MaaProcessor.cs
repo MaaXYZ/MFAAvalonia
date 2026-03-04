@@ -654,6 +654,11 @@ public class MaaProcessor
             ViewModel?.SetConnected(false);
             DisposeScreenshotTasker();
         }
+        else if (maaTasker == null)
+        {
+            // 即使主 Tasker 已经为空，也要确保截图 Tasker 被清理。
+            DisposeScreenshotTasker();
+        }
         else if (maaTasker != null)
         {
             MaaTasker = maaTasker;
@@ -680,6 +685,7 @@ public class MaaProcessor
                 // Ensure screenshot tasker is recreated from this processor's latest connection context.
                 DisposeScreenshotTasker();
                 ResetScreencapFailureLogFlags();
+                await PrewarmScreenshotTaskerAsync(token);
             }
         }
         return MaaTasker;
@@ -694,8 +700,45 @@ public class MaaProcessor
             // Ensure screenshot tasker is recreated from this processor's latest connection context.
             DisposeScreenshotTasker();
             ResetScreencapFailureLogFlags();
+            await PrewarmScreenshotTaskerAsync(token);
         }
         return (MaaTasker, tuple.Item2, tuple.Item3);
+    }
+
+    private async Task PrewarmScreenshotTaskerAsync(CancellationToken token)
+    {
+        if (!UseSeparateScreenshotTasker || _isClosed || MaaTasker == null || _screenshotTasker != null)
+            return;
+
+        Task<MaaTasker?> initTask;
+        lock (_screenshotTaskerInitLock)
+        {
+            _screenshotTaskerInitTask ??= InitializeScreenshotTaskerAsync(token);
+            initTask = _screenshotTaskerInitTask;
+        }
+
+        MaaTasker? tasker = null;
+        try
+        {
+            tasker = await initTask;
+        }
+        catch (OperationCanceledException)
+        {
+            // Keep main tasker usable even if screenshot prewarm gets canceled.
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"Screenshot tasker prewarm failed: {ex.Message}");
+        }
+
+        lock (_screenshotTaskerInitLock)
+        {
+            if (_screenshotTasker == null)
+            {
+                _screenshotTasker = tasker;
+            }
+            _screenshotTaskerInitTask = null;
+        }
     }
 
     private bool UseSeparateScreenshotTasker =>

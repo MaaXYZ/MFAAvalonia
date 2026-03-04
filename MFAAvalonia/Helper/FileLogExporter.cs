@@ -7,6 +7,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace MFAAvalonia.Helper;
@@ -14,6 +15,7 @@ namespace MFAAvalonia.Helper;
 public static class FileLogExporter
 {
     public const int MAX_LINES = 42000;
+    private static readonly SemaphoreSlim ExportSemaphore = new(1, 1);
     // 定义需要处理的图片文件扩展名
     private static readonly string[] ImageExtensions =
     {
@@ -27,13 +29,21 @@ public static class FileLogExporter
     private static readonly string ExcludedFolder = "vision";
     public async static Task CompressRecentLogs(IStorageProvider? storageProvider)
     {
-        if (Instances.RootViewModel.IsRunning)
+        if (!await ExportSemaphore.WaitAsync(0))
         {
-            ToastHelper.Warn(
-                LangKeys.Warning.ToLocalization(),
-                LangKeys.StopTaskBeforeExportLog.ToLocalization());
+            ToastHelper.Info(LangKeys.ExportLog.ToLocalization(), LangKeys.ExportLogInProgress.ToLocalization());
             return;
         }
+
+        try
+        {
+            if (Instances.RootViewModel.IsRunning)
+            {
+                ToastHelper.Warn(
+                    LangKeys.Warning.ToLocalization(),
+                    LangKeys.StopTaskBeforeExportLog.ToLocalization());
+                return;
+            }
 
         // try
         // {
@@ -48,115 +58,114 @@ public static class FileLogExporter
         //     return;
         // }
 
-        if (storageProvider == null)
-        {
-            ToastHelper.Error("导出日志失败!");
-            LoggerHelper.Error("storageProvider is null!");
-            return;
-        }
-
-        try
-        {
-            // 获取用户选择的保存路径
-            var saveFile = await storageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            if (storageProvider == null)
             {
-                Title = LangKeys.ExportLog.ToLocalization(),
-                DefaultExtension = "zip",
-                SuggestedFileName = $"log_{DateTime.Now:yyyyMMdd_HHmmss}"
-            });
-
-            if (saveFile == null)
-                return; // 用户取消了操作
-
-            // 获取应用程序基目录
-            string baseDirectory = AppContext.BaseDirectory;
-
-            // 获取符合条件的日志文件和图片文件
-            var eligibleFiles = GetEligibleFiles(baseDirectory);
-
-            if (!eligibleFiles.Any())
-            {
-                LoggerHelper.Warning("未找到符合条件的日志文件或图片。");
+                ToastHelper.Error(LangKeys.ExportLog.ToLocalization(), LangKeys.ExportLogFailed.ToLocalization());
+                LoggerHelper.Error("storageProvider is null!");
                 return;
             }
 
-            // 创建临时目录用于压缩
-            var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-            Directory.CreateDirectory(tempDir);
-
             try
             {
-                // 处理每个文件（日志/图片）
-                foreach (var file in eligibleFiles)
+                // 获取用户选择的保存路径
+                var saveFile = await storageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
                 {
-                    var destDir = Path.Combine(tempDir, file.RelativePath ?? string.Empty);
-                    Directory.CreateDirectory(destDir);
-                    var destPath = Path.Combine(destDir, Path.GetFileName(file.FullName ?? string.Empty));
+                    Title = LangKeys.ExportLog.ToLocalization(),
+                    DefaultExtension = "zip",
+                    SuggestedFileName = $"log_{DateTime.Now:yyyyMMdd_HHmmss}"
+                });
 
-                    if (file.IsImage)
-                    {
-                        // 图片文件：直接复制，无行数限制
-                        File.Copy(file.FullName ?? string.Empty, destPath, overwrite: true);
-                    }
-                    else
-                    {
-                        // 日志文件：按行数限制处理
-                        // if (file.LineCount > MAX_LINES)
-                        // {
-                        //     ExtractLastLines(file.FullName, destPath, MAX_LINES);
-                        // }
-                        // else
-                        // {
-                            File.Copy(file.FullName ?? string.Empty, destPath);
-                        // }
-                    }
+                if (saveFile == null)
+                    return; // 用户取消了操作
+
+                // 获取应用程序基目录
+                string baseDirectory = AppContext.BaseDirectory;
+
+                // 获取符合条件的日志文件和图片文件
+                var eligibleFiles = await Task.Run(() => GetEligibleFiles(baseDirectory));
+
+                if (!eligibleFiles.Any())
+                {
+                    LoggerHelper.Warning("未找到符合条件的日志文件或图片。");
+                    ToastHelper.Warn(LangKeys.ExportLog.ToLocalization(), LangKeys.ExportLogNoEligibleFiles.ToLocalization());
+                    return;
                 }
 
-                await using (var stream = await saveFile.OpenWriteAsync())
-                using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
+                // 创建临时目录用于压缩
+                var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+                Directory.CreateDirectory(tempDir);
+
+                try
                 {
-                    // 跟踪已添加的压缩条目名称，处理重复
-                    var usedEntryNames = new HashSet<string>();
-
-                    foreach (var file in Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories))
+                    await Task.Run(() =>
                     {
-                        var originalFileName = Path.GetFileName(file);
-                        var entryName = originalFileName;
-                        int duplicateCounter = 1;
-
-                        // 处理重复文件名（如 a.png 和 a.log 或多个 a.png）
-                        while (usedEntryNames.Contains(entryName))
+                        // 处理每个文件（日志/图片）
+                        foreach (var file in eligibleFiles)
                         {
-                            var fileNameWithoutExt = Path.GetFileNameWithoutExtension(originalFileName);
-                            var ext = Path.GetExtension(originalFileName);
-                            entryName = $"{fileNameWithoutExt}_{duplicateCounter}{ext}";
-                            duplicateCounter++;
-                        }
+                            var destDir = Path.Combine(tempDir, file.RelativePath ?? string.Empty);
+                            Directory.CreateDirectory(destDir);
+                            var destPath = Path.Combine(destDir, Path.GetFileName(file.FullName ?? string.Empty));
 
-                        usedEntryNames.Add(entryName);
-                        archive.CreateEntryFromFile(file, entryName);
+                            if (file.IsImage)
+                            {
+                                // 图片文件：直接复制，无行数限制
+                                File.Copy(file.FullName ?? string.Empty, destPath, overwrite: true);
+                            }
+                            else
+                            {
+                                // 日志文件：按行数限制处理
+                                // if (file.LineCount > MAX_LINES)
+                                // {
+                                //     ExtractLastLines(file.FullName, destPath, MAX_LINES);
+                                // }
+                                // else
+                                // {
+                                File.Copy(file.FullName ?? string.Empty, destPath, overwrite: true);
+                                // }
+                            }
+                        }
+                    });
+
+                    await using (var stream = await saveFile.OpenWriteAsync())
+                    {
+                        await Task.Run(() =>
+                        {
+                            using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
+                            foreach (var file in Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories))
+                            {
+                                var entryName = Path.GetRelativePath(tempDir, file).Replace('\\', '/');
+                                archive.CreateEntryFromFile(file, entryName);
+                            }
+                        });
+                    }
+
+                    LoggerHelper.Info($"日志和图片已成功压缩到：\n{saveFile.Name}");
+                    ToastHelper.Success(LangKeys.ExportLog.ToLocalization(), LangKeys.ExportLogSuccess.ToLocalization());
+                }
+                catch (Exception ex)
+                {
+                    LoggerHelper.Error($"压缩过程中发生错误：\n{ex}");
+                    ToastHelper.Error(LangKeys.ExportLog.ToLocalization(), LangKeys.ExportLogFailed.ToLocalization());
+                }
+                finally
+                {
+                    // 清理临时目录
+                    try { Directory.Delete(tempDir, true); }
+                    catch
+                    {
+                        /* 忽略清理错误 */
                     }
                 }
-
-                LoggerHelper.Info($"日志和图片已成功压缩到：\n{saveFile.Name}");
             }
             catch (Exception ex)
             {
-                LoggerHelper.Error($"压缩过程中发生错误：\n{ex}");
-            }
-            finally
-            {
-                // 清理临时目录
-                try { Directory.Delete(tempDir, true); }
-                catch
-                {
-                    /* 忽略清理错误 */
-                }
+                LoggerHelper.Error($"发生错误：\n{ex}");
+                ToastHelper.Error(LangKeys.ExportLog.ToLocalization(), LangKeys.ExportLogFailed.ToLocalization());
             }
         }
-        catch (Exception ex)
+        finally
         {
-            LoggerHelper.Error($"发生错误：\n{ex}");
+            ExportSemaphore.Release();
         }
     }
 

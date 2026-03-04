@@ -418,9 +418,15 @@ public static class LangKeys
 	public static readonly string AlphaVersion = "AlphaVersion";
 	public static readonly string UIUpdateChannel = "UIUpdateChannel";
 	public static readonly string ExportLog = "ExportLog";
+	public static readonly string ExportLogInProgress = "ExportLogInProgress";
+	public static readonly string ExportLogNoEligibleFiles = "ExportLogNoEligibleFiles";
+	public static readonly string ExportLogSuccess = "ExportLogSuccess";
+	public static readonly string ExportLogFailed = "ExportLogFailed";
 	public static readonly string ClearCache = "ClearCache";
 	public static readonly string ClearCacheSuccess = "ClearCacheSuccess";
 	public static readonly string ClearCacheFailed = "ClearCacheFailed";
+	public static readonly string ClearCacheStopInstanceFailed = "ClearCacheStopInstanceFailed";
+	public static readonly string ClearCacheInstanceStillUsingResource = "ClearCacheInstanceStillUsingResource";
 	public static readonly string Warning = "Warning";
 	public static readonly string PlatformNotSupportedOperation = "PlatformNotSupportedOperation";
 	public static readonly string StopTaskBeforeExportLog = "StopTaskBeforeExportLog";

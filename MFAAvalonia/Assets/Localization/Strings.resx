@@ -1227,6 +1227,18 @@
     <data name="ExportLog" xml:space="preserve">
         <value>导出日志</value>
     </data>
+    <data name="ExportLogInProgress" xml:space="preserve">
+        <value>正在导出日志，请稍候...</value>
+    </data>
+    <data name="ExportLogNoEligibleFiles" xml:space="preserve">
+        <value>未找到符合条件的日志文件或图片。</value>
+    </data>
+    <data name="ExportLogSuccess" xml:space="preserve">
+        <value>日志导出成功</value>
+    </data>
+    <data name="ExportLogFailed" xml:space="preserve">
+        <value>日志导出失败</value>
+    </data>
     <data name="ClearCache" xml:space="preserve">
         <value>清理缓存</value>
     </data>
@@ -1235,6 +1247,12 @@
     </data>
     <data name="ClearCacheFailed" xml:space="preserve">
         <value>清理缓存失败</value>
+    </data>
+    <data name="ClearCacheStopInstanceFailed" xml:space="preserve">
+        <value>停止实例 {0} 失败</value>
+    </data>
+    <data name="ClearCacheInstanceStillUsingResource" xml:space="preserve">
+        <value>实例 {0} 仍在占用资源</value>
     </data>
     <data name="Warning" xml:space="preserve">
         <value>警告</value>

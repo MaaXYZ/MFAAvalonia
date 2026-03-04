@@ -1212,6 +1212,18 @@
     <data name="ExportLog" xml:space="preserve">
         <value>Export Log</value>
     </data>
+    <data name="ExportLogInProgress" xml:space="preserve">
+        <value>Exporting logs, please wait...</value>
+    </data>
+    <data name="ExportLogNoEligibleFiles" xml:space="preserve">
+        <value>No eligible log files or images were found.</value>
+    </data>
+    <data name="ExportLogSuccess" xml:space="preserve">
+        <value>Log export completed successfully</value>
+    </data>
+    <data name="ExportLogFailed" xml:space="preserve">
+        <value>Failed to export logs</value>
+    </data>
     <data name="ClearCache" xml:space="preserve">
         <value>Clear Cache</value>
     </data>
@@ -1220,6 +1232,12 @@
     </data>
     <data name="ClearCacheFailed" xml:space="preserve">
         <value>Failed to clear cache</value>
+    </data>
+    <data name="ClearCacheStopInstanceFailed" xml:space="preserve">
+        <value>Failed to stop instance {0}</value>
+    </data>
+    <data name="ClearCacheInstanceStillUsingResource" xml:space="preserve">
+        <value>Instance {0} is still using resources</value>
     </data>
     <data name="Warning" xml:space="preserve">
         <value>Warning</value>

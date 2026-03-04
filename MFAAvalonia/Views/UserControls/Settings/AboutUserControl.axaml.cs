@@ -23,8 +23,7 @@ public partial class AboutUserControl : UserControl
         InitializeComponent();
 
     }
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-    private void Button_OnClick(object? sender, RoutedEventArgs e)
+    private async void Button_OnClick(object? sender, RoutedEventArgs e)
     {
         var storageProvider = Instances.StorageProvider;
         if (storageProvider == null)
@@ -33,7 +32,7 @@ public partial class AboutUserControl : UserControl
             return;
         }
 
-        FileLogExporter.CompressRecentLogs(storageProvider);
+        await FileLogExporter.CompressRecentLogs(storageProvider);
     }
     
     private void DisplayAnnouncement(object? sender, RoutedEventArgs e)
@@ -51,9 +50,27 @@ public partial class AboutUserControl : UserControl
             return;
         }
 
-        foreach (var processor in MaaProcessor.Processors)
+        var processors = MaaProcessor.Processors.ToList();
+        foreach (var processor in processors)
         {
-            processor.SetTasker();
+            try
+            {
+                processor.SetTasker();
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Error($"清理缓存前停止实例 {processor.InstanceId} 的 Tasker 失败: {ex}");
+                ToastHelper.Error(LangKeys.ClearCacheFailed.ToLocalization(), $"停止实例 {processor.InstanceId} 失败");
+                return;
+            }
+        }
+
+        var remainingTasker = processors.FirstOrDefault(p => p.MaaTasker != null || p.ScreenshotTasker != null);
+        if (remainingTasker != null)
+        {
+            LoggerHelper.Warning($"清理缓存中止：实例 {remainingTasker.InstanceId} 仍存在未释放 Tasker。");
+            ToastHelper.Error(LangKeys.ClearCacheFailed.ToLocalization(), $"实例 {remainingTasker.InstanceId} 仍在占用资源");
+            return;
         }
 
         var baseDirectory = AppContext.BaseDirectory;
