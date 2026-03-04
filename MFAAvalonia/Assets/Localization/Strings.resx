@@ -906,6 +906,9 @@
     <data name="ShutDown" xml:space="preserve">
         <value>关机</value>
     </data>
+    <data name="ShutDownOnce" xml:space="preserve">
+        <value>关机（仅一次）</value>
+    </data>
     <data name="SliderControlTitle" xml:space="preserve">
         <value>滑动获取器</value>
     </data>

@@ -897,6 +897,9 @@
     <data name="ShutDown" xml:space="preserve">
         <value>Shut Down</value>
     </data>
+    <data name="ShutDownOnce" xml:space="preserve">
+        <value>Shut Down (Once)</value>
+    </data>
     <data name="SliderControlTitle" xml:space="preserve">
         <value>Slider Control</value>
     </data>

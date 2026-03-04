@@ -3423,6 +3423,10 @@ public class MaaProcessor
             case "ShutDown":
                 Instances.ShutdownSystem();
                 break;
+            case "ShutDownOnce":
+                InstanceConfiguration.SetValue(ConfigurationKeys.AfterTask, "None");
+                Instances.ShutdownSystem();
+                break;
             case "CloseEmulatorAndRestartMFA":
                 CloseSoftwareAndRestartMFA(this);
                 break;

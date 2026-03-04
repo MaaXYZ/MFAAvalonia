@@ -100,6 +100,7 @@ public partial class StartSettingsUserControlModel : ViewModelBase
         new("CloseEmulator"),
         new("CloseEmulatorAndMFA"),
         new("ShutDown"),
+        new("ShutDownOnce"),
         new("CloseEmulatorAndRestartMFA"),
         new("RestartPC"),
     ];
