@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -97,34 +96,43 @@ public static class FileLogExporter
 
                 try
                 {
+                    var copiedCount = 0;
+                    var skippedCount = 0;
+
                     await Task.Run(() =>
                     {
                         // 处理每个文件（日志/图片）
                         foreach (var file in eligibleFiles)
                         {
-                            var destDir = Path.Combine(tempDir, file.RelativePath ?? string.Empty);
-                            Directory.CreateDirectory(destDir);
-                            var destPath = Path.Combine(destDir, Path.GetFileName(file.FullName ?? string.Empty));
-
-                            if (file.IsImage)
+                            if (string.IsNullOrWhiteSpace(file.FullName))
                             {
-                                // 图片文件：直接复制，无行数限制
-                                File.Copy(file.FullName ?? string.Empty, destPath, overwrite: true);
+                                skippedCount++;
+                                continue;
                             }
-                            else
+
+                            try
                             {
-                                // 日志文件：按行数限制处理
-                                // if (file.LineCount > MAX_LINES)
-                                // {
-                                //     ExtractLastLines(file.FullName, destPath, MAX_LINES);
-                                // }
-                                // else
-                                // {
-                                File.Copy(file.FullName ?? string.Empty, destPath, overwrite: true);
-                                // }
+                                var destDir = Path.Combine(tempDir, file.RelativePath ?? string.Empty);
+                                Directory.CreateDirectory(destDir);
+                                var destPath = Path.Combine(destDir, Path.GetFileName(file.FullName));
+
+                                CopyFileSnapshot(file.FullName, destPath);
+                                copiedCount++;
+                            }
+                            catch (Exception ex)
+                            {
+                                skippedCount++;
+                                LoggerHelper.Warning($"导出日志时跳过文件（可能正在占用）: {file.FullName}\n{ex.Message}");
                             }
                         }
                     });
+
+                    if (copiedCount == 0)
+                    {
+                        LoggerHelper.Warning("日志导出失败：没有任何文件成功复制到临时目录。");
+                        ToastHelper.Error(LangKeys.ExportLog.ToLocalization(), LangKeys.ExportLogFailed.ToLocalization());
+                        return;
+                    }
 
                     await using (var stream = await saveFile.OpenWriteAsync())
                     {
@@ -139,6 +147,10 @@ public static class FileLogExporter
                         });
                     }
 
+                    if (skippedCount > 0)
+                    {
+                        LoggerHelper.Warning($"日志导出完成，但有 {skippedCount} 个文件未导出（可能正在占用）。");
+                    }
                     LoggerHelper.Info($"日志和图片已成功压缩到：\n{saveFile.Name}");
                     ToastHelper.Success(LangKeys.ExportLog.ToLocalization(), LangKeys.ExportLogSuccess.ToLocalization());
                 }
@@ -274,43 +286,12 @@ public static class FileLogExporter
         }
     }
 
-    // 从日志文件末尾提取指定行数（图片文件不调用此方法）
-    private static void ExtractLastLines(string sourcePath, string destPath, int lineCount)
+    // 尝试以共享方式读取文件快照，降低“文件占用导致复制失败”的概率
+    private static void CopyFileSnapshot(string sourcePath, string destPath)
     {
-        try
-        {
-            var queue = new Queue<string>(lineCount);
-
-            using (var stream = new FileStream(
-                       sourcePath,
-                       FileMode.Open,
-                       FileAccess.Read,
-                       FileShare.ReadWrite | FileShare.Delete))
-            using (var reader = new StreamReader(stream))
-            {
-                string line;
-                while ((line = reader.ReadLine()) != null)
-                {
-                    if (queue.Count >= lineCount)
-                        queue.Dequeue();
-                    queue.Enqueue(line);
-                }
-            }
-
-            using var writer = new StreamWriter(destPath, false, Encoding.UTF8);
-            foreach (var line in queue)
-                writer.WriteLine(line);
-        }
-        catch (Exception ex)
-        {
-            LoggerHelper.Error($"提取文件 {sourcePath} 的最后 {lineCount} 行时出错: {ex}");
-            // 提取失败时尝试复制原始文件
-            try { File.Copy(sourcePath, destPath, overwrite: true); }
-            catch (Exception e)
-            {
-                LoggerHelper.Error(e);
-            }
-        }
+        using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var destination = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        source.CopyTo(destination);
     }
 }
 
