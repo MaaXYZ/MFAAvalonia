@@ -163,16 +163,25 @@
         <value>The data currently in the clipboard cannot be converted to text.</value>
     </data>
     <data name="CloseEmulator" xml:space="preserve">
-        <value>Disable Game</value>
+        <value>Close Emulator</value>
     </data>
     <data name="CloseEmulatorAndMFA" xml:space="preserve">
-        <value>Disable MFA and Game</value>
+        <value>Close Emulator and This App</value>
     </data>
     <data name="CloseEmulatorAndRestartMFA" xml:space="preserve">
-        <value>Restart MFA and Disable Game</value>
+        <value>Restart This App and Close Emulator</value>
     </data>
     <data name="CloseMFA" xml:space="preserve">
-        <value>Disable MFA</value>
+        <value>Close This App</value>
+    </data>
+    <data name="CloseTargetProgram" xml:space="preserve">
+        <value>Close Target Program</value>
+    </data>
+    <data name="CloseTargetProgramAndMFA" xml:space="preserve">
+        <value>Close Target Program and This App</value>
+    </data>
+    <data name="CloseTargetProgramAndRestartMFA" xml:space="preserve">
+        <value>Restart This App and Close Target Program</value>
     </data>
     <data name="ColorPickerTitle" xml:space="preserve">
         <value>Color Picker</value>

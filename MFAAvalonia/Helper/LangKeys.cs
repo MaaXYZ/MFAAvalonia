@@ -63,6 +63,9 @@ public static class LangKeys
 	public static readonly string CloseEmulatorAndMFA = "CloseEmulatorAndMFA";
 	public static readonly string CloseEmulatorAndRestartMFA = "CloseEmulatorAndRestartMFA";
 	public static readonly string CloseMFA = "CloseMFA";
+	public static readonly string CloseTargetProgram = "CloseTargetProgram";
+	public static readonly string CloseTargetProgramAndMFA = "CloseTargetProgramAndMFA";
+	public static readonly string CloseTargetProgramAndRestartMFA = "CloseTargetProgramAndRestartMFA";
 	public static readonly string ColorPickerTitle = "ColorPickerTitle";
 	public static readonly string ColorTheme = "ColorTheme";
 	public static readonly string CommonSetting = "CommonSetting";
@@ -304,6 +307,7 @@ public static class LangKeys
 	public static readonly string ShowDisclaimerNoMore = "ShowDisclaimerNoMore";
 	public static readonly string ShowHitDraw = "ShowHitDraw";
 	public static readonly string ShutDown = "ShutDown";
+	public static readonly string ShutDownOnce = "ShutDownOnce";
 	public static readonly string SliderControlTitle = "SliderControlTitle";
 	public static readonly string SoftwarePath = "SoftwarePath";
 	public static readonly string SoftwareUpdate = "SoftwareUpdate";

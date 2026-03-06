@@ -163,16 +163,25 @@
         <value>目前剪貼簿中資料不可轉換為文字</value>
     </data>
     <data name="CloseEmulator" xml:space="preserve">
-        <value>關閉遊戲</value>
+        <value>關閉模擬器</value>
     </data>
     <data name="CloseEmulatorAndMFA" xml:space="preserve">
-        <value>關閉MFA和遊戲</value>
+        <value>關閉模擬器和本程式</value>
     </data>
     <data name="CloseEmulatorAndRestartMFA" xml:space="preserve">
-        <value>重啟MFA和關閉遊戲</value>
+        <value>重啟本程式並關閉模擬器</value>
     </data>
     <data name="CloseMFA" xml:space="preserve">
-        <value>關閉MFA</value>
+        <value>關閉本程式</value>
+    </data>
+    <data name="CloseTargetProgram" xml:space="preserve">
+        <value>關閉目標程式</value>
+    </data>
+    <data name="CloseTargetProgramAndMFA" xml:space="preserve">
+        <value>關閉目標程式和本程式</value>
+    </data>
+    <data name="CloseTargetProgramAndRestartMFA" xml:space="preserve">
+        <value>重啟本程式並關閉目標程式</value>
     </data>
     <data name="ColorPickerTitle" xml:space="preserve">
         <value>取色器</value>

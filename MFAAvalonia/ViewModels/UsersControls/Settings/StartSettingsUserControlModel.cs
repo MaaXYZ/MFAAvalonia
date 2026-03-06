@@ -5,16 +5,53 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MFAAvalonia.Configuration;
 using MFAAvalonia.Extensions;
+using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Helper;
+using MFAAvalonia.Helper.Converters;
 using MFAAvalonia.ViewModels.Other;
+using MFAAvalonia.ViewModels.Pages;
 using SukiUI.Dialogs;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System;
 using System.Threading.Tasks;
 
 namespace MFAAvalonia.ViewModels.UsersControls.Settings;
 
 public partial class StartSettingsUserControlModel : ViewModelBase
 {
+    private readonly LocalizationViewModel _closeSoftwareItem = new(LangKeys.CloseEmulator);
+    private readonly LocalizationViewModel _closeSoftwareAndMFAItem = new(LangKeys.CloseEmulatorAndMFA);
+    private readonly LocalizationViewModel _closeSoftwareAndRestartMFAItem = new(LangKeys.CloseEmulatorAndRestartMFA);
+    private readonly AvaloniaList<LocalizationViewModel> _afterTaskList;
+    private TaskQueueViewModel? _trackedTaskQueueViewModel;
+    private bool _isAdbController;
+
+    public StartSettingsUserControlModel()
+    {
+        _afterTaskList =
+        [
+            new(LangKeys.None),
+            new(LangKeys.CloseMFA),
+            _closeSoftwareItem,
+            _closeSoftwareAndMFAItem,
+            new(LangKeys.ShutDown),
+            new(LangKeys.ShutDownOnce),
+            _closeSoftwareAndRestartMFAItem,
+            new(LangKeys.RestartPC),
+        ];
+    }
+
+    protected override void Initialize()
+    {
+        base.Initialize();
+
+        Instances.InstanceTabBarViewModel.PropertyChanged += OnInstanceTabBarPropertyChanged;
+        LanguageHelper.LanguageChanged += OnLanguageChanged;
+        SubscribeToTaskQueueViewModel(Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel);
+        RebuildAfterTaskList();
+    }
+
     [ObservableProperty] private bool _autoMinimize = ConfigurationManager.Current.GetValue(ConfigurationKeys.AutoMinimize, false);
 
     [ObservableProperty] private bool _autoHide = ConfigurationManager.Current.GetValue(ConfigurationKeys.AutoHide, false);
@@ -92,18 +129,7 @@ public partial class StartSettingsUserControlModel : ViewModelBase
         new("StartupScriptOnly"),
     ];
 
-
-    public AvaloniaList<LocalizationViewModel> AfterTaskList =>
-    [
-        new("None"),
-        new("CloseMFA"),
-        new("CloseEmulator"),
-        new("CloseEmulatorAndMFA"),
-        new("ShutDown"),
-        new("ShutDownOnce"),
-        new("CloseEmulatorAndRestartMFA"),
-        new("RestartPC"),
-    ];
+    public AvaloniaList<LocalizationViewModel> AfterTaskList => _afterTaskList;
 
 
     [ObservableProperty] private string? _beforeTask = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.BeforeTask, "None");
@@ -124,5 +150,70 @@ public partial class StartSettingsUserControlModel : ViewModelBase
     private void QuickSettings()
     {
         Instances.DialogManager.CreateDialog().WithTitle("EmulatorMultiInstanceEditor").WithViewModel(dialog => new MultiInstanceEditorDialogViewModel(dialog)).Dismiss().ByClickingBackground().TryShow();
+    }
+
+    private void OnInstanceTabBarPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(InstanceTabBarViewModel.ActiveTab))
+        {
+            return;
+        }
+
+        SubscribeToTaskQueueViewModel(Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel);
+        RebuildAfterTaskList();
+    }
+
+    private void SubscribeToTaskQueueViewModel(TaskQueueViewModel? taskQueueViewModel)
+    {
+        if (_trackedTaskQueueViewModel == taskQueueViewModel)
+        {
+            return;
+        }
+
+        if (_trackedTaskQueueViewModel != null)
+        {
+            _trackedTaskQueueViewModel.PropertyChanged -= OnTaskQueueViewModelPropertyChanged;
+        }
+
+        _trackedTaskQueueViewModel = taskQueueViewModel;
+
+        if (_trackedTaskQueueViewModel != null)
+        {
+            _trackedTaskQueueViewModel.PropertyChanged += OnTaskQueueViewModelPropertyChanged;
+        }
+    }
+
+    private void OnTaskQueueViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TaskQueueViewModel.CurrentController))
+        {
+            RebuildAfterTaskList();
+        }
+    }
+
+    private void RebuildAfterTaskList()
+    {
+        _isAdbController = (_trackedTaskQueueViewModel?.CurrentController
+            ?? ConfigurationManager.CurrentInstance.GetValue(
+                ConfigurationKeys.CurrentController,
+                MaaControllerTypes.Adb,
+                MaaControllerTypes.None,
+                new UniversalEnumConverter<MaaControllerTypes>())) == MaaControllerTypes.Adb;
+
+        UpdateAfterTaskDisplayNames();
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        UpdateAfterTaskDisplayNames();
+    }
+
+    private void UpdateAfterTaskDisplayNames()
+    {
+        _closeSoftwareItem.Name = (_isAdbController ? LangKeys.CloseEmulator : LangKeys.CloseTargetProgram).ToLocalization();
+        _closeSoftwareAndMFAItem.Name = (_isAdbController ? LangKeys.CloseEmulatorAndMFA : LangKeys.CloseTargetProgramAndMFA).ToLocalization();
+        _closeSoftwareAndRestartMFAItem.Name = (_isAdbController
+            ? LangKeys.CloseEmulatorAndRestartMFA
+            : LangKeys.CloseTargetProgramAndRestartMFA).ToLocalization();
     }
 }
