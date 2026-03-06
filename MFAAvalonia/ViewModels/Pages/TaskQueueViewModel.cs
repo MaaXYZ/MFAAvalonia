@@ -575,7 +575,7 @@ public partial class TaskQueueViewModel : ViewModelBase
         {
             if (!string.IsNullOrWhiteSpace(presetTask.Label) && dragItem.InterfaceItem != null)
             {
-                dragItem.InterfaceItem.Label = presetTask.Label;
+                dragItem.InterfaceItem.Remark = presetTask.Label;
                 dragItem.RefreshDisplayName();
             }
 
