@@ -2064,7 +2064,11 @@
   <data name="InstanceDropdownCloseConfig" xml:space="preserve">
     <value>关闭配置</value>
   </data>
+  <data name="InstanceDropdownJustNow" xml:space="preserve">
+    <value>刚刚</value>
+  </data>
 </root>
+
 
 
 

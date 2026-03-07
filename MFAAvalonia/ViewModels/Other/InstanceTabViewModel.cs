@@ -7,6 +7,7 @@ using MFAAvalonia.Helper.ValueType;
 using MFAAvalonia.ViewModels.Pages;
 using Avalonia.Controls;
 using MFAAvalonia.Views.Pages;
+using System;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
@@ -41,6 +42,7 @@ public partial class InstanceTabViewModel : ViewModelBase
         Processor = processor;
         InstanceId = processor.InstanceId;
         UpdateName();
+        LanguageHelper.LanguageChanged += OnLanguageChanged;
 
         IsRunning = processor.TaskQueue.Count > 0;
         processor.TaskQueue.CountChanged += OnTaskCountChanged;
@@ -52,6 +54,11 @@ public partial class InstanceTabViewModel : ViewModelBase
         }
 
         RefreshBadges();
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        DispatcherHelper.RunOnMainThread(RefreshBadges);
     }
 
     private void OnTaskCountChanged(object? sender, ObservableQueue<MFATask>.CountChangedEventArgs e)

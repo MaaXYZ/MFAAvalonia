@@ -2054,7 +2054,11 @@
   <data name="InstanceDropdownCloseConfig" xml:space="preserve">
     <value>Close config</value>
   </data>
+  <data name="InstanceDropdownJustNow" xml:space="preserve">
+    <value>Just now</value>
+  </data>
 </root>
+
 
 
 

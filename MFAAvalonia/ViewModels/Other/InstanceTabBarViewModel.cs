@@ -212,10 +212,31 @@ public partial class InstanceTabBarViewModel : ViewModelBase
     public InstanceTabBarViewModel()
     {
         ReloadTabs();
+        LanguageHelper.LanguageChanged += OnLanguageChanged;
         MaaProcessor.Processors.CollectionChanged += (_, _) =>
         {
             DispatcherHelper.PostOnMainThread(ReloadTabs);
         };
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        DispatcherHelper.PostOnMainThread(() =>
+        {
+            OnPropertyChanged(nameof(DropdownSearchWatermark));
+            OnPropertyChanged(nameof(OpenConfigsHeaderText));
+            OnPropertyChanged(nameof(RecentClosedHeaderText));
+            OnPropertyChanged(nameof(NoOpenConfigsText));
+            OnPropertyChanged(nameof(NoRecentClosedText));
+            OnPropertyChanged(nameof(CloseConfigTooltipText));
+
+            foreach (var item in RecentClosedTabs)
+            {
+                item.UpdateLocalization();
+            }
+
+            RefreshFilteredRecentClosedTabs();
+        });
     }
 
     public void ReloadTabs()
@@ -573,14 +594,19 @@ public partial class InstanceTabBarViewModel : ViewModelBase
     }
 }
 
-public sealed class RecentClosedInstanceItem : ViewModelBase
+public sealed partial class RecentClosedInstanceItem : ViewModelBase
 {
     public string InstanceId { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
-    public string MetaText { get; init; } = string.Empty;
-    public string TimeText { get; init; } = string.Empty;
+    [ObservableProperty] private string _metaText = string.Empty;
+    [ObservableProperty] private string _timeText = string.Empty;
     public string TaskCountText { get; init; } = string.Empty;
     public string ConfigContent { get; init; } = string.Empty;
+
+    public void UpdateLocalization()
+    {
+        TimeText = "InstanceDropdownJustNow".ToLocalization();
+    }
 
     public static RecentClosedInstanceItem FromTab(InstanceTabViewModel tab, string? configContent)
     {
@@ -596,7 +622,7 @@ public sealed class RecentClosedInstanceItem : ViewModelBase
             InstanceId = tab.InstanceId,
             Name = tab.Name,
             MetaText = string.Join(" · ", metaParts),
-            TimeText = "刚刚",
+            TimeText = "InstanceDropdownJustNow".ToLocalization(),
             TaskCountText = tab.TaskCountText,
             ConfigContent = configContent ?? string.Empty
         };
