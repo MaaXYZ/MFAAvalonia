@@ -491,12 +491,18 @@
                                   Classes="LimitWidth" Height="35"
                                   IsEnabled="{Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
                                   ItemsSource="{Binding Devices}"
+                                  PlaceholderText="{Binding CurrentDevicePlaceholderText}"
+                                  PlaceholderForeground="{DynamicResource SukiDisabledText}"
                                   MinWidth="100"
                                   HorizontalAlignment="Stretch"
                                   SelectedValue="{Binding CurrentDevice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                            <ComboBox.Styles>
+                                <Style Selector="ComboBox /template/ TextBlock#PlaceholderTextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource SukiDisabledText}" />
+                                </Style>
+                            </ComboBox.Styles>
                             <ToolTip.Tip>
-                                <TextBlock
-                                    Text="{Binding CurrentDevice, Converter={converters:DeviceDisplayConverter}}" />
+                                <TextBlock Text="{Binding CurrentDeviceTooltipText}" />
                             </ToolTip.Tip>
                             <ComboBox.DataTemplates>
                                 <DataTemplate DataType="binding:AdbDeviceInfo">
@@ -507,7 +513,19 @@
                                     <TextBlock HorizontalAlignment="Left"
                                                Text="{Binding Name}" />
                                 </DataTemplate>
+                                <DataTemplate DataType="valueType:EmptyDevicePlaceholder">
+                                    <TextBlock HorizontalAlignment="Center"
+                                               Foreground="{DynamicResource SukiDisabledText}"
+                                               Text="{Binding ListText}" />
+                                </DataTemplate>
                             </ComboBox.DataTemplates>
+                            <ComboBox.SelectionBoxItemTemplate>
+                                <DataTemplate DataType="valueType:EmptyDevicePlaceholder">
+                                    <TextBlock HorizontalAlignment="Left"
+                                               Foreground="{DynamicResource SukiDisabledText}"
+                                               Text="{Binding SelectionText}" />
+                                </DataTemplate>
+                            </ComboBox.SelectionBoxItemTemplate>
                         </ComboBox>
                     </Grid>
                     <StackPanel x:Name="ConnectionButtonsPanel" Grid.Column="4" Orientation="Horizontal"
@@ -866,12 +884,18 @@
                                       Classes="LimitWidth" Height="35"
                                       IsEnabled="{Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
                                       ItemsSource="{Binding Devices}"
+                                      PlaceholderText="{Binding CurrentDevicePlaceholderText}"
+                                      PlaceholderForeground="{DynamicResource SukiDisabledText}"
                                       MinWidth="100"
                                       HorizontalAlignment="Stretch"
                                       SelectedValue="{Binding CurrentDevice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                                <ComboBox.Styles>
+                                    <Style Selector="ComboBox /template/ TextBlock#PlaceholderTextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource SukiDisabledText}" />
+                                    </Style>
+                                </ComboBox.Styles>
                                 <ToolTip.Tip>
-                                    <TextBlock
-                                        Text="{Binding CurrentDevice, Converter={converters:DeviceDisplayConverter}}" />
+                                    <TextBlock Text="{Binding CurrentDeviceTooltipText}" />
                                 </ToolTip.Tip>
                                 <ComboBox.DataTemplates>
                                     <DataTemplate DataType="binding:AdbDeviceInfo">
@@ -882,7 +906,19 @@
                                         <TextBlock HorizontalAlignment="Left"
                                                    Text="{Binding Name}" />
                                     </DataTemplate>
+                                    <DataTemplate DataType="valueType:EmptyDevicePlaceholder">
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   Foreground="{DynamicResource SukiDisabledText}"
+                                                   Text="{Binding ListText}" />
+                                    </DataTemplate>
                                 </ComboBox.DataTemplates>
+                                <ComboBox.SelectionBoxItemTemplate>
+                                    <DataTemplate DataType="valueType:EmptyDevicePlaceholder">
+                                        <TextBlock HorizontalAlignment="Left"
+                                                   Foreground="{DynamicResource SukiDisabledText}"
+                                                   Text="{Binding SelectionText}" />
+                                    </DataTemplate>
+                                </ComboBox.SelectionBoxItemTemplate>
                             </ComboBox>
                         </Grid>
 

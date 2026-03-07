@@ -726,6 +726,9 @@
     <data name="NoEmulatorFound" xml:space="preserve">
         <value>No emulator found! </value>
     </data>
+    <data name="NoEmulatorFoundPlaceholder" xml:space="preserve">
+        <value>No emulator found</value>
+    </data>
     <data name="None" xml:space="preserve">
         <value>None</value>
     </data>
@@ -734,6 +737,9 @@
     </data>
     <data name="NoWindowFound" xml:space="preserve">
         <value>No window found!</value>
+    </data>
+    <data name="NoWindowFoundPlaceholder" xml:space="preserve">
+        <value>No window found</value>
     </data>
     <data name="Nox" xml:space="preserve">
         <value>Nox</value>
@@ -746,6 +752,12 @@
     </data>
     <data name="OperateController" xml:space="preserve">
         <value>Select the Controller to Operate</value>
+    </data>
+    <data name="PleaseSelectEmulator" xml:space="preserve">
+        <value>Please select an emulator</value>
+    </data>
+    <data name="PleaseSelectWindow" xml:space="preserve">
+        <value>Please select a window</value>
     </data>
     <data name="Paste" xml:space="preserve">
         <value>Paste</value>

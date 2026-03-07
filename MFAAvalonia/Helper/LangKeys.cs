@@ -243,13 +243,17 @@ public static class LangKeys
 	public static readonly string NewVersionFoundDescDownloading = "NewVersionFoundDescDownloading";
 	public static readonly string No = "No";
 	public static readonly string NoEmulatorFound = "NoEmulatorFound";
+	public static readonly string NoEmulatorFoundPlaceholder = "NoEmulatorFoundPlaceholder";
 	public static readonly string None = "None";
 	public static readonly string NoTaskToStop = "NoTaskToStop";
 	public static readonly string NoWindowFound = "NoWindowFound";
+	public static readonly string NoWindowFoundPlaceholder = "NoWindowFoundPlaceholder";
 	public static readonly string Nox = "Nox";
 	public static readonly string Off = "Off";
 	public static readonly string Ok = "Ok";
 	public static readonly string OperateController = "OperateController";
+	public static readonly string PleaseSelectEmulator = "PleaseSelectEmulator";
+	public static readonly string PleaseSelectWindow = "PleaseSelectWindow";
 	public static readonly string Paste = "Paste";
 	public static readonly string PasteAbove = "PasteAbove";
 	public static readonly string PasteBelow = "PasteBelow";

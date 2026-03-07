@@ -958,7 +958,23 @@ public partial class TaskQueueViewModel : ViewModelBase
 
     [ObservableProperty] private int _shouldShow = 0;
     [ObservableProperty] private ObservableCollection<object> _devices = [];
-    [ObservableProperty] private object? _currentDevice;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentDeviceTooltipText))]
+    private object? _currentDevice;
+
+    private static bool IsSelectableDevice(object? value) => value is AdbDeviceInfo or DesktopWindowInfo;
+
+    private static EmptyDevicePlaceholder CreateEmptyDevicePlaceholder(MaaControllerTypes controllerType) =>
+        controllerType == MaaControllerTypes.Adb
+            ? new EmptyDevicePlaceholder(LangKeys.PleaseSelectEmulator.ToLocalization(), LangKeys.NoEmulatorFoundPlaceholder.ToLocalization())
+            : new EmptyDevicePlaceholder(LangKeys.PleaseSelectWindow.ToLocalization(), LangKeys.NoWindowFoundPlaceholder.ToLocalization());
+
+    private void SetEmptyDeviceState(MaaControllerTypes? controllerType = null)
+    {
+        var placeholder = CreateEmptyDevicePlaceholder(controllerType ?? CurrentController);
+        Devices = [placeholder];
+        CurrentDevice = null;
+    }
 
     [ObservableProperty] private bool _isConnected;
 
@@ -976,12 +992,28 @@ public partial class TaskQueueViewModel : ViewModelBase
 
     partial void OnCurrentDeviceChanged(object? value)
     {
+        if (value is EmptyDevicePlaceholder)
+        {
+            _suppressAutoConnect = true;
+            try
+            {
+                CurrentDevice = null;
+            }
+            finally
+            {
+                _suppressAutoConnect = false;
+            }
+
+            SetConnected(false);
+            return;
+        }
+
         ChangedDevice(value);
 
         // 仅 ComboBox 手动选中设备时，根据"刷新后尝试连接"设置自动连接
         if (!_suppressAutoConnect
             && !_isSyncing
-            && value != null
+            && IsSelectableDevice(value)
             && Instances.IsResolved<ConnectSettingsUserControlModel>()
             && Instances.ConnectSettingsUserControlModel.AutoConnectAfterRefresh)
         {
@@ -1018,7 +1050,11 @@ public partial class TaskQueueViewModel : ViewModelBase
                     _lastExecutionTime = now;
             }
         }
-        if (value is DesktopWindowInfo window)
+        if (value is EmptyDevicePlaceholder)
+        {
+            SetConnected(false);
+        }
+        else if (value is DesktopWindowInfo window)
         {
             if (!igoreToast) ToastHelper.Info(LangKeys.WindowSelectionMessage.ToLocalizationFormatted(false, ""), window.Name);
             var isSameWindow = Processor.Config.DesktopWindow.HWnd == window.Handle
@@ -1051,7 +1087,28 @@ public partial class TaskQueueViewModel : ViewModelBase
         }
     }
 
-    [ObservableProperty] private MaaControllerTypes _currentController = MaaControllerTypes.Adb;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentDevicePlaceholderText))]
+    private MaaControllerTypes _currentController = MaaControllerTypes.Adb;
+
+    public string CurrentDevicePlaceholderText => CurrentController == MaaControllerTypes.Adb
+        ? LangKeys.PleaseSelectEmulator.ToLocalization()
+        : LangKeys.PleaseSelectWindow.ToLocalization();
+
+    public string CurrentDeviceTooltipText
+    {
+        get
+        {
+            if (CurrentDevice != null)
+            {
+                return new DeviceDisplayConverter().Convert(CurrentDevice, typeof(string), null!, System.Globalization.CultureInfo.CurrentCulture)?.ToString() ?? string.Empty;
+            }
+
+            return CurrentController == MaaControllerTypes.Adb
+                ? LangKeys.NoEmulatorFoundPlaceholder.ToLocalization()
+                : LangKeys.NoWindowFoundPlaceholder.ToLocalization();
+        }
+    }
 
     partial void OnCurrentControllerChanged(MaaControllerTypes value)
     {
@@ -1071,8 +1128,7 @@ public partial class TaskQueueViewModel : ViewModelBase
         _suppressAutoConnect = true;
         try
         {
-            Devices = [];
-            CurrentDevice = null;
+            SetEmptyDeviceState(value);
         }
         finally
         {
@@ -1468,11 +1524,15 @@ public partial class TaskQueueViewModel : ViewModelBase
             _suppressAutoConnect = true;
             try
             {
-                Devices = devices;
-                if (devices.Count > index)
-                    CurrentDevice = devices[index];
+                if (devices.Count == 0)
+                {
+                    SetEmptyDeviceState();
+                }
                 else
-                    CurrentDevice = null;
+                {
+                    Devices = devices;
+                    CurrentDevice = index >= 0 && index < devices.Count ? devices[index] : null;
+                }
             }
             finally
             {
@@ -1688,8 +1748,7 @@ public partial class TaskQueueViewModel : ViewModelBase
                     _suppressAutoConnect = true;
                     try
                     {
-                        Devices = [];
-                        CurrentDevice = null;
+                        SetEmptyDeviceState(MaaControllerTypes.Adb);
                     }
                     finally
                     {

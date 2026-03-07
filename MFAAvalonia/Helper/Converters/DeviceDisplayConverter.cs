@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.Templates;
 using FluentAvalonia.UI.Controls;
 using MaaFramework.Binding;
+using MFAAvalonia.Helper.ValueType;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -28,6 +29,10 @@ public class DeviceDisplayConverter : MarkupExtension, IValueConverter
         if (value is DesktopWindowInfo info)
         {
             return info.Name;
+        }
+        if (value is EmptyDevicePlaceholder placeholder)
+        {
+            return placeholder.SelectionText;
         }
         return value?.ToString() ?? string.Empty;
     }

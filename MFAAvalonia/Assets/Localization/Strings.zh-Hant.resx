@@ -726,6 +726,9 @@
     <data name="NoEmulatorFound" xml:space="preserve">
         <value>未找到模擬器！</value>
     </data>
+    <data name="NoEmulatorFoundPlaceholder" xml:space="preserve">
+        <value>未找到模擬器</value>
+    </data>
     <data name="None" xml:space="preserve">
         <value>無</value>
     </data>
@@ -734,6 +737,9 @@
     </data>
     <data name="NoWindowFound" xml:space="preserve">
         <value>未找到視窗!</value>
+    </data>
+    <data name="NoWindowFoundPlaceholder" xml:space="preserve">
+        <value>未找到視窗</value>
     </data>
     <data name="Nox" xml:space="preserve">
         <value>夜神模擬器</value>
@@ -746,6 +752,12 @@
     </data>
     <data name="OperateController" xml:space="preserve">
         <value>選擇要操作的控制器</value>
+    </data>
+    <data name="PleaseSelectEmulator" xml:space="preserve">
+        <value>請選擇模擬器</value>
+    </data>
+    <data name="PleaseSelectWindow" xml:space="preserve">
+        <value>請選擇視窗</value>
     </data>
     <data name="Paste" xml:space="preserve">
         <value>貼上</value>
