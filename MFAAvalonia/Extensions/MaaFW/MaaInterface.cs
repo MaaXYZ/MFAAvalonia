@@ -1157,7 +1157,9 @@ public partial class MaaInterface
         private void UpdateDisplayName()
         {
             DisplayName = LanguageHelper.GetLocalizedDisplayName(Label, Name ?? string.Empty);
-            TaskCountText = LangKeys.InstancePresetTaskCountFormat.ToLocalizationFormatted(false, (Task?.Count ?? 0).ToString());
+            var totalCount = Task?.Count ?? 0;
+            var enabledCount = Task?.Count(task => task.Enabled != false) ?? 0;
+            TaskCountText = LangKeys.InstancePresetTaskCountFormat.ToLocalizationFormatted(false, enabledCount.ToString(), totalCount.ToString());
             try
             {
                 DisplayDescription = LanguageHelper.GetLocalizedString(Description.ResolveContentAsync().Result);
@@ -1568,3 +1570,4 @@ public partial class MaaInterface
         return JsonConvert.SerializeObject(this, settings);
     }
 }
+

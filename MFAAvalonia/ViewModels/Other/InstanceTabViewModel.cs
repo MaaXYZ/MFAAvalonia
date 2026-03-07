@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MFAAvalonia.Extensions;
 using MFAAvalonia.Extensions.MaaFW;
@@ -7,7 +7,9 @@ using MFAAvalonia.Helper.ValueType;
 using MFAAvalonia.ViewModels.Pages;
 using Avalonia.Controls;
 using MFAAvalonia.Views.Pages;
+using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Linq;
 
 namespace MFAAvalonia.ViewModels.Other;
 
@@ -44,7 +46,10 @@ public partial class InstanceTabViewModel : ViewModelBase
         processor.TaskQueue.CountChanged += OnTaskCountChanged;
 
         if (TaskQueueViewModel != null)
+        {
             TaskQueueViewModel.PropertyChanged += OnTaskQueueViewModelPropertyChanged;
+            SubscribeTaskItems(TaskQueueViewModel.TaskItemViewModels);
+        }
 
         RefreshBadges();
     }
@@ -66,6 +71,76 @@ public partial class InstanceTabViewModel : ViewModelBase
         {
             DispatcherHelper.RunOnMainThread(RefreshBadges);
         }
+
+        if (e.PropertyName is nameof(TaskQueueViewModel.TaskItemViewModels) && TaskQueueViewModel != null)
+        {
+            SubscribeTaskItems(TaskQueueViewModel.TaskItemViewModels);
+            DispatcherHelper.RunOnMainThread(RefreshBadges);
+        }
+    }
+
+    private void SubscribeTaskItems(System.Collections.ObjectModel.ObservableCollection<DragItemViewModel> taskItems)
+    {
+        taskItems.CollectionChanged -= OnTaskItemsCollectionChanged;
+        taskItems.CollectionChanged += OnTaskItemsCollectionChanged;
+
+        foreach (var item in taskItems)
+        {
+            item.PropertyChanged -= OnTaskItemPropertyChanged;
+            item.PropertyChanged += OnTaskItemPropertyChanged;
+        }
+    }
+
+    private void OnTaskItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems != null)
+        {
+            foreach (DragItemViewModel item in e.OldItems)
+            {
+                item.PropertyChanged -= OnTaskItemPropertyChanged;
+            }
+        }
+
+        if (e.NewItems != null)
+        {
+            foreach (DragItemViewModel item in e.NewItems)
+            {
+                item.PropertyChanged -= OnTaskItemPropertyChanged;
+                item.PropertyChanged += OnTaskItemPropertyChanged;
+            }
+        }
+
+        DispatcherHelper.RunOnMainThread(RefreshBadges);
+    }
+
+    private void OnTaskItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(DragItemViewModel.IsCheckedWithNull)
+            or nameof(DragItemViewModel.InterfaceItem))
+        {
+            DispatcherHelper.RunOnMainThread(RefreshBadges);
+        }
+    }
+
+    private (int enabledCount, int totalCount) GetTaskCounts()
+    {
+        var taskItems = TaskQueueViewModel?.TaskItemViewModels
+            .Where(item => !item.IsResourceOptionItem)
+            .Select(item => item.InterfaceItem)
+            .Where(item => item != null)
+            .ToList();
+
+        if (taskItems is not { Count: > 0 })
+        {
+            taskItems = Processor.InstanceConfiguration
+                .GetValue(Configuration.ConfigurationKeys.TaskItems, new System.Collections.Generic.List<MaaInterface.MaaInterfaceTask>())?
+                .Where(item => item != null)
+                .ToList();
+        }
+
+        var totalCount = taskItems?.Count ?? 0;
+        var enabledCount = taskItems?.Count(item => item?.Check != false) ?? 0;
+        return (enabledCount, totalCount);
     }
 
     public string InstanceId { get; }
@@ -93,9 +168,10 @@ public partial class InstanceTabViewModel : ViewModelBase
     private void RefreshBadges()
     {
         var vm = TaskQueueViewModel;
+        var (enabledCount, totalCount) = GetTaskCounts();
 
         IsConnected = vm?.IsConnected ?? false;
-        TaskCountText = LangKeys.InstancePresetTaskCountFormat.ToLocalizationFormatted(false, Processor.TaskQueue.Count.ToString());
+        TaskCountText = LangKeys.InstancePresetTaskCountFormat.ToLocalizationFormatted(false, enabledCount.ToString(), totalCount.ToString());
 
         ControllerBadgeText = vm?.CurrentController switch
         {

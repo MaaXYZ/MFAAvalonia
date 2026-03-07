@@ -1947,7 +1947,7 @@
         <value>Follow Rightmost Config</value>
     </data>
     <data name="InstancePresetTaskCountFormat" xml:space="preserve">
-        <value>{0} tasks</value>
+        <value>{0}/{1} tasks</value>
     </data>
     <data name="InstanceCannotCloseLast" xml:space="preserve">
         <value>Cannot close the last instance</value>
@@ -2013,4 +2013,6 @@
         <value>Remove Timer</value>
     </data>
 </root>
+
+
 

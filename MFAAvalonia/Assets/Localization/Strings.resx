@@ -1957,7 +1957,7 @@
         <value>跟随最右侧配置</value>
     </data>
     <data name="InstancePresetTaskCountFormat" xml:space="preserve">
-        <value>{0} 个任务</value>
+        <value>{0}/{1} 个任务</value>
     </data>
     <data name="InstanceCannotCloseLast" xml:space="preserve">
         <value>不能关闭最后一个实例</value>
@@ -2023,4 +2023,6 @@
         <value>删除定时</value>
     </data>
 </root>
+
+
 
