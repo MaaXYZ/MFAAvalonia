@@ -116,14 +116,14 @@ jobs:
             ext: zip
           - os: ubuntu-latest
             platform: android
-            arch: x64
+            arch: x86_64
             compress_cmd: "zip -r -9"
             ext: zip
             is_android: true
 
           - os: ubuntu-latest
             platform: android
-            arch: arm64
+            arch: aarch64
             compress_cmd: "zip -r -9"
             ext: zip
             is_android: true
