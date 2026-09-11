@@ -4551,7 +4551,7 @@ public class MaaProcessor
                 ? Instances.ExternalNotificationSettingsUserControlModel.CustomFailureText
                 : LangKeys.TaskFailed.ToLocalization());
 
-            if (queueCompleted && !onlyStart)
+            if (!onlyStart)
                 HandleAfterTaskOperation();
         }
         else if (status == MFATask.MFATaskStatus.STOPPED)
