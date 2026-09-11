@@ -3313,6 +3313,8 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                                 AddLogByKey(LangKeys.ScreencapTimeoutDisconnected, Brushes.OrangeRed, changeColor: false);
                             });
                         }
+
+                        return;
                     }
                     return;
                 }
