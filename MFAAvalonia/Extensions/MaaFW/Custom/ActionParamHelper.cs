@@ -77,11 +77,14 @@ public static class ActionParamHelper
         ThrowIfStopping(context);
 
         using var cts = new CancellationTokenSource();
-        using var monitor = Task.Run(async () =>
+        // Capture the token value before cleanup. Reading cts.Token after the
+        // source is disposed throws ObjectDisposedException.
+        var cancellationToken = cts.Token;
+        var monitor = Task.Run(async () =>
         {
             try
             {
-                while (!cts.IsCancellationRequested)
+                while (!cancellationToken.IsCancellationRequested)
                 {
                     if (context.Tasker.IsStopping)
                     {
@@ -89,7 +92,7 @@ public static class ActionParamHelper
                         break;
                     }
 
-                    await Task.Delay(200, cts.Token);
+                    await Task.Delay(200, cancellationToken);
                 }
             }
             catch (OperationCanceledException)
@@ -100,15 +103,18 @@ public static class ActionParamHelper
 
         try
         {
-            return sendAsync(cts.Token).GetAwaiter().GetResult();
+            return sendAsync(cancellationToken).GetAwaiter().GetResult();
         }
         catch (OperationCanceledException) when (context.Tasker.IsStopping)
         {
             throw new MaaStopException();
         }
-        catch (TaskCanceledException) when (context.Tasker.IsStopping)
+        finally
         {
-            throw new MaaStopException();
+            // Stop the monitor and wait for it before disposing the source.
+            // This prevents an unobserved monitor exception during finalization.
+            cts.Cancel();
+            monitor.GetAwaiter().GetResult();
         }
     }
 }
