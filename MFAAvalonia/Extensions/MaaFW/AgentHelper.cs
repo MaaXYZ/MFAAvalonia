@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -253,9 +254,12 @@ public static class AgentHelper
 
         var replacedArgs = platformArgs.Select(ConvertPath).ToList();
 
-        var executablePath = PathFinder.FindPath(program);
+        var executablePath = program;
 
-        if (!File.Exists(executablePath))
+        // Bare executable names (for example, "python") are resolved through PATH
+        // by Process.Start. Validate only explicit filesystem paths here.
+        if (string.IsNullOrWhiteSpace(executablePath)
+            || (HasExplicitPath(executablePath) && !File.Exists(executablePath)))
         {
             var errorMsg = LangKeys.AgentExecutableNotFound.ToLocalizationFormatted(false, executablePath);
             throw new FileNotFoundException(errorMsg, executablePath);
@@ -292,7 +296,15 @@ public static class AgentHelper
 
         IMaaAgentClient.AgentServerStartupMethod method = (s, directory) =>
         {
-            ctx.Process = System.Diagnostics.Process.Start(startInfo);
+            try
+            {
+                ctx.Process = Process.Start(startInfo);
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode is 2 or 3)
+            {
+                var errorMsg = LangKeys.AgentExecutableNotFound.ToLocalizationFormatted(false, executablePath);
+                throw new FileNotFoundException(errorMsg, executablePath, ex);
+            }
             if (ctx.Process == null)
                 LoggerHelper.Error("Agent 启动失败。");
             else
@@ -946,6 +958,18 @@ public static class AgentHelper
         bool isRelativePath = input.StartsWith("./") || input.StartsWith("../") || (hasPathSeparator && !input.StartsWith("-"));
         bool hasFileExtension = Path.HasExtension(input) && !input.StartsWith("-");
         return hasPathSeparator || isAbsolutePath || isRelativePath || hasFileExtension;
+    }
+
+    private static bool HasExplicitPath(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return false;
+
+        return Path.IsPathRooted(input)
+               || input.Contains(Path.DirectorySeparatorChar)
+               || input.Contains(Path.AltDirectorySeparatorChar)
+               || input.StartsWith("./", StringComparison.Ordinal)
+               || input.StartsWith("../", StringComparison.Ordinal);
     }
 
     private static void DisposeMaaTasker(MaaTasker maaTasker)
