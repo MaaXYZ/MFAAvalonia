@@ -1446,6 +1446,12 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         {
             ClearActiveAdbDeviceConfig();
         }
+        else if (resolvedControllerType == MaaControllerTypes.Win32)
+        {
+            // Keep the saved class/title matching rules, but never let a stale
+            // HWND reach MaaWin32Controller when discovery found no window.
+            Processor.Config.DesktopWindow.HWnd = IntPtr.Zero;
+        }
 
         var placeholder = CreateEmptyDevicePlaceholder(resolvedControllerType);
         Devices = [placeholder];
@@ -1755,7 +1761,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
         if (await RefreshConnectionTargetIfNeededAsync())
         {
-            LoggerHelper.Info("重新连接前发现连接目标为空，已先刷新设备列表。");
+            LoggerHelper.Info("重新连接前发现连接目标无效，已先刷新设备列表。");
         }
 
         if (CurrentController != MaaControllerTypes.PlayCover && CurrentDevice == null)
@@ -1804,7 +1810,8 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             MaaControllerTypes.PlayCover => false,
             MaaControllerTypes.Adb => CurrentDevice is not AdbDeviceInfo adbInfo
                 || string.IsNullOrWhiteSpace(adbInfo.AdbSerial),
-            MaaControllerTypes.Win32 or MaaControllerTypes.Gamepad => CurrentDevice is not DesktopWindowInfo window
+            MaaControllerTypes.Win32 => !IsCurrentWin32WindowValid(),
+            MaaControllerTypes.Gamepad => CurrentDevice is not DesktopWindowInfo window
                 || window.Handle == IntPtr.Zero,
             MaaControllerTypes.MacOS => CurrentDevice is not MacOSWindowInfo macOSWindow
                 || macOSWindow.WindowId == 0,
@@ -1814,8 +1821,76 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         };
     }
 
+    /// <summary>
+    /// Checks that the selected Win32 window still exists and is still the same
+    /// target that was selected. HWND values are reused by Windows, so checking
+    /// for a non-zero value alone is not sufficient after the game restarts.
+    /// </summary>
+    public bool IsCurrentWin32WindowValid()
+    {
+        if (CurrentController != MaaControllerTypes.Win32
+            || CurrentDevice is not DesktopWindowInfo selectedWindow
+            || selectedWindow.Handle == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        if (Processor.Config.DesktopWindow.HWnd != selectedWindow.Handle)
+            return false;
+
+        try
+        {
+            var liveWindow = MaaProcessor.Toolkit.Desktop.Window.Find()
+                .FirstOrDefault(window => window.Handle == selectedWindow.Handle);
+            if (liveWindow == null
+                || !string.Equals(liveWindow.ClassName, selectedWindow.ClassName, StringComparison.Ordinal)
+                || !string.Equals(liveWindow.Name, selectedWindow.Name, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var controller = MaaProcessor.Interface?.Controller?
+                .FirstOrDefault(c => c.Type?.Equals(MaaControllerTypes.Win32.ToJsonKey(), StringComparison.OrdinalIgnoreCase) == true);
+            return controller?.Win32 == null
+                || ApplyRegexFilters([liveWindow], controller.Win32).Count > 0;
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"检查 Win32 窗口有效性失败：{ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Drops the volatile Win32 selection while retaining the saved class/title
+    /// rules used to rediscover the window.
+    /// </summary>
+    public void InvalidateCurrentWin32Window()
+    {
+        if (CurrentController != MaaControllerTypes.Win32)
+            return;
+
+        DispatcherHelper.RunOnMainThread(() =>
+        {
+            _suppressAutoConnect = true;
+            try
+            {
+                Processor.Config.DesktopWindow.HWnd = IntPtr.Zero;
+                CurrentDevice = null;
+            }
+            finally
+            {
+                _suppressAutoConnect = false;
+            }
+        });
+        SetConnected(false);
+    }
+
     private async Task<bool> RefreshConnectionTargetIfNeededAsync()
     {
+        var staleWin32Window = CurrentController == MaaControllerTypes.Win32
+            && CurrentDevice is DesktopWindowInfo
+            && !IsCurrentWin32WindowValid();
         if (!NeedsRefreshBeforeReconnect())
             return false;
 
@@ -1824,6 +1899,11 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
         try
         {
+            if (staleWin32Window)
+            {
+                InvalidateCurrentWin32Window();
+                Processor.SetTasker();
+            }
             await Task.Run(() => AutoDetectDevice());
         }
         catch (OperationCanceledException)
@@ -1938,6 +2018,13 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
         var controllerType = CurrentController;
         var isAdb = controllerType == MaaControllerTypes.Adb;
+
+        if (controllerType == MaaControllerTypes.Win32
+            && CurrentDevice is DesktopWindowInfo
+            && !IsCurrentWin32WindowValid())
+        {
+            InvalidateCurrentWin32Window();
+        }
 
         if (showToast)
             ToastHelper.Info(GetDetectionMessage(controllerType));

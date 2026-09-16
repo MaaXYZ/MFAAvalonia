@@ -1657,7 +1657,10 @@ public class MaaProcessor
         try
         {
             var preTaskExecuted = await RunPreTasksAsync(token);
-            if (preTaskExecuted && ViewModel?.CurrentController != MaaControllerTypes.PlayCover && ViewModel?.CurrentDevice == null)
+            var shouldRefreshWin32Window = ViewModel is { CurrentController: MaaControllerTypes.Win32, CurrentDevice: not null }
+                && !ViewModel.IsCurrentWin32WindowValid();
+            if (ViewModel?.CurrentController != MaaControllerTypes.PlayCover
+                && ((preTaskExecuted && ViewModel?.CurrentDevice == null) || shouldRefreshWin32Window))
             {
                 await Task.Run(() => ViewModel.AutoDetectDevice(token, showToast: false), token);
             }
@@ -3363,6 +3366,15 @@ public class MaaProcessor
         Interlocked.Exchange(ref _isConnecting, 1);
         try
         {
+            if (ViewModel is { CurrentController: MaaControllerTypes.Win32, CurrentDevice: not null }
+                && !ViewModel.IsCurrentWin32WindowValid())
+            {
+                LoggerHelper.Info("检测到 Win32 目标窗口已失效，释放旧控制器并重新发现窗口。");
+                ViewModel.InvalidateCurrentWin32Window();
+                SetTasker();
+                await Task.Run(() => ViewModel.AutoDetectDevice(showToast: false));
+            }
+
             await GetTaskerAsync();
             var task = MaaTasker?.Controller?.LinkStart();
             task?.Wait();
@@ -4042,6 +4054,16 @@ public class MaaProcessor
 
         try
         {
+            var controllerType = ViewModel?.CurrentController ?? MaaControllerTypes.Adb;
+            if (controllerType == MaaControllerTypes.Win32
+                && ViewModel is { CurrentDevice: not null }
+                && !ViewModel.IsCurrentWin32WindowValid())
+            {
+                LoggerHelper.Info("检测到 Win32 目标窗口已失效，释放旧控制器并重新发现窗口。");
+                ViewModel.InvalidateCurrentWin32Window();
+                SetTasker();
+            }
+
             if (ViewModel?.IsConnected == true && MaaTasker?.Controller?.IsConnected == true)
             {
                 return;
@@ -4053,7 +4075,6 @@ public class MaaProcessor
                 ViewModel.SetConnected(false);
             }
 
-            var controllerType = ViewModel?.CurrentController ?? MaaControllerTypes.Adb;
             // Android interfaces commonly declare an ADB controller for compatibility,
             // but the registered platform factory owns the complete connection lifecycle.
             var isPlatformController = PlatformControllerFactory.CanInitializeWithoutDevice;
@@ -4079,6 +4100,17 @@ public class MaaProcessor
             if (isAdb)
             {
                 await EnsureAdbTargetReadyAsync(token, showMessage, delayFingerprintMatching);
+            }
+
+            // A Win32 HWND is only valid for the lifetime of its window. If the
+            // selected window was closed and recreated, rediscover it before
+            // creating a controller instead of passing the stale handle on.
+            if (controllerType == MaaControllerTypes.Win32
+                && ViewModel is { CurrentDevice: not null }
+                && !ViewModel.IsCurrentWin32WindowValid())
+            {
+                ViewModel.InvalidateCurrentWin32Window();
+                await Task.Run(() => ViewModel.AutoDetectDevice(token, showToast: false), token);
             }
 
             if (!isPlatformController && !isPlayCover && ViewModel?.CurrentDevice == null && InstanceConfiguration.GetValue(ConfigurationKeys.AutoDetectOnConnectionFailed, true) && !delayFingerprintMatching)
