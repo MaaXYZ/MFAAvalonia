@@ -1076,7 +1076,11 @@ public class MaaProcessor
     {
         if (!UseSeparateScreenshotTasker)
         {
-            DisposeScreenshotTasker();
+            // Detaching increments the generation and clears the in-flight job.
+            // Doing it on every shared-controller lookup makes
+            // PostScreencapPipelined discard every frame as stale.
+            if (_screenshotTasker != null || _screenshotTaskerInitTask != null)
+                DisposeScreenshotTasker();
             return MaaTasker;
         }
 
