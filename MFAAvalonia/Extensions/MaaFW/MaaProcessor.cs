@@ -1070,6 +1070,9 @@ public class MaaProcessor
 
     private bool UseSeparateScreenshotTasker =>
         !PlatformControllerFactory.CanInitializeWithoutDevice
+        // Win32 controllers must share the owner of pseudo-minimized window state.
+        // A second controller can snapshot alpha=0 as the original state.
+        && ViewModel?.CurrentController != MaaControllerTypes.Win32
         && InstanceConfiguration.GetValue(ConfigurationKeys.UseSeparateScreenshotTasker, true);
 
     private MaaTasker? GetScreenshotTasker(CancellationToken token = default)
