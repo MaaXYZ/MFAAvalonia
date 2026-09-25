@@ -1070,13 +1070,20 @@ public class MaaProcessor
 
     private bool UseSeparateScreenshotTasker =>
         !PlatformControllerFactory.CanInitializeWithoutDevice
+        // Win32 controllers must share the owner of pseudo-minimized window state.
+        // A second controller can snapshot alpha=0 as the original state.
+        && ViewModel?.CurrentController != MaaControllerTypes.Win32
         && InstanceConfiguration.GetValue(ConfigurationKeys.UseSeparateScreenshotTasker, true);
 
     private MaaTasker? GetScreenshotTasker(CancellationToken token = default)
     {
         if (!UseSeparateScreenshotTasker)
         {
-            DisposeScreenshotTasker();
+            // Detaching increments the generation and clears the in-flight job.
+            // Doing it on every shared-controller lookup makes
+            // PostScreencapPipelined discard every frame as stale.
+            if (_screenshotTasker != null || _screenshotTaskerInitTask != null)
+                DisposeScreenshotTasker();
             return MaaTasker;
         }
 
