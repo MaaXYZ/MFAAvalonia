@@ -1442,7 +1442,8 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     private void SetEmptyDeviceState(MaaControllerTypes? controllerType = null)
     {
         var resolvedControllerType = controllerType ?? CurrentController;
-        if (resolvedControllerType == MaaControllerTypes.Adb)
+        if (resolvedControllerType == MaaControllerTypes.Adb
+            && !IsNetworkAdbSerial(Processor.Config.AdbDevice.AdbSerial))
         {
             ClearActiveAdbDeviceConfig();
         }
@@ -2052,9 +2053,28 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
     private (ObservableCollection<object> devices, int index) DetectAdbDevices(bool strictLaunchTarget = false)
     {
+        var savedSerial = Processor.Config.AdbDevice.AdbSerial;
+        if (IsNetworkAdbSerial(savedSerial))
+        {
+            LoggerHelper.Info($"刷新 ADB 设备前尝试重新连接已保存目标：{savedSerial}");
+            ProcessHelper.ReconnectByAdb(Processor.Config.AdbDevice.AdbPath, savedSerial);
+        }
+
         var devices = MaaProcessor.Toolkit.AdbDevice.Find();
         var index = CalculateAdbDeviceIndex(devices, strictLaunchTarget);
         return (new(devices), index);
+    }
+
+    private static bool IsNetworkAdbSerial(string? serial)
+    {
+        if (string.IsNullOrWhiteSpace(serial))
+            return false;
+
+        var separator = serial.LastIndexOf(':');
+        return separator > 0
+            && separator < serial.Length - 1
+            && int.TryParse(serial[(separator + 1)..], out var port)
+            && port is > 0 and <= 65535;
     }
 
     private int CalculateAdbDeviceIndex(IList<AdbDeviceInfo> devices, bool strictLaunchTarget = false)
