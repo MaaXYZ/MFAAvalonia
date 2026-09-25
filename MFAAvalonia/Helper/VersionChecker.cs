@@ -1592,6 +1592,7 @@ public static class VersionChecker
                             if (File.Exists(targetFile))
                                 DeleteFileWithBackup(targetFile);
                             File.Move(tempTarget, targetFile, overwrite: true);
+                            RestoreUnixExecutablePermission(targetFile);
                         }
                     }, cancellationToken);
 
@@ -1712,6 +1713,7 @@ public static class VersionChecker
                         if (File.Exists(targetFile))
                             DeleteFileWithBackup(targetFile);
                         File.Move(tempTarget, targetFile, overwrite: true);
+                        RestoreUnixExecutablePermission(targetFile);
                     }, cancellationToken);
 
                     // 12. 设置目标文件为普通属性（清除只读/隐藏等限制）
@@ -1797,6 +1799,42 @@ public static class VersionChecker
         public int Total { get; set; } = 0;
     }
 
+    private static void RestoreUnixExecutablePermission(string filePath)
+    {
+        if (OperatingSystem.IsWindows() || !File.Exists(filePath) || !IsLikelyExecutablePath(filePath))
+            return;
+
+        try
+        {
+            var mode = File.GetUnixFileMode(filePath);
+            File.SetUnixFileMode(filePath, mode
+                | UnixFileMode.UserExecute
+                | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherExecute);
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"恢复 Unix 执行权限失败：文件={filePath}，原因={ex.Message}");
+        }
+    }
+
+    private static bool IsLikelyExecutablePath(string filePath)
+    {
+        var normalizedPath = filePath.Replace('\\', '/');
+        if (normalizedPath.Contains("/python/bin/", StringComparison.OrdinalIgnoreCase)
+            || (normalizedPath.Contains("/runtimes/", StringComparison.OrdinalIgnoreCase)
+                && normalizedPath.Contains("/native/", StringComparison.OrdinalIgnoreCase))
+            || normalizedPath.Contains("/libs/MaaAgentBinary/", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var extension = Path.GetExtension(filePath);
+        return string.IsNullOrEmpty(extension)
+            || extension.Equals(".sh", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".command", StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class UpdateFileTransaction : IDisposable
     {
         private sealed record FileChange(string TargetPath, string? BackupPath);
@@ -1848,6 +1886,7 @@ public static class VersionChecker
                 // failure between moving the old target and moving the pending file into place.
                 _changes.Add(new FileChange(targetPath, backupPath));
                 File.Move(pendingPath, targetPath, overwrite: true);
+                RestoreUnixExecutablePermission(targetPath);
             }
             catch
             {
@@ -3734,6 +3773,7 @@ public static class VersionChecker
 
                     File.Copy(sourceFile, targetFile, overwrite: false);
                     File.SetAttributes(targetFile, FileAttributes.Normal);
+                    RestoreUnixExecutablePermission(targetFile);
                     LoggerHelper.Info($"新的同名主程序已复制完成：源文件={sourceFile}，目标文件={targetFile}");
                 }, cancellationToken);
 
