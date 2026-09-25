@@ -1068,6 +1068,17 @@ public class MaaProcessor
         PublishInitializedScreenshotTasker(initTask, tasker, initGeneration);
     }
 
+    private MaaInterface.MaaResourceController? GetCurrentInterfaceController()
+    {
+        var controllerType = ViewModel?.CurrentController ?? MaaControllerTypes.Adb;
+        var controllerName = ViewModel?.GetCurrentControllerName();
+        return Interface?.Controller?.FirstOrDefault(controller =>
+                   !string.IsNullOrWhiteSpace(controllerName)
+                   && string.Equals(controller.Name, controllerName, StringComparison.OrdinalIgnoreCase))
+               ?? Interface?.Controller?.FirstOrDefault(controller =>
+                   string.Equals(controller.Type, controllerType.ToJsonKey(), StringComparison.OrdinalIgnoreCase));
+    }
+
     private bool UseSeparateScreenshotTasker =>
         !PlatformControllerFactory.CanInitializeWithoutDevice
         // Win32 controllers must share the owner of pseudo-minimized window state.
@@ -1494,9 +1505,10 @@ public class MaaProcessor
                 return InitializeController(ViewModel?.CurrentController ?? MaaControllerTypes.Adb, logConfig: false);
             }, token: token, name: "截图控制器检测", catchException: true, shouldLog: false, noMessage: true);
 
-            var displayShortSide = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(ViewModel?.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayShortSide;
-            var displayLongSide = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(ViewModel?.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayLongSide;
-            var displayRaw = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(ViewModel?.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayRaw;
+            var controllerConfig = GetCurrentInterfaceController();
+            var displayShortSide = controllerConfig?.DisplayShortSide;
+            var displayLongSide = controllerConfig?.DisplayLongSide;
+            var displayRaw = controllerConfig?.DisplayRaw;
 
             if (displayLongSide != null && displayShortSide == null && displayRaw == null)
                 controller.SetOption_ScreenshotTargetLongSide(Convert.ToInt32(displayLongSide.Value));
@@ -1554,10 +1566,7 @@ public class MaaProcessor
             // resources = resources.Select(Path.GetFullPath).ToList();
 
             var resources = new List<string>();
-            var controllerType = ViewModel?.CurrentController ?? MaaControllerTypes.Adb;
-            var controllerName = controllerType.ToJsonKey();
-            var controllerConfig = Interface?.Controller?.FirstOrDefault(c =>
-                c.Type != null && c.Type.Equals(controllerName, StringComparison.OrdinalIgnoreCase));
+            var controllerConfig = GetCurrentInterfaceController();
 
             if (controllerConfig?.AttachResourcePath != null)
             {
@@ -1593,9 +1602,10 @@ public class MaaProcessor
                 return InitializeController(ViewModel?.CurrentController ?? MaaControllerTypes.Adb, logConfig: false);
             }, token: token, name: "截图控制器检测", catchException: true, shouldLog: false, noMessage: true);
 
-            var displayShortSide = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(ViewModel?.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayShortSide;
-            var displayLongSide = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(ViewModel?.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayLongSide;
-            var displayRaw = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(ViewModel?.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayRaw;
+            var controllerConfig = GetCurrentInterfaceController();
+            var displayShortSide = controllerConfig?.DisplayShortSide;
+            var displayLongSide = controllerConfig?.DisplayLongSide;
+            var displayRaw = controllerConfig?.DisplayRaw;
 
             if (displayLongSide != null && displayShortSide == null && displayRaw == null)
                 controller.SetOption_ScreenshotTargetLongSide(Convert.ToInt32(displayLongSide.Value));
@@ -1702,10 +1712,7 @@ public class MaaProcessor
                 }
             }
 
-            var controllerType = ViewModel?.CurrentController ?? MaaControllerTypes.Adb;
-            var controllerName = controllerType.ToJsonKey();
-            var controllerConfig = Interface?.Controller?.FirstOrDefault(c =>
-                c.Type != null && c.Type.Equals(controllerName, StringComparison.OrdinalIgnoreCase));
+            var controllerConfig = GetCurrentInterfaceController();
 
             if (controllerConfig?.AttachResourcePath != null)
             {
@@ -1780,10 +1787,10 @@ public class MaaProcessor
                 return (null, InvalidResource, ShouldRetry);
             }
 
-            var displayShortSide = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(ViewModel?.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayShortSide;
-
-            var displayLongSide = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(ViewModel?.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayLongSide;
-            var displayRaw = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(ViewModel?.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayRaw;
+            var controllerConfig = GetCurrentInterfaceController();
+            var displayShortSide = controllerConfig?.DisplayShortSide;
+            var displayLongSide = controllerConfig?.DisplayLongSide;
+            var displayRaw = controllerConfig?.DisplayRaw;
             if (displayLongSide != null && displayShortSide == null && displayRaw == null)
                 controller.SetOption_ScreenshotTargetLongSide(Convert.ToInt32(displayLongSide.Value));
             if (displayShortSide != null && displayLongSide == null && displayRaw == null)
@@ -4001,10 +4008,7 @@ public class MaaProcessor
     /// </summary>
     private void MergeControllerOptionParams(ref MaaToken taskModels)
     {
-        var controllerType = ViewModel?.CurrentController ?? MaaControllerTypes.Adb;
-        var controllerName = controllerType.ToJsonKey();
-        var controllerConfig = Interface?.Controller?.FirstOrDefault(c =>
-            c.Type != null && c.Type.Equals(controllerName, StringComparison.OrdinalIgnoreCase));
+        var controllerConfig = GetCurrentInterfaceController();
 
         var selectOptions = controllerConfig?.SelectOptions;
         if (selectOptions == null || selectOptions.Count == 0)
@@ -4957,8 +4961,7 @@ public class MaaProcessor
         if (controllerType != MaaControllerTypes.Win32 && controllerType != MaaControllerTypes.Gamepad)
             return false;
 
-        var controllerConfig = Interface?.Controller?.FirstOrDefault(c =>
-            c.Type != null && c.Type.Equals(controllerType.ToJsonKey(), StringComparison.OrdinalIgnoreCase));
+        var controllerConfig = GetCurrentInterfaceController();
 
         return controllerConfig?.PermissionRequired == true;
     }
@@ -4977,8 +4980,7 @@ public class MaaProcessor
         if (controllerType != MaaControllerTypes.Win32 && controllerType != MaaControllerTypes.Gamepad)
             return true;
 
-        var controllerConfig = Interface?.Controller?.FirstOrDefault(c =>
-            c.Type != null && c.Type.Equals(controllerType.ToJsonKey(), StringComparison.OrdinalIgnoreCase));
+        var controllerConfig = GetCurrentInterfaceController();
 
         // 如果配置了 permission_required，当前进程（承载 MaaFW）必须以管理员身份运行
         if (controllerConfig?.PermissionRequired == true)
