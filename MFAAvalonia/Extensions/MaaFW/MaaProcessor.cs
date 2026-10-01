@@ -3540,6 +3540,10 @@ public class MaaProcessor
         if (tasks.Count == 0)
             return tasks;
 
+        // 用户可在 游戏设置 中关闭「重新启动队列时从上次未完成的任务继续」
+        if (!InstanceConfiguration.GetValue(ConfigurationKeys.ResumeInterruptedQueue, true))
+            return tasks;
+
         var hasUnfinished = tasks.Any(task =>
             task.RunState is TaskRunState.Failed or TaskRunState.Stopped or TaskRunState.Skipped);
         if (!hasUnfinished)
