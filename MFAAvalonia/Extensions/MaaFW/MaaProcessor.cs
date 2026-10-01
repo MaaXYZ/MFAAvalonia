@@ -3530,9 +3530,9 @@ public class MaaProcessor
     }
 
     /// <summary>
-    /// 续跑过滤：上一轮队列未跑完（存在失败/中止/未执行的任务）时，
-    /// 跳过已成功的任务，使本轮从首个未完成的任务开始。
-    /// 上一轮全部成功或没有任何进行过的状态时不介入，行为与原先一致。
+    /// 续跑过滤：勾选的任务中存在非成功项（上一轮失败/中止/未执行，或本轮新增勾选）时，
+    /// 跳过已成功的任务，使本轮从首个未成功的任务开始。
+    /// 勾选与上一轮完全一致且全部成功（或尚无任何运行状态）时不介入，行为与原先一致。
     /// </summary>
     private List<DragItemViewModel> FilterResumableTasks(List<DragItemViewModel> tasks, out bool retainCompletedStates)
     {
@@ -3544,8 +3544,7 @@ public class MaaProcessor
         if (!InstanceConfiguration.GetValue(ConfigurationKeys.ResumeInterruptedQueue, true))
             return tasks;
 
-        var hasUnfinished = tasks.Any(task =>
-            task.RunState is TaskRunState.Failed or TaskRunState.Stopped or TaskRunState.Skipped);
+        var hasUnfinished = tasks.Any(task => task.RunState != TaskRunState.Succeeded);
         if (!hasUnfinished)
             return tasks;
 
@@ -3558,7 +3557,7 @@ public class MaaProcessor
         var nextTask = tasks.First(task => task.RunState != TaskRunState.Succeeded);
         var nextName = nextTask.InterfaceItem?.Name ?? nextTask.Name;
         LoggerHelper.Info(
-            $"续跑：上一轮队列未完成，跳过已成功的 {completed.Count} 个任务（{completedNames}），本轮从「{nextName}」开始");
+            $"续跑：勾选中存在未成功任务，跳过已成功的 {completed.Count} 个任务（{completedNames}），本轮从「{nextName}」开始");
         return tasks.Where(task => task.RunState != TaskRunState.Succeeded).ToList();
     }
 
