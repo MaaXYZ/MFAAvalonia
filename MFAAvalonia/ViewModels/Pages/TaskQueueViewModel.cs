@@ -296,6 +296,9 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             item.RunElapsed = DateTimeOffset.UtcNow - startedAt;
 
         item.RunStartedAt = null;
+        item.RunCompletedAt = state is TaskRunState.Succeeded or TaskRunState.Failed or TaskRunState.Stopped
+            ? DateTimeOffset.UtcNow
+            : null;
         item.RunErrorMessage = errorMessage;
         item.RunState = state;
     }
