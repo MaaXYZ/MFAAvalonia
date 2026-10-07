@@ -2231,6 +2231,7 @@
   <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>背景模式 · 虛擬螢幕</value></data>
   <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>前景模式 · 目前螢幕</value></data>
   <data name="CurrentScreen" xml:space="preserve"><value>目前螢幕</value></data>
+  <data name="ResumeInterruptedQueue" xml:space="preserve"><value>重新啟動任務清單時，從上次未完成的任務繼續（自動跳過已成功的任務）</value></data>
 </root>
 
 

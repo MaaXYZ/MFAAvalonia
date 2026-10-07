@@ -470,6 +470,7 @@ public static class LangKeys
 	public static readonly string StopTaskBeforeUpdateResource = "StopTaskBeforeUpdateResource";
 	public static readonly string MirrorCdkEmpty = "MirrorCdkEmpty";
 	public static readonly string ContinueRunningWhenError = "ContinueRunningWhenError";
+	public static readonly string ResumeInterruptedQueue = "ResumeInterruptedQueue";
 	public static readonly string CurrentOtherUpdatingTask = "CurrentOtherUpdatingTask";
 	public static readonly string RedownloadResourceFullPackage = "RedownloadResourceFullPackage";
 	public static readonly string RedownloadUiFullPackage = "RedownloadUiFullPackage";

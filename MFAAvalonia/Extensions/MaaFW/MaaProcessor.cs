@@ -3436,16 +3436,20 @@ public class MaaProcessor
         if (InitializeData(currentTasks))
         {
             List<DragItemViewModel> tasks;
+            var retainCompletedStates = false;
             if (dragItemViewModels == null)
             {
                 tasks = FilterExecutableTasks(ViewModel?.TaskItemViewModels);
+                // 上一轮队列被中止且仍有未完成任务时，从首个未完成任务续跑，
+                // 跳过的已完成任务在界面保留其完成徽标
+                tasks = FilterResumableTasks(tasks, out retainCompletedStates);
             }
             else
             {
                 tasks = FilterExecutableTasks(dragItemViewModels, ignoreCheckedState);
             }
 
-            _ = RunTaskChainAsync(tasks, onlyStart, checkUpdate);
+            _ = RunTaskChainAsync(tasks, onlyStart, checkUpdate, retainCompletedStates);
             return Task.CompletedTask;
         }
 
@@ -3476,11 +3480,12 @@ public class MaaProcessor
         });
     }
 
-    private async Task RunTaskChainAsync(List<DragItemViewModel> tasks, bool onlyStart, bool checkUpdate)
+    private async Task RunTaskChainAsync(List<DragItemViewModel> tasks, bool onlyStart, bool checkUpdate,
+        bool retainCompletedStates = false)
     {
         try
         {
-            await StartTask(tasks, onlyStart, checkUpdate);
+            await StartTask(tasks, onlyStart, checkUpdate, retainCompletedStates);
         }
         catch (OperationCanceledException)
         {
@@ -3524,6 +3529,45 @@ public class MaaProcessor
             ?? new List<DragItemViewModel>();
     }
 
+    /// <summary>
+    /// 续跑过滤：勾选的任务中存在非成功项（上一轮失败/中止/未执行，或本轮新增勾选）时，
+    /// 跳过<b>近期</b>已成功的任务，使本轮从首个未成功的任务开始。
+    /// 仅统计 12 小时内完成的成功项：运行状态驻留在应用进程内存中，
+    /// 跨天/长期挂机后的旧成功态不代表「本周期已完成」，不得据此跳过。
+    /// 勾选与上一轮完全一致且全部成功（或尚无任何运行状态）时不介入，行为与原先一致。
+    /// </summary>
+    private List<DragItemViewModel> FilterResumableTasks(List<DragItemViewModel> tasks, out bool retainCompletedStates)
+    {
+        retainCompletedStates = false;
+        if (tasks.Count == 0)
+            return tasks;
+
+        // 用户可在 游戏设置 中关闭「重新启动队列时从上次未完成的任务继续」
+        if (!InstanceConfiguration.GetValue(ConfigurationKeys.ResumeInterruptedQueue, true))
+            return tasks;
+
+        static bool RecentlySucceeded(DragItemViewModel task) =>
+            task.RunState == TaskRunState.Succeeded
+            && task.RunCompletedAt is { } t
+            && DateTimeOffset.UtcNow - t <= TimeSpan.FromHours(12);
+
+        var hasUnfinished = tasks.Any(task => !RecentlySucceeded(task));
+        if (!hasUnfinished)
+            return tasks;
+
+        var completed = tasks.Where(RecentlySucceeded).ToList();
+        if (completed.Count == 0)
+            return tasks;
+
+        retainCompletedStates = true;
+        var completedNames = string.Join("、", completed.Select(task => task.InterfaceItem?.Name ?? task.Name));
+        var nextTask = tasks.First(task => !RecentlySucceeded(task));
+        var nextName = nextTask.InterfaceItem?.Name ?? nextTask.Name;
+        LoggerHelper.Info(
+            $"续跑：勾选中存在未成功任务，跳过近期已成功的 {completed.Count} 个任务（{completedNames}），本轮从「{nextName}」开始");
+        return tasks.Where(task => !RecentlySucceeded(task)).ToList();
+    }
+
     public CancellationTokenSource? CancellationTokenSource
     {
         get;
@@ -3532,7 +3576,8 @@ public class MaaProcessor
     private DateTime? _startTime;
     private List<DragItemViewModel> _tempTasks = [];
 
-    public async Task StartTask(List<DragItemViewModel>? tasks, bool onlyStart = false, bool checkUpdate = false)
+    public async Task StartTask(List<DragItemViewModel>? tasks, bool onlyStart = false, bool checkUpdate = false,
+        bool retainCompletedStates = false)
     {
         using var logScope = BeginInstanceLogScope("ExecuteTaskQueue", "Worker");
         ResetActionFailedCount();
@@ -3563,7 +3608,7 @@ public class MaaProcessor
         {
             tasks ??= new List<DragItemViewModel>();
             _tempTasks = tasks;
-            runId = ViewModel?.BeginTaskRun(tasks) ?? 0;
+            runId = ViewModel?.BeginTaskRun(tasks, retainCompletedStates) ?? 0;
             LoggerHelper.Info($"准备执行任务队列：任务数量={tasks.Count}");
             var taskAndParams = tasks.Select((task, index) => CreateNodeAndParam(task, index + 1, runId)).ToList();
             InitializeConnectionTasksAsync(token);

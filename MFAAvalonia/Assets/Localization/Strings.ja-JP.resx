@@ -2238,4 +2238,5 @@
   <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>バックグラウンド · 仮想ディスプレイ</value></data>
   <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>フォアグラウンド · 現在の画面</value></data>
   <data name="CurrentScreen" xml:space="preserve"><value>現在の画面</value></data>
+  <data name="ResumeInterruptedQueue" xml:space="preserve"><value>キューを再開するとき、前回未完了のタスクから再開（成功済みタスクはスキップ）</value></data>
 </root>

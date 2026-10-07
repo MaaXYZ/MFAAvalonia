@@ -2243,6 +2243,7 @@ Update using this archive?</value>
   <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>Background · Virtual display</value></data>
   <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>Foreground · Current screen</value></data>
   <data name="CurrentScreen" xml:space="preserve"><value>Current screen</value></data>
+  <data name="ResumeInterruptedQueue" xml:space="preserve"><value>When restarting the queue, resume from the first unfinished task (succeeded tasks are skipped)</value></data>
 </root>
 
 

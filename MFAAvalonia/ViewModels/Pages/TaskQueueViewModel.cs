@@ -163,7 +163,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
     public bool Idle => !IsRunning;
 
-    public long BeginTaskRun(IReadOnlyCollection<DragItemViewModel> tasks)
+    public long BeginTaskRun(IReadOnlyCollection<DragItemViewModel> tasks, bool retainCompletedStates = false)
     {
         return DispatcherHelper.RunOnMainThread(() =>
         {
@@ -172,6 +172,15 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
             foreach (var item in TaskItemViewModels)
             {
+                // 续跑时，上一轮已成功且本轮被跳过的任务保留完成徽标与耗时
+                if (retainCompletedStates
+                    && item.RunState == TaskRunState.Succeeded
+                    && !tasks.Contains(item))
+                {
+                    item.RunId = runId;
+                    continue;
+                }
+
                 item.RunId = runId;
                 item.RunState = TaskRunState.None;
                 item.RunElapsed = TimeSpan.Zero;
@@ -287,6 +296,9 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             item.RunElapsed = DateTimeOffset.UtcNow - startedAt;
 
         item.RunStartedAt = null;
+        item.RunCompletedAt = state is TaskRunState.Succeeded or TaskRunState.Failed or TaskRunState.Stopped
+            ? DateTimeOffset.UtcNow
+            : null;
         item.RunErrorMessage = errorMessage;
         item.RunState = state;
     }
