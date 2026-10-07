@@ -7,7 +7,7 @@ using System.Collections.Generic;
 namespace MFAAvalonia.Helper.Converters;
 
 /// <summary>
-/// Parses the PI welcome field's legacy string and v2.10.0 announcement array forms.
+/// Parses the PI welcome field's string, string-array, and legacy object-array forms.
 /// </summary>
 public sealed class MaaWelcomeConverter : JsonConverter
 {
@@ -46,8 +46,23 @@ public sealed class MaaWelcomeConverter : JsonConverter
             var result = new List<MaaInterface.MaaInterfaceWelcome>(array.Count);
             foreach (var item in array)
             {
+                if (item.Type == JTokenType.String)
+                {
+                    var stringContent = item.Value<string>();
+                    if (string.IsNullOrWhiteSpace(stringContent))
+                        throw new JsonSerializationException("welcome announcement content is required.");
+
+                    result.Add(new MaaInterface.MaaInterfaceWelcome
+                    {
+                        Content = stringContent,
+                        IsLegacyString = true,
+                    });
+                    continue;
+                }
+
                 if (item is not JObject obj)
-                    throw new JsonSerializationException("welcome announcement entries must be objects.");
+                    throw new JsonSerializationException(
+                        "welcome announcement entries must be strings or objects.");
 
                 var content = obj["content"]?.Type == JTokenType.String
                     ? obj["content"]!.Value<string>()
@@ -69,7 +84,8 @@ public sealed class MaaWelcomeConverter : JsonConverter
             return result;
         }
 
-        throw new JsonSerializationException("welcome must be a string or an array of announcement objects.");
+        throw new JsonSerializationException(
+            "welcome must be a string or a non-empty array of announcement strings or objects.");
     }
 
     public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer) =>
