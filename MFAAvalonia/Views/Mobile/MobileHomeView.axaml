@@ -1,0 +1,66 @@
+<UserControl x:Class="MFAAvalonia.Views.Mobile.MobileHomeView"
+             x:DataType="pages:TaskQueueViewModel"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:fluent="clr-namespace:FluentIcons.Avalonia.Fluent;assembly=FluentIcons.Avalonia.Fluent"
+             xmlns:helper="clr-namespace:MFAAvalonia.Helper"
+             xmlns:pages="clr-namespace:MFAAvalonia.ViewModels.Pages"
+             xmlns:other="clr-namespace:MFAAvalonia.ViewModels.Other"
+             mc:Ignorable="d" d:DesignWidth="390" d:DesignHeight="760">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="18,18,18,12" Spacing="14">
+            <StackPanel Spacing="3">
+                <TextBlock Text="{Binding ApplicationDisplayName, Source={x:Static helper:Instances.RootViewModel}}"
+                           FontSize="28" FontWeight="Bold" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <Border CornerRadius="8" Padding="16"
+                    Background="{DynamicResource SukiCardBackground}"
+                    BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" RowSpacing="10">
+                    <Border Width="44" Height="44" CornerRadius="6"
+                            Background="{DynamicResource SukiPrimaryColor5}">
+                        <fluent:FluentIcon Icon="Phone" IconSize="Size24"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource SukiPrimaryColor}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="CurrentConfigurationText" Text="Current configuration" FontSize="12"
+                                   Foreground="{DynamicResource SukiLowText}" />
+                        <TextBlock x:Name="SingleInstanceText" Text="One configuration runs at a time" FontSize="13" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <ComboBox x:Name="HomeInstanceSelector" Grid.Row="1" Grid.ColumnSpan="2"
+                              SelectionChanged="OnInstanceChanged">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="other:TimerModel+InstanceEntry">
+                                <TextBlock Text="{Binding Name}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </Grid>
+            </Border>
+
+            <Border CornerRadius="8" Padding="16"
+                    Background="{DynamicResource SukiCardBackground}"
+                    BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Spacing="4">
+                        <TextBlock x:Name="CurrentTaskLabel" Text="Current task" FontSize="12" Foreground="{DynamicResource SukiLowText}" />
+                        <TextBlock x:Name="CurrentTaskValue" Text="{Binding CurrentTaskName}" FontSize="16" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <Button Grid.Column="1" MinWidth="130" Height="46" Command="{Binding ToggleCommand}"
+                            IsEnabled="{Binding ToggleEnable}" Background="{DynamicResource SukiPrimaryColor}"
+                            Foreground="White">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <fluent:FluentIcon Icon="Play" IconSize="Size20" />
+                            <TextBlock x:Name="StartStopText" Text="Start / Stop" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

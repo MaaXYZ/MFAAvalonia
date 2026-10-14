@@ -14,12 +14,14 @@ namespace ColorDocument.Avalonia.DocumentElements
         private SelectionList? _prevSelection;
 
         internal string MarkerText { get; set; }
+        public bool? TaskChecked { get; }
 
         public override Control Control => _panel.Value;
         public override IEnumerable<DocumentElement> Children => _elements;
 
-        public ListItemElement(IEnumerable<DocumentElement> contents)
+        public ListItemElement(IEnumerable<DocumentElement> contents, bool? taskChecked = null)
         {
+            TaskChecked = taskChecked;
             _elements = contents.ToEnumerable();
             _panel = new Lazy<StackPanel>(() =>
             {

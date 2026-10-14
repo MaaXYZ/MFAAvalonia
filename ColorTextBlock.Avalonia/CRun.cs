@@ -55,7 +55,7 @@ namespace ColorTextBlock.Avalonia
                 return Array.Empty<CGeometry>();
             }
 
-            if (firstLine.Width < remainWidth)
+            if (firstLine.WidthIncludingTrailingWhitespace < remainWidth)
             {
                 if (firstLine.Length == Text.Length)
                 {

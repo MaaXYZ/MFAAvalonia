@@ -123,6 +123,9 @@
     <data name="BackgroundTransitionsTitle" xml:space="preserve">
         <value>Background Transitions</value>
     </data>
+    <data name="Back" xml:space="preserve">
+        <value>Back</value>
+    </data>
     <data name="BaseTheme" xml:space="preserve">
         <value>Basic Theme</value>
     </data>
@@ -242,6 +245,9 @@
     </data>
     <data name="CopiedToClipboard" xml:space="preserve">
         <value>Copied to Clipboard</value>
+    </data>
+    <data name="CopySuccess" xml:space="preserve">
+        <value>Copied successfully</value>
     </data>
     <data name="Copy" xml:space="preserve">
         <value>Copy</value>
@@ -984,6 +990,9 @@
     <data name="TabWin32" xml:space="preserve">
         <value>Win32</value>
     </data>
+    <data name="TabMacOS" xml:space="preserve">
+        <value>macOS</value>
+    </data>
     <data name="TabPlayCover" xml:space="preserve">
         <value>PlayCover</value>
     </data>
@@ -1235,6 +1244,9 @@
     </data>
     <data name="TaskFailed" xml:space="preserve">
         <value>Task execution failed!</value>
+    </data>
+    <data name="TaskFailedWithName" xml:space="preserve">
+        <value>Task failed: {0}</value>
     </data>
     <data name="ExternalNotificationCustomNotificationContentSuccess" xml:space="preserve">
         <value>Customize success notification content</value>
@@ -1927,6 +1939,9 @@ Please do not copy only the main executable by itself.</value>
     <data name="SpecialTask_Webhook" xml:space="preserve">
         <value>Webhook</value>
     </data>
+    <data name="SpecialTask_SwitchInstance" xml:space="preserve">
+        <value>Switch Instance</value>
+    </data>
     <data name="SpecialTask_CountdownDesc" xml:space="preserve">
         <value>Continues to the next task after the specified seconds, supports `1~86400` seconds (24 hours), useful for adding delays between tasks.</value>
     </data>
@@ -1948,8 +1963,14 @@ Please do not copy only the main executable by itself.</value>
     <data name="SpecialTask_WebhookDesc" xml:space="preserve">
         <value>Sends an HTTP request to a specified URL with custom request body, useful for integrating with external services or automation platforms.</value>
     </data>
+    <data name="SpecialTask_SwitchInstanceDesc" xml:space="preserve">
+        <value>Stops the current instance, switches to the target instance (optionally itself), reconnects the emulator, and starts the target queue. Useful for multi-account rotation or single-instance looping.</value>
+    </data>
     <data name="SpecialTask_CountdownSeconds" xml:space="preserve">
         <value>Countdown (seconds)</value>
+    </data>
+    <data name="SpecialTask_SwitchInstanceTarget" xml:space="preserve">
+        <value>Target Instance</value>
     </data>
     <data name="SpecialTask_WaitUntilTime" xml:space="preserve">
         <value>Wait until (HH:MM)</value>
@@ -2022,6 +2043,12 @@ Please do not copy only the main executable by itself.</value>
     </data>
     <data name="InstancePresetTaskCountFormat" xml:space="preserve">
         <value>{0}/{1} tasks</value>
+    </data>
+    <data name="ExpandDescription" xml:space="preserve">
+        <value>Expand description</value>
+    </data>
+    <data name="CollapseDescription" xml:space="preserve">
+        <value>Collapse description</value>
     </data>
     <data name="InstanceCannotCloseLast" xml:space="preserve">
         <value>Cannot close the last instance</value>
@@ -2107,6 +2134,115 @@ Please do not copy only the main executable by itself.</value>
   <data name="InstanceDropdownJustNow" xml:space="preserve">
     <value>Just now</value>
   </data>
+  <data name="GlobalBatchStartup" xml:space="preserve">
+    <value>Batch start on launch</value>
+  </data>
+  <data name="GlobalBatchStartupDescription" xml:space="preserve">
+    <value>When enabled, app launch and start timers run all instances using the settings below.</value>
+  </data>
+  <data name="InstanceStartupSettings" xml:space="preserve">
+    <value>Instance startup settings</value>
+  </data>
+  <data name="RefreshInstanceList" xml:space="preserve">
+    <value>Refresh instance list</value>
+  </data>
+  <data name="IncludeInBatchStartup" xml:space="preserve"><value>Include in batch startup</value></data>
+  <data name="ExtraLaunchItems" xml:space="preserve"><value>Additional launch items</value></data>
+  <data name="ExtraLaunchItem" xml:space="preserve"><value>Additional launch item</value></data>
+  <data name="AddExtraLaunchItem" xml:space="preserve"><value>Add launch item</value></data>
+  <data name="RemoveExtraLaunchItem" xml:space="preserve"><value>Remove launch item</value></data>
+  <data name="LaunchItemName" xml:space="preserve"><value>Launch item name</value></data>
+  <data name="VirtualGamepadType" xml:space="preserve"><value>Virtual gamepad type</value></data>
+  <data name="CopyInstanceId" xml:space="preserve"><value>Copy instance ID</value></data>
+  <data name="HelpImproveSoftware" xml:space="preserve"><value>Help improve the software</value></data>
+  <data name="HelpImproveSoftwareDescription" xml:space="preserve"><value>Send anonymous crash reports, task results, and relevant logs and error screenshots from failed tasks to help resource authors diagnose issues.</value></data>
+  <data name="ExportInstanceConfig" xml:space="preserve"><value>Export instance configuration</value></data>
+  <data name="ImportInstanceConfig" xml:space="preserve"><value>Import instance configuration</value></data>
+  <data name="ExportToClipboard" xml:space="preserve"><value>Copy to clipboard</value></data>
+  <data name="ExportToFile" xml:space="preserve"><value>Export to file</value></data>
+  <data name="ImportFromClipboard" xml:space="preserve"><value>Import from clipboard</value></data>
+  <data name="ImportFromFile" xml:space="preserve"><value>Import from file</value></data>
+  <data name="ExportInstanceConfigSuccess" xml:space="preserve"><value>Instance configuration exported.</value></data>
+  <data name="ExportInstanceConfigFailed" xml:space="preserve"><value>Failed to export the instance configuration.</value></data>
+  <data name="ImportInstanceConfigSuccess" xml:space="preserve"><value>Instance configuration imported with {0} tasks.</value></data>
+  <data name="ImportInstanceConfigInvalid" xml:space="preserve"><value>The instance configuration could not be recognized.</value></data>
+  <data name="ImportInstanceConfigProjectMismatch" xml:space="preserve"><value>This configuration belongs to another project.</value></data>
+  <data name="ImportInstanceConfigUnsupportedVersion" xml:space="preserve"><value>This configuration version is not supported.</value></data>
+  <data name="DroppedResourceNameMismatch" xml:space="preserve">
+    <value>Resource name mismatch: the package contains "{0}", but the current resource is "{1}".</value>
+  </data>
+  <data name="DroppedResourcePackageInvalid" xml:space="preserve">
+    <value>This archive is not a valid resource update package.</value>
+  </data>
+  <data name="DroppedResourceUpdateConfirm" xml:space="preserve">
+    <value>A resource update package for "{0}" was detected.
+Current version: {1}
+Package version: {2}
+
+Update using this archive?</value>
+  </data>
+  <data name="DroppedResourceVersionTooLow" xml:space="preserve">
+    <value>Package version {0} is older than the current version {1}.</value>
+  </data>
+  <data name="StopTaskBeforeUpdateResource" xml:space="preserve">
+    <value>Stop the running task before updating resources.</value>
+  </data>
+  <data name="DroppedResourceRidMismatch" xml:space="preserve">
+    <value>Resource ID mismatch: the package contains "{0}", but the current resource is "{1}".</value>
+  </data>
+  <!-- Android mobile interface -->
+  <data name="AccentColor" xml:space="preserve"><value>Accent color</value></data>
+  <data name="Appearance" xml:space="preserve"><value>Appearance</value></data>
+  <data name="ConfigurationActive" xml:space="preserve"><value>Switched to this configuration</value></data>
+  <data name="ConfigurationAdded" xml:space="preserve"><value>Configuration added</value></data>
+  <data name="ConfigurationDeleted" xml:space="preserve"><value>Configuration deleted</value></data>
+  <data name="ConfigurationRenamed" xml:space="preserve"><value>Configuration renamed</value></data>
+  <data name="Configurations" xml:space="preserve"><value>Configurations</value></data>
+  <data name="CurrentConfiguration" xml:space="preserve"><value>Current configuration</value></data>
+  <data name="Dark" xml:space="preserve"><value>Dark</value></data>
+  <data name="DisplayLanguage" xml:space="preserve"><value>Display language</value></data>
+  <data name="ForceScheduledStartDescription" xml:space="preserve"><value>Stop the current task, then start the scheduled task</value></data>
+  <data name="Idle" xml:space="preserve"><value>Idle</value></data>
+  <data name="Language" xml:space="preserve"><value>Language</value></data>
+  <data name="Light" xml:space="preserve"><value>Light</value></data>
+  <data name="RuntimeReady" xml:space="preserve"><value>Initializing controller</value></data>
+  <data name="Schedule" xml:space="preserve"><value>Schedule</value></data>
+  <data name="ScheduleDescription" xml:space="preserve"><value>Configure when tasks start automatically</value></data>
+  <data name="SingleActiveConfiguration" xml:space="preserve"><value>Only one configuration can run at a time</value></data>
+  <data name="StartStop" xml:space="preserve"><value>Task controls</value></data>
+  <data name="StartTasks" xml:space="preserve"><value>Start tasks</value></data>
+  <data name="StopBeforeDelete" xml:space="preserve"><value>Stop this configuration before deleting it</value></data>
+  <data name="StopBeforeSwitch" xml:space="preserve"><value>Stop the current task before switching configurations</value></data>
+  <data name="StopTasks" xml:space="preserve"><value>Stop tasks</value></data>
+  <data name="TargetPackage" xml:space="preserve"><value>Target app package</value></data>
+  <data name="TaskQueue" xml:space="preserve"><value>Task queue</value></data>
+  <data name="TaskQueueDescription" xml:space="preserve"><value>Select tasks and adjust their execution order</value></data>
+  <data name="Tasks" xml:space="preserve"><value>Tasks</value></data>
+  <data name="ThemeMode" xml:space="preserve"><value>Theme mode</value></data>
+  <data name="UserLogs" xml:space="preserve"><value>User logs</value></data>
+  <data name="VirtualAlreadyRunning" xml:space="preserve"><value>Virtual display is already running</value></data>
+  <data name="VirtualAppLaunched" xml:space="preserve"><value>App launched on the virtual display</value></data>
+  <data name="VirtualCreateFailed" xml:space="preserve"><value>Failed to create virtual display</value></data>
+  <data name="VirtualDisplay" xml:space="preserve"><value>Virtual display</value></data>
+  <data name="VirtualLaunchFailed" xml:space="preserve"><value>Failed to launch app</value></data>
+  <data name="VirtualNoActivityOptions" xml:space="preserve"><value>Unable to create app launch options</value></data>
+  <data name="VirtualNoDisplayManager" xml:space="preserve"><value>Android display manager is unavailable</value></data>
+  <data name="VirtualOperationFailed" xml:space="preserve"><value>Virtual display operation failed</value></data>
+  <data name="VirtualPackageNotFound" xml:space="preserve"><value>Target app was not found</value></data>
+  <data name="VirtualPackageRequired" xml:space="preserve"><value>Enter the target app package name</value></data>
+  <data name="VirtualRequiresAndroid8" xml:space="preserve"><value>Virtual display requires Android 8.0 or later</value></data>
+  <data name="VirtualStarted" xml:space="preserve"><value>Virtual display started</value></data>
+  <data name="VirtualStopped" xml:space="preserve"><value>Virtual display is not running</value></data>
+  <data name="VirtualStoppedDone" xml:space="preserve"><value>Virtual display stopped</value></data>
+  <data name="VirtualUnsupported" xml:space="preserve"><value>Controller is not connected; preview is unavailable</value></data>
+  <data name="Blue" xml:space="preserve"><value>Blue</value></data>
+  <data name="Green" xml:space="preserve"><value>Green</value></data>
+  <data name="Red" xml:space="preserve"><value>Red</value></data>
+  <data name="Orange" xml:space="preserve"><value>Orange</value></data>
+  <data name="Purple" xml:space="preserve"><value>Purple</value></data>
+  <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>Background · Virtual display</value></data>
+  <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>Foreground · Current screen</value></data>
+  <data name="CurrentScreen" xml:space="preserve"><value>Current screen</value></data>
 </root>
 
 

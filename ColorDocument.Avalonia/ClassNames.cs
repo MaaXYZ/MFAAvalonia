@@ -23,10 +23,20 @@ namespace ColorDocument.Avalonia
         
         // GitHub-style alert classes
         public const string AlertNoteClass = "AlertNote";
+        public const string AlertAbstractClass = "AlertAbstract";
+        public const string AlertInfoClass = "AlertInfo";
+        public const string AlertTodoClass = "AlertTodo";
         public const string AlertTipClass = "AlertTip";
         public const string AlertImportantClass = "AlertImportant";
+        public const string AlertSuccessClass = "AlertSuccess";
+        public const string AlertQuestionClass = "AlertQuestion";
         public const string AlertWarningClass = "AlertWarning";
         public const string AlertCautionClass = "AlertCaution";
+        public const string AlertFailureClass = "AlertFailure";
+        public const string AlertDangerClass = "AlertDanger";
+        public const string AlertBugClass = "AlertBug";
+        public const string AlertExampleClass = "AlertExample";
+        public const string AlertQuoteClass = "AlertQuote";
 
         public const string ParagraphClass = "Paragraph";
 
@@ -40,5 +50,8 @@ namespace ColorDocument.Avalonia
 
         public const string ListClass = "List";
         public const string ListMarkerClass = "ListMarker";
+        public const string TaskListMarkerClass = "MarkdownTaskListMarker";
+        public const string FootnoteReferenceClass = "FootnoteReference";
+        public const string FootnoteRuleClass = "FootnoteRule";
     }
 }

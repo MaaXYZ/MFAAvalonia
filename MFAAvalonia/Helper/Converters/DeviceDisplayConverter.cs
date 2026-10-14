@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.Templates;
 using FluentAvalonia.UI.Controls;
 using MaaFramework.Binding;
+using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Helper.ValueType;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -31,6 +32,14 @@ public class DeviceDisplayConverter : MarkupExtension, IValueConverter
         if (value is DesktopWindowInfo info)
         {
             return info.Name;
+        }
+        if (value is MacOSWindowInfo macOSWindow)
+        {
+            return macOSWindow.Name;
+        }
+        if (value is WlRootsSocketInfo wlRootsSocket)
+        {
+            return wlRootsSocket.SocketPath;
         }
         if (value is EmptyDevicePlaceholder placeholder)
         {

@@ -1,4 +1,12 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
   <color name="splash_background">#FFFFFF</color>
+  <color name="shizuku_dialog_surface">#F8FAFF</color>
+  <color name="shizuku_dialog_title">#171A21</color>
+  <color name="shizuku_dialog_body">#717886</color>
+  <color name="shizuku_dialog_secondary_action">#777E8B</color>
+  <color name="shizuku_warning_circle_color">#DFEAFA</color>
+  <color name="shizuku_warning_icon">#2D76D6</color>
+  <color name="shizuku_primary_button_color">#2D74D8</color>
+  <color name="shizuku_primary_button_ripple">#4DFFFFFF</color>
 </resources>

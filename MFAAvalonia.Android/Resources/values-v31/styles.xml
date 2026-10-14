@@ -9,7 +9,8 @@
     <item name="android:windowBackground">@null</item>
     <item name="android:windowNoTitle">true</item>
     <item name="android:windowSplashScreenBackground">@color/splash_background</item>
-    <item name="android:windowSplashScreenAnimatedIcon">@drawable/avalonia_anim</item>
+    <!-- Keep Android 12+ splash artwork identical to the build-time Launcher icon. -->
+    <item name="android:windowSplashScreenAnimatedIcon">@drawable/Icon</item>
     <item name="android:windowSplashScreenAnimationDuration">1000</item>
     <item name="postSplashScreenTheme">@style/MyTheme.Main</item>
 

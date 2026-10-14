@@ -14,6 +14,8 @@ public partial class MonitorView : UserControl
         if (!Design.IsDesignMode)
         {
             DataContext = Instances.MonitorViewModel;
+            AttachedToVisualTree += (_, _) => Instances.MonitorViewModel.EnterLiveViewOverride();
+            DetachedFromVisualTree += (_, _) => Instances.MonitorViewModel.LeaveLiveViewOverride();
         }
     }
 

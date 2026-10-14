@@ -29,9 +29,9 @@ namespace Markdown.Avalonia.Parsers.Builtin
             parseTextBegin = firstMatch.Index;
             parseTextEnd = firstMatch.Index + firstMatch.Length;
 
-            var detentTxt = String.Join("\n", firstMatch.Groups[1].Value.Split('\n').Select(line => TextUtil.DetentLineBestEffort(line, 4)));
+            var detentTxt = TextUtil.DetentLinesBestEffort(firstMatch.Groups[1].Value, 4);
             var border = FencedCodeBlockParser.Create(_newlinesLeadingTrailing.Replace(detentTxt, ""));
-            return new[] { new UnBlockElement(border) };
+            return new[] { new UnBlockElement(border, "IndentedCode:" + detentTxt) };
         }
     }
 }

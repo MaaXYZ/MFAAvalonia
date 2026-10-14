@@ -1,0 +1,80 @@
+<UserControl x:Class="MFAAvalonia.Views.Mobile.MobileScheduleView"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:other="clr-namespace:MFAAvalonia.ViewModels.Other"
+             xmlns:controls="clr-namespace:MFAAvalonia.Views.UserControls"
+             xmlns:helper="clr-namespace:MFAAvalonia.Helper"
+             xmlns:markup="https://codewf.com"
+             xmlns:fluent="clr-namespace:FluentIcons.Avalonia.Fluent;assembly=FluentIcons.Avalonia.Fluent"
+             x:DataType="other:TimerModel"
+             mc:Ignorable="d" d:DesignWidth="390" d:DesignHeight="760">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="18" Spacing="12">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                    <TextBlock x:Name="PageTitle" FontSize="22" FontWeight="Bold" />
+                    <TextBlock x:Name="PageDescription" Foreground="{DynamicResource SukiLowText}" TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="1" Width="42" Height="42" Padding="0"
+                        Command="{Binding AddTimerCommand}" ToolTip.Tip="Add schedule">
+                    <fluent:FluentIcon Icon="Add" IconSize="Size20" />
+                </Button>
+            </Grid>
+
+            <Border CornerRadius="8" Padding="14" Background="{DynamicResource SukiCardBackground}"
+                    BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel>
+                        <TextBlock x:Name="ForceStartTitle" FontWeight="SemiBold" />
+                        <TextBlock x:Name="ForceStartDescription" FontSize="12" Foreground="{DynamicResource SukiLowText}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding ForceScheduledStart}" />
+                </Grid>
+            </Border>
+
+            <ItemsControl ItemsSource="{Binding Timers}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="other:TimerModel+TimerProperties">
+                        <Border Margin="0,0,0,10" CornerRadius="8" Padding="14"
+                                Background="{DynamicResource SukiCardBackground}"
+                                BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                    <ToggleSwitch IsChecked="{Binding IsOn}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding TimerName}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <Button Grid.Column="2" Width="38" Height="38" Padding="0" Command="{Binding RemoveCommand}">
+                                        <fluent:FluentIcon Icon="Delete" IconSize="Size20" />
+                                    </Button>
+                                </Grid>
+                                <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="10">
+                                    <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.TriggerTime}}" VerticalAlignment="Center" />
+                                    <TimePicker Grid.Column="1" SelectedTime="{Binding Time}" MinuteIncrement="1" ClockIdentifier="24HourClock" />
+                                    <TextBlock Grid.Row="1" Text="{markup:I18n {x:Static helper:LangKeys.TriggerDate}}" VerticalAlignment="Center" />
+                                    <controls:SchedulePicker Grid.Row="1" Grid.Column="1" ScheduleConfig="{Binding ScheduleConfig}" />
+                                    <TextBlock Grid.Row="2" Text="{markup:I18n {x:Static helper:LangKeys.TimerAction}}" VerticalAlignment="Center" />
+                                    <ComboBox Grid.Row="2" Grid.Column="1" SelectedIndex="{Binding TimerActionIndex}">
+                                        <ComboBoxItem Content="{markup:I18n {x:Static helper:LangKeys.StartTask}}" />
+                                        <ComboBoxItem Content="{markup:I18n {x:Static helper:LangKeys.StopTask}}" />
+                                    </ComboBox>
+                                    <TextBlock Grid.Row="3" Text="{markup:I18n {x:Static helper:LangKeys.SelectedConfig}}" VerticalAlignment="Center" />
+                                    <ComboBox Grid.Row="3" Grid.Column="1"
+                                              ItemsSource="{Binding InstanceList}"
+                                              SelectedValue="{Binding TimerConfig}"
+                                              SelectedValueBinding="{Binding InstanceId}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="other:TimerModel+InstanceEntry">
+                                                <TextBlock Text="{Binding Name}" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

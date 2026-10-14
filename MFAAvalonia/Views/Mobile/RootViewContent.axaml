@@ -92,7 +92,8 @@
                                                        Foreground="{DynamicResource SukiText}">
                                     <fluentIcon:FluentIcon.Transitions>
                                         <Transitions>
-                                            <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.15" />
+                                            <TransformOperationsTransition Property="RenderTransform"
+                                                                           Duration="0:0:0.15" />
                                         </Transitions>
                                     </fluentIcon:FluentIcon.Transitions>
                                 </fluentIcon:FluentIcon>
@@ -114,7 +115,8 @@
                                                        Foreground="{DynamicResource SukiText}">
                                     <fluentIcon:FluentIcon.Transitions>
                                         <Transitions>
-                                            <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.15" />
+                                            <TransformOperationsTransition Property="RenderTransform"
+                                                                           Duration="0:0:0.15" />
                                         </Transitions>
                                     </fluentIcon:FluentIcon.Transitions>
                                 </fluentIcon:FluentIcon>

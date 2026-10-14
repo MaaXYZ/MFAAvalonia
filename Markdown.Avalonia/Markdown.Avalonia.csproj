@@ -25,5 +25,6 @@
     <ProjectReference Include="..\Markdown.Avalonia.Svg\Markdown.Avalonia.Svg.csproj" />
     <ProjectReference Include="..\Markdown.Avalonia.Tight\Markdown.Avalonia.Tight.csproj" />
 	    <ProjectReference Include="..\Markdown.Avalonia.SyntaxHigh\Markdown.Avalonia.SyntaxHigh.csproj" />    
+	    <ProjectReference Include="..\Markdown.Avalonia.Math\Markdown.Avalonia.Math.csproj" />
   </ItemGroup>
 </Project>

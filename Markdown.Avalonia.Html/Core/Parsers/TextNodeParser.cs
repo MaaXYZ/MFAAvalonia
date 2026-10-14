@@ -4,6 +4,7 @@ using ColorTextBlock.Avalonia;
 using HtmlAgilityPack;
 using Markdown.Avalonia.Html.Core.Utils;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Markdown.Avalonia.Html.Core.Parsers;
 
@@ -32,12 +33,7 @@ public class TextNodeParser : IInlineTagParser
 
     public IEnumerable<CInline> Replace(string text, ReplaceManager manager)
     {
-        // 只去除前导换行符，保留其他空格（避免破坏单词间的空格）
-        // 这样可以解决HTML内联标签后因换行符产生的间隔问题
-        var processedText = text.TrimStart('\n', '\r');
-
-        // 将内部的换行符替换为空格
-        processedText = processedText.Replace('\n', ' ');
+        var processedText = HtmlTextNormalizer.NormalizeSourceWhitespace(text);
 
         // 如果处理后为空，返回空列表
         if (string.IsNullOrEmpty(processedText))
@@ -45,7 +41,17 @@ public class TextNodeParser : IInlineTagParser
             return EnumerableExt.Empty<CInline>();
         }
 
+        // A whitespace-only node between inline HTML elements still occupies
+        // one collapsed HTML space. A non-breaking space prevents the custom
+        // text formatter from discarding that standalone run.
+        if (string.IsNullOrWhiteSpace(processedText))
+        {
+            return [new CRun { Text = "\u00A0" }];
+        }
+
         // 使用Markdown引擎处理文本
-        return manager.Engine.RunSpanGamut(processedText);
+        var inlines = manager.Engine.RunSpanGamut(processedText).ToArray();
+        HtmlTextNormalizer.DecodeEntities(inlines);
+        return inlines;
     }
 }

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="shizuku_not_installed_title">Shizuku not found</string>
+  <string name="shizuku_not_installed_message">MFA Android requires the Shizuku service, but Shizuku is not installed. Install it and follow its instructions to start the service.</string>
+  <string name="shizuku_install_bundled">Quick install Shizuku</string>
+  <string name="shizuku_open_official_download">Open official download</string>
+  <string name="shizuku_later">Skip check (not recommended)</string>
+  <string name="shizuku_warning_icon_description">Warning</string>
+  <string name="shizuku_not_running_title">Start Shizuku first</string>
+  <string name="shizuku_not_running_message">Shizuku is installed, but its service is not running. Open Shizuku and start the service, then return to MFA.</string>
+  <string name="shizuku_open_app">Open Shizuku</string>
+  <string name="shizuku_not_authorized_title">Shizuku authorization required</string>
+  <string name="shizuku_not_authorized_message">Shizuku is running, but MFA has not been authorized. Grant access in the Shizuku permission dialog before starting a task.</string>
+  <string name="shizuku_authorize_now">Authorize now</string>
+  <string name="shizuku_authorizing">Waiting for authorization...</string>
+  <string name="shizuku_service_connecting_title">Connecting to Shizuku</string>
+  <string name="shizuku_service_connecting_message">Permission is granted, but the MFA controller service is not ready. Retry the connection.</string>
+  <string name="shizuku_retry_connection">Retry connection</string>
+</resources>

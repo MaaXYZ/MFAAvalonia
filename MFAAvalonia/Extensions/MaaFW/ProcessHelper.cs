@@ -101,7 +101,7 @@ public static class ProcessHelper
     /// </summary>
     public static void ReconnectByAdb(string adbPath, string address)
     {
-        if (string.IsNullOrEmpty(adbPath) || adbPath == "adb")
+        if (string.IsNullOrWhiteSpace(adbPath) || string.IsNullOrWhiteSpace(address))
             return;
 
         if (OperatingSystem.IsWindows())
@@ -119,7 +119,7 @@ public static class ProcessHelper
     /// </summary>
     public static async Task ReconnectByAdbAsync(string adbPath, string address)
     {
-        if (string.IsNullOrEmpty(adbPath) || adbPath == "adb")
+        if (string.IsNullOrWhiteSpace(adbPath) || string.IsNullOrWhiteSpace(address))
             return;
 
         if (OperatingSystem.IsWindows())
@@ -154,6 +154,7 @@ public static class ProcessHelper
         };
         process.Start();
         process.StandardInput.WriteLine($"\"{adbPath}\" disconnect {address}");
+        process.StandardInput.WriteLine($"\"{adbPath}\" connect {address}");
         process.StandardInput.WriteLine("exit");
         process.WaitForExit();
     }
@@ -161,11 +162,13 @@ public static class ProcessHelper
     private static void ReconnectByAdbUnix(string adbPath, string address)
     {
         ExecuteCommand(adbPath, $"disconnect {address}");
+        ExecuteCommand(adbPath, $"connect {address}");
     }
 
     private static async Task ReconnectByAdbUnixAsync(string adbPath, string address)
     {
         await ExecuteCommandAsync(adbPath, $"disconnect {address}");
+        await ExecuteCommandAsync(adbPath, $"connect {address}");
     }
 
     /// <summary>

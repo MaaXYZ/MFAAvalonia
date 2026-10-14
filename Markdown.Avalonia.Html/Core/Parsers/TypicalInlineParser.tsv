@@ -5,7 +5,7 @@ acronym    | ColorTextBlock.Avalonia.CSpan      | TagAbbr              | Acronym
 b          | ColorTextBlock.Avalonia.CBold      | TagBold              |
 bdi        | ColorTextBlock.Avalonia.CSpan      | TagBdi               |
 br         | ColorTextBlock.Avalonia.CLineBreak |                      |
-cite       | ColorTextBlock.Avalonia.CSpan      | TagCite              |
+cite       | ColorTextBlock.Avalonia.CItalic    | TagCite              |
 del        | ColorTextBlock.Avalonia.CSpan      | TagStrikethrough     | Strikethrough
 em         | ColorTextBlock.Avalonia.CItalic    | TagItalic            |
 i          | ColorTextBlock.Avalonia.CItalic    | TagItalic            |
@@ -18,6 +18,9 @@ sub        | ColorTextBlock.Avalonia.CSpan      | TagSubscript         | Subscri
 sup        | ColorTextBlock.Avalonia.CSpan      | TagSuperscript       | Superscript
 u          | ColorTextBlock.Avalonia.CUnderline | TagUnderline         |
 code       | ColorTextBlock.Avalonia.CCode      | TagCodeSpan          |
-kbd        | ColorTextBlock.Avalonia.CCode      | TagCodeSpan          |
-var        | ColorTextBlock.Avalonia.CCode      | TagCodeSpan          |
+kbd        | ColorTextBlock.Avalonia.CCode      | TagKbd               |
+var        | ColorTextBlock.Avalonia.CItalic    | TagVar               |
+big        | ColorTextBlock.Avalonia.CSpan      | TagBig               |
+small      | ColorTextBlock.Avalonia.CSpan      | TagSmall             |
+tt         | ColorTextBlock.Avalonia.CSpan      | TagTeletype          |
 span       | ColorTextBlock.Avalonia.CSpan      |                      |

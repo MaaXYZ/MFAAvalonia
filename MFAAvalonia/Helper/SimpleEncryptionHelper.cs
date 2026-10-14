@@ -156,6 +156,16 @@ public static class SimpleEncryptionHelper
         if (string.IsNullOrWhiteSpace(plainText))
             return string.Empty;
 
+        // CrossPlatformProtectedData creates an AndroidKeyStore EC key and then
+        // attempts to export its private parameters. CheckJNI aborts the process
+        // before a managed exception can be caught, so Android uses the existing
+        // device-bound AES fallback directly.
+        if (OperatingSystem.IsAndroid())
+        {
+            var androidKey = GetDeviceKeys(Generate());
+            return EncryptProvider.AESEncrypt(plainText, androidKey);
+        }
+
         try
         {
             var data = Encoding.UTF8.GetBytes(plainText);
@@ -178,18 +188,21 @@ public static class SimpleEncryptionHelper
             return string.Empty;
         string result;
 
-        try
+        if (!OperatingSystem.IsAndroid())
         {
-            var data = Convert.FromBase64String(encryptedBase64);
-            var decryptedData = ProtectedData.Unprotect(data, null, DataProtectionScope.CurrentUser);
-            result = Encoding.UTF8.GetString(decryptedData);
-            if (string.IsNullOrWhiteSpace(result))
-                throw new Exception("result is null");
-            return result;
-        }
-        catch (Exception e)
-        {
-            LoggerHelper.Warn("跨平台数据解密失败: " + e.Message);
+            try
+            {
+                var data = Convert.FromBase64String(encryptedBase64);
+                var decryptedData = ProtectedData.Unprotect(data, null, DataProtectionScope.CurrentUser);
+                result = Encoding.UTF8.GetString(decryptedData);
+                if (string.IsNullOrWhiteSpace(result))
+                    throw new Exception("result is null");
+                return result;
+            }
+            catch (Exception e)
+            {
+                LoggerHelper.Warn("跨平台数据解密失败: " + e.Message);
+            }
         }
 
 

@@ -344,6 +344,8 @@ namespace ColorTextBlock.Avalonia
                 _entered.OnMouseLeave?.Invoke(this);
                 _entered = null;
             }
+
+            CloseInlineToolTip();
         }
 
         protected override void OnPointerMoved(PointerEventArgs e)
@@ -351,27 +353,25 @@ namespace ColorTextBlock.Avalonia
             base.OnPointerMoved(e);
 
             Point point = e.GetPosition(this);
+            var next = _metries.FirstOrDefault(isEntered);
 
-            if (_entered is not null)
+            if (ReferenceEquals(_entered, next)) return;
+
+            var previousToolTip = _entered?.Owner.ToolTipText;
+            var nextToolTip = next?.Owner.ToolTipText;
+
+            _entered?.OnMouseLeave?.Invoke(this);
+            next?.OnMouseEnter?.Invoke(this);
+            _entered = next;
+
+            if (!String.Equals(previousToolTip, nextToolTip, StringComparison.Ordinal))
             {
-                var relX = point.X - _entered.Left;
-                var relY = point.Y - _entered.Top;
+                CloseInlineToolTip();
 
-                if (!isEntered(_entered))
+                if (!String.IsNullOrWhiteSpace(nextToolTip))
                 {
-                    _entered.OnMouseLeave?.Invoke(this);
-                    _entered = null;
-                }
-                else return;
-            }
-
-            foreach (CGeometry metry in _metries)
-            {
-                if (isEntered(metry))
-                {
-                    metry.OnMouseEnter?.Invoke(this);
-                    _entered = metry;
-                    break;
+                    ToolTip.SetTip(this, nextToolTip);
+                    ToolTip.SetIsOpen(this, true);
                 }
             }
 
@@ -383,6 +383,12 @@ namespace ColorTextBlock.Avalonia
                 return 0 <= relX && relX <= metry.Width
                     && 0 <= relY && relY <= metry.Height;
             }
+        }
+
+        private void CloseInlineToolTip()
+        {
+            ToolTip.SetIsOpen(this, false);
+            ToolTip.SetTip(this, null);
         }
 
         protected override void OnPointerPressed(PointerPressedEventArgs e)

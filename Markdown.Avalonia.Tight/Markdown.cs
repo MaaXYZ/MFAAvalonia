@@ -12,22 +12,29 @@ using ColorTextBlock.Avalonia.Utils;
 using Markdown.Avalonia.Controls;
 using Markdown.Avalonia.Parsers;
 using Markdown.Avalonia.Parsers.Builtin;
+using Markdown.Avalonia.Parsing;
 using Markdown.Avalonia.Plugins;
 using Markdown.Avalonia.Tables;
 using Markdown.Avalonia.Utils;
+using Markdig.Extensions.Footnotes;
+using Markdig.Renderers.Html;
+using Markdig.Syntax.Inlines;
+using Markdig.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Windows.Input;
 
 namespace Markdown.Avalonia
 {
-    public class Markdown : AvaloniaObject, IMarkdownEngine, IMarkdownEngine2
+    public class Markdown : AvaloniaObject, IMarkdownEngine, IMarkdownEngine2, IDocumentAnchorProvider
     {
         #region const
 
@@ -149,16 +156,28 @@ namespace Markdown.Avalonia
         public IEnumerable<string> AssetAssemblyNames => _assetAssemblyNames;
 
         private ICommand? _hyperlinkCommand;
+        private RoutedHyperlinkCommand? _routedHyperlinkCommand;
+        private readonly Dictionary<string, DocumentElement> _documentAnchors =
+            new(StringComparer.Ordinal);
+
+        Action<string>? IDocumentAnchorProvider.AnchorNavigationRequested { get; set; }
 
         /// <inheritdoc/>
         public ICommand? HyperlinkCommand
         {
-            get => _hyperlinkCommand ?? _setupInfo?.HyperlinkCommand;
+            get => _routedHyperlinkCommand ??= new RoutedHyperlinkCommand(this);
             set
             {
+                if (ReferenceEquals(value, _routedHyperlinkCommand))
+                    return;
                 _hyperlinkCommand = value;
             }
         }
+
+        private ICommand? ExternalHyperlinkCommand => _hyperlinkCommand ?? _setupInfo?.HyperlinkCommand;
+
+        bool IDocumentAnchorProvider.TryGetDocumentAnchor(string anchor, out DocumentElement element)
+            => _documentAnchors.TryGetValue(NormalizeAnchor(anchor), out element!);
 
         public MdAvPlugins Plugins { get; set; }
 
@@ -263,6 +282,10 @@ namespace Markdown.Avalonia
             topBlocks.Add(
                 info.EnableListMarkerExt ? new ExtListParser() : new CommonListParser());
 
+            // Plugin block parsers must be able to specialize built-in syntax
+            // (for example, rendering a ```math fence instead of a code block).
+            topBlocks.AddRange(info.TopBlock.Select(bp => bp.Upgrade()));
+
             topBlocks.Add(new FencedCodeBlockParser(info.EnablePreRenderingCodeBlock));
 
             if (info.EnableContainerBlockExt)
@@ -295,6 +318,7 @@ namespace Markdown.Avalonia
             // inline parser
             inlines.Add(InlineParser.New(_codeSpan, nameof(CodeSpanEvaluator), CodeSpanEvaluator));
             inlines.Add(InlineParser.New(_imageOrHrefInline, nameof(ImageOrHrefInlineEvaluator), ImageOrHrefInlineEvaluator));
+            inlines.Add(InlineParser.New(_autoLink, nameof(AutoLinkEvaluator), AutoLinkEvaluator));
 
             if (StrictBoldItalic)
             {
@@ -307,7 +331,6 @@ namespace Markdown.Avalonia
 
             // parser registered by plugin
 
-            topBlocks.AddRange(info.TopBlock.Select(bp => bp.Upgrade()));
             subBlocks.AddRange(info.Block.Select(bp => bp.Upgrade()));
             inlines.AddRange(info.Inline);
 
@@ -336,7 +359,7 @@ namespace Markdown.Avalonia
                 return input;
 
             // 使用预编译的静态正则表达式处理 HTML 注释
-            return _htmlCommentPattern.Replace(input, match =>
+            var processed = _htmlCommentPattern.Replace(input, match =>
             {
                 // 提取注释中间的内容（捕获组1）
                 string commentContent = match.Groups[1].Value;
@@ -346,6 +369,40 @@ namespace Markdown.Avalonia
 
                 // 若包含汉字，则保留中间内容；否则完全移除
                 return hasChineseChars ? commentContent : string.Empty;
+            });
+
+            return ResolveReferenceLinks(processed);
+        }
+
+        private static readonly Regex _referenceDefinitionPattern = new(
+            @"^[\t ]*\[(?!\^)(?<id>[^\]]+)\]:[\t ]*(?<url>\S+)(?:[\t ]+(?<title>[\""'].*?[\""']))?[\t ]*$",
+            RegexOptions.Multiline | RegexOptions.Compiled);
+
+        private static readonly Regex _referenceLinkPattern = new(
+            @"(?<image>!?)\[(?<text>[^\]]+)\]\[(?<id>[^\]]+)\]",
+            RegexOptions.Compiled);
+
+        internal static string ResolveReferenceLinks(string text)
+        {
+            var definitions = new Dictionary<string, (string Url, string Title)>(StringComparer.OrdinalIgnoreCase);
+            var withoutDefinitions = _referenceDefinitionPattern.Replace(text, match =>
+            {
+                definitions[match.Groups["id"].Value.Trim()] = (
+                    match.Groups["url"].Value,
+                    match.Groups["title"].Success ? match.Groups["title"].Value : string.Empty);
+                return string.Empty;
+            });
+
+            if (definitions.Count == 0)
+                return withoutDefinitions;
+
+            return _referenceLinkPattern.Replace(withoutDefinitions, match =>
+            {
+                var id = match.Groups["id"].Value.Trim();
+                return definitions.TryGetValue(id, out var definition)
+                    ? $"{match.Groups["image"].Value}[{match.Groups["text"].Value}]" +
+                      $"({definition.Url}{(definition.Title.Length > 0 ? " " + definition.Title : string.Empty)})"
+                    : match.Value;
             });
         }
 
@@ -366,8 +423,215 @@ namespace Markdown.Avalonia
             text = TextUtil.Normalize(text, _tabWidth);
 
             var status = new ParseStatus(true & _supportTextAlignment);
-            var elements = ParseGamutElement(text, status);
+            _documentAnchors.Clear();
+            var elements = ParseGamutElement(text, status).ToArray();
             return new DocumentRootElement(elements);
+        }
+
+        internal DeferredParseOptions PrepareDeferredParsing()
+        {
+            SetupParser();
+            return new DeferredParseOptions(_tabWidth, _supportTextAlignment);
+        }
+
+        internal DeferredDocumentPlan BuildDeferredDocument(
+            string text,
+            DeferredParseOptions options,
+            CancellationToken cancellationToken)
+        {
+            var processed = PreprocessText(text) ?? string.Empty;
+            cancellationToken.ThrowIfCancellationRequested();
+            processed = TextUtil.Normalize(processed, options.TabWidth);
+
+            var index = StandardMarkdownParser.CreateIndex(processed, cancellationToken);
+            var elements = new List<DocumentElement>(index.Blocks.Count);
+            var anchors = new List<DeferredAnchor>();
+
+            foreach (var block in index.Blocks)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var capturedBlock = block;
+                var useBoundedRawFallback = ShouldUseBoundedRawFallback(index.Source, block);
+                Func<IReadOnlyList<DocumentElement>> factory = useBoundedRawFallback
+                    ? () =>
+                    [
+                        new LargeRawTextElement(index.Source.Substring(
+                            capturedBlock.SourceStart,
+                            capturedBlock.SourceLength))
+                    ]
+                    : () => RenderDeferredBlock(
+                        index.Source,
+                        capturedBlock,
+                        options.SupportTextAlignment);
+                var contentKey =
+                    $"{block.Node.GetType().Name}:{block.SourceStart}:{block.SourceLength}";
+                DocumentElement deferred = block.Node is HeadingBlock heading
+                    ? new DeferredHeadingElement(
+                        factory,
+                        contentKey,
+                        heading.Level,
+                        ExtractHeadingText(heading))
+                    : new DeferredBlockElement(factory, contentKey);
+
+                elements.Add(deferred);
+                foreach (var anchor in ExtractIndexedBlockAnchors(index.Source, block))
+                    anchors.Add(new DeferredAnchor(anchor, deferred));
+
+                if (block.Node is LeafBlock { Inline: { } inline })
+                {
+                    foreach (var link in EnumerateInlineTree(inline)
+                                 .OfType<FootnoteLink>()
+                                 .Where(link => !link.IsBackLink))
+                    {
+                        anchors.Add(new DeferredAnchor($"fnref:{link.Index}", deferred));
+                    }
+                }
+
+                if (block.Node is FootnoteGroup footnoteGroup)
+                {
+                    foreach (var footnote in footnoteGroup.OfType<Footnote>().Where(f => f.Order > 0))
+                        anchors.Add(new DeferredAnchor($"fn:{footnote.Order}", deferred));
+                }
+            }
+
+            return new DeferredDocumentPlan(
+                new DocumentRootElement(elements),
+                anchors,
+                index.Source);
+        }
+
+        internal void ActivateDeferredDocument(DeferredDocumentPlan plan)
+        {
+            _documentAnchors.Clear();
+            foreach (var anchor in plan.Anchors)
+                RegisterDocumentAnchor(anchor.Name, anchor.Target);
+        }
+
+        private IReadOnlyList<DocumentElement> RenderDeferredBlock(
+            string documentSource,
+            StandardMarkdownParser.IndexedBlock indexedBlock,
+            bool supportTextAlignment)
+        {
+            var parsedBlock = indexedBlock.Materialize(documentSource);
+            return RenderParsedBlock(parsedBlock, new ParseStatus(supportTextAlignment));
+        }
+
+        private IEnumerable<string> ExtractIndexedBlockAnchors(
+            string documentSource,
+            StandardMarkdownParser.IndexedBlock indexedBlock)
+        {
+            if (indexedBlock.IsRawHtmlContainer)
+            {
+                var html = documentSource.Substring(indexedBlock.SourceStart, indexedBlock.SourceLength);
+                foreach (var anchor in ExtractHtmlAnchors(html))
+                    yield return anchor;
+                yield break;
+            }
+
+            var attributes = indexedBlock.Node.TryGetAttributes();
+            if (!string.IsNullOrWhiteSpace(attributes?.Id))
+                yield return attributes.Id!;
+
+            if (indexedBlock.Node is CodeBlock)
+                yield break;
+
+            if (indexedBlock.Node is Markdig.Syntax.HtmlBlock htmlBlock)
+            {
+                foreach (var anchor in ExtractHtmlAnchors(SliceSource(documentSource, htmlBlock)))
+                    yield return anchor;
+            }
+
+            if (indexedBlock.Node is LeafBlock { Inline: { } inline })
+            {
+                foreach (var htmlInline in EnumerateInlineTree(inline).OfType<HtmlInline>())
+                {
+                    foreach (var anchor in ExtractHtmlAnchors(SliceSource(documentSource, htmlInline)))
+                        yield return anchor;
+                }
+            }
+        }
+
+        private static string ExtractHeadingText(HeadingBlock heading)
+        {
+            if (heading.Inline is null)
+                return string.Empty;
+
+            var builder = new StringBuilder();
+            foreach (var inline in EnumerateInlineTree(heading.Inline))
+            {
+                switch (inline)
+                {
+                    case LiteralInline literal:
+                        builder.Append(literal.Content.ToString());
+                        break;
+                    case HtmlEntityInline entity:
+                        builder.Append(WebUtility.HtmlDecode(entity.Original.ToString()));
+                        break;
+                    case CodeInline code:
+                        builder.Append(code.Content);
+                        break;
+                    case LineBreakInline:
+                        builder.Append(' ');
+                        break;
+                    case AutolinkInline autolink:
+                        builder.Append(autolink.Url);
+                        break;
+                    case FootnoteLink footnote when !footnote.IsBackLink:
+                        builder.Append('[').Append(footnote.Footnote.Order).Append(']');
+                        break;
+                }
+            }
+            return builder.ToString();
+        }
+
+        private static bool ShouldUseBoundedRawFallback(
+            string source,
+            StandardMarkdownParser.IndexedBlock block)
+        {
+            if (block.Node is CodeBlock or FootnoteGroup or HeadingBlock)
+                return false;
+
+            const int maximumExpandedCharacters = 512 * 1024;
+            const int maximumExpandedLines = 5000;
+            if (block.SourceLength > maximumExpandedCharacters)
+                return true;
+
+            var end = Math.Min(source.Length, block.SourceStart + block.SourceLength);
+            var lines = 1;
+            for (var index = block.SourceStart; index < end; index++)
+            {
+                if (source[index] == '\n' && ++lines > maximumExpandedLines)
+                    return true;
+            }
+
+            return false;
+        }
+
+        internal readonly record struct DeferredParseOptions(
+            int TabWidth,
+            bool SupportTextAlignment);
+
+        internal readonly record struct DeferredAnchor(
+            string Name,
+            DocumentElement Target);
+
+        internal sealed class DeferredDocumentPlan
+        {
+            public DeferredDocumentPlan(
+                DocumentRootElement document,
+                IReadOnlyList<DeferredAnchor> anchors,
+                string source)
+            {
+                Document = document;
+                Anchors = anchors;
+                Source = source;
+            }
+
+            public DocumentRootElement Document { get; }
+            public IReadOnlyList<DeferredAnchor> Anchors { get; }
+
+            // Keeps the normalized source alive for deferred block factories.
+            public string Source { get; }
         }
 
         public IEnumerable<DocumentElement> ParseGamutElement(string? text, ParseStatus status)
@@ -377,7 +641,7 @@ namespace Markdown.Avalonia
                 throw new ArgumentNullException(nameof(text));
             }
             SetupParser();
-            return PrivateRunBlockGamut(text, status);
+            return RunStandardBlockPipeline(text, status);
         }
 
         public IEnumerable<CInline> ParseGamutInline(string? text)
@@ -401,7 +665,7 @@ namespace Markdown.Avalonia
 
             text = TextUtil.Normalize(text, _tabWidth);
 
-            var elements = PrivateRunBlockGamut(text, status);
+            var elements = RunStandardBlockPipeline(text, status);
             return elements.Select(e => e.Control);
         }
 
@@ -417,6 +681,313 @@ namespace Markdown.Avalonia
             text = TextUtil.Normalize(text, _tabWidth);
 
             return PrivateRunSpanGamut(text);
+        }
+
+        private IEnumerable<DocumentElement> RunStandardBlockPipeline(string text, ParseStatus status)
+        {
+            var pendingAnchors = new List<string>();
+
+            foreach (var parsedBlock in StandardMarkdownParser.ParseBlocks(text))
+            {
+                var blockAnchors = ExtractBlockAnchors(parsedBlock).ToArray();
+                var blockElements = RenderParsedBlock(parsedBlock, status);
+
+                if (blockElements.Count == 0)
+                {
+                    pendingAnchors.AddRange(blockAnchors);
+                    continue;
+                }
+
+                var anchorTarget = blockElements[0];
+                foreach (var anchor in pendingAnchors)
+                    RegisterDocumentAnchor(anchor, anchorTarget);
+                pendingAnchors.Clear();
+
+                foreach (var anchor in blockAnchors)
+                    RegisterDocumentAnchor(anchor, anchorTarget);
+
+                RegisterFootnoteReferenceAnchors(parsedBlock.Node, anchorTarget);
+
+                foreach (var element in blockElements)
+                    yield return element;
+            }
+        }
+
+        private IReadOnlyList<DocumentElement> RenderParsedBlock(
+            StandardMarkdownParser.ParsedBlock parsedBlock,
+            ParseStatus status)
+        {
+            if (TryRenderStandardBlock(parsedBlock, status, out var standardElements))
+                return standardElements!;
+
+            var source = parsedBlock.Source.EndsWith('\n')
+                ? parsedBlock.Source
+                : parsedBlock.Source + "\n";
+            return PrivateRunBlockGamut(source, status).ToArray();
+        }
+
+        private IEnumerable<string> ExtractBlockAnchors(StandardMarkdownParser.ParsedBlock parsedBlock)
+        {
+            if (parsedBlock.IsRawHtmlContainer)
+            {
+                foreach (var anchor in ExtractHtmlAnchors(parsedBlock.Source))
+                    yield return anchor;
+                yield break;
+            }
+
+            var attributes = parsedBlock.Node.TryGetAttributes();
+            if (!string.IsNullOrWhiteSpace(attributes?.Id))
+                yield return attributes.Id!;
+
+            if (parsedBlock.Node is CodeBlock)
+                yield break;
+
+            if (parsedBlock.Node is Markdig.Syntax.HtmlBlock htmlBlock)
+            {
+                foreach (var anchor in ExtractHtmlAnchors(SliceSource(parsedBlock.DocumentSource, htmlBlock)))
+                    yield return anchor;
+            }
+
+            if (parsedBlock.Node is LeafBlock { Inline: { } inline })
+            {
+                foreach (var htmlInline in EnumerateInlineTree(inline).OfType<HtmlInline>())
+                {
+                    foreach (var anchor in ExtractHtmlAnchors(SliceSource(parsedBlock.DocumentSource, htmlInline)))
+                        yield return anchor;
+                }
+            }
+        }
+
+        private static readonly Regex _htmlIdAnchorPattern = new(
+            "\\bid\\s*=\\s*(?:\"(?<double>[^\"]+)\"|'(?<single>[^']+)'|(?<bare>[^\\s>]+))",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex _htmlNameAnchorPattern = new(
+            "<a\\b[^>]*\\bname\\s*=\\s*(?:\"(?<double>[^\"]+)\"|'(?<single>[^']+)'|(?<bare>[^\\s>]+))",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static IEnumerable<string> ExtractHtmlAnchors(string html)
+        {
+            foreach (Match match in _htmlIdAnchorPattern.Matches(html))
+                yield return ReadAnchorAttribute(match);
+            foreach (Match match in _htmlNameAnchorPattern.Matches(html))
+                yield return ReadAnchorAttribute(match);
+
+            static string ReadAnchorAttribute(Match match)
+            {
+                var value = match.Groups["double"].Success
+                    ? match.Groups["double"].Value
+                    : match.Groups["single"].Success
+                        ? match.Groups["single"].Value
+                        : match.Groups["bare"].Value;
+                return WebUtility.HtmlDecode(value);
+            }
+        }
+
+        private void RegisterFootnoteReferenceAnchors(Block node, DocumentElement target)
+        {
+            if (node is not LeafBlock { Inline: { } inline })
+                return;
+
+            foreach (var link in EnumerateInlineTree(inline).OfType<FootnoteLink>().Where(link => !link.IsBackLink))
+                RegisterDocumentAnchor($"fnref:{link.Index}", target);
+        }
+
+        private void RegisterDocumentAnchor(string anchor, DocumentElement target)
+        {
+            var normalized = NormalizeAnchor(anchor);
+            if (normalized.Length > 0)
+                _documentAnchors.TryAdd(normalized, target);
+        }
+
+        private static string NormalizeAnchor(string anchor)
+        {
+            var normalized = anchor.Trim();
+            if (normalized.StartsWith('#'))
+                normalized = normalized[1..];
+
+            try
+            {
+                return Uri.UnescapeDataString(normalized);
+            }
+            catch (UriFormatException)
+            {
+                return normalized;
+            }
+        }
+
+        private bool TryRenderStandardBlock(
+            StandardMarkdownParser.ParsedBlock parsedBlock,
+            ParseStatus status,
+            out IReadOnlyList<DocumentElement>? elements)
+        {
+            elements = null;
+
+            // Markdig moves all referenced footnote definitions into a FootnoteGroup
+            // at the end of the document.  Its group span can begin at position zero,
+            // so sending Group.Source through the legacy parser would render a second
+            // copy of the document.  Render the authoritative AST group directly.
+            if (parsedBlock.Node is FootnoteGroup footnoteGroup)
+            {
+                elements = RenderFootnoteGroup(footnoteGroup, parsedBlock.DocumentSource, status);
+                return true;
+            }
+
+            // Code blocks have already been delimited by Markdig.  Sending their
+            // source through the legacy block/HTML parsers a second time makes
+            // code such as "<?php" look like an HTML processing instruction and
+            // can truncate everything after the first line.
+            if (parsedBlock.Node is CodeBlock codeBlock and not Markdig.Syntax.FencedCodeBlock)
+            {
+                // The AST span is the authoritative boundary.  Rebuild the code
+                // from its original source instead of Markdig's internal line
+                // buffer, whose representation can vary with parser context.
+                var code = TextUtil.DetentLinesBestEffort(parsedBlock.Source
+                    .Replace("\r\n", "\n", StringComparison.Ordinal)
+                    .Replace('\r', '\n'), 4)
+                    .TrimEnd('\n');
+                elements = [new UnBlockElement(FencedCodeBlockParser.Create(code), "IndentedCode:" + code)];
+                return true;
+            }
+
+            if (status.SupportTextAlignment && _align.IsMatch(parsedBlock.Source))
+                return false;
+
+            ContainerInline? inline = parsedBlock.Node switch
+            {
+                ParagraphBlock paragraph => paragraph.Inline,
+                HeadingBlock heading => heading.Inline,
+                _ => null
+            };
+
+            if (inline is null)
+                return false;
+
+            CInline[] rendered;
+            if (CanUseStandardInlinePipeline(parsedBlock.Source, inline))
+            {
+                rendered = RenderStandardInlines(inline).ToArray();
+            }
+            else if (ContainsForwardFootnoteLink(inline))
+            {
+                // Preserve the existing HTML/math/textile inline pipeline while
+                // replacing only the footnote reference nodes recognized by Markdig.
+                rendered = RenderMixedFootnoteInlines(
+                    parsedBlock.Source,
+                    parsedBlock.SourceStart,
+                    inline).ToArray();
+            }
+            else
+            {
+                return false;
+            }
+
+            DecodeHtmlEntities(rendered);
+            NormalizeInlineWhitespaceBoundaries(rendered);
+
+            elements =
+            [
+                parsedBlock.Node is HeadingBlock headingBlock
+                    ? new HeaderElement(rendered, headingBlock.Level)
+                    : new CTextBlockElement(rendered, ParagraphClass)
+            ];
+            return true;
+        }
+
+        private IReadOnlyList<DocumentElement> RenderFootnoteGroup(
+            FootnoteGroup footnoteGroup,
+            string documentSource,
+            ParseStatus status)
+        {
+            var footnotes = footnoteGroup
+                .OfType<Footnote>()
+                .Where(footnote => footnote.Order > 0)
+                .OrderBy(footnote => footnote.Order)
+                .ToArray();
+
+            if (footnotes.Length == 0)
+                return Array.Empty<DocumentElement>();
+
+            var items = footnotes.Select(footnote =>
+            {
+                var contents = RenderFootnoteBlocks(footnote, documentSource, status).ToArray();
+                if (contents.Length == 0)
+                    contents = [new CTextBlockElement(Array.Empty<CInline>(), ParagraphClass)];
+                var item = new ListItemElement(contents);
+                RegisterDocumentAnchor($"fn:{footnote.Order}", item);
+                return item;
+            }).ToArray();
+
+            var rule = new Rule(RuleType.Single);
+            rule.Classes.Add(ClassNames.FootnoteRuleClass);
+
+            return
+            [
+                new UnBlockElement(rule, "FootnoteRule"),
+                new ListBlockElement(
+                    ColorDocument.Avalonia.DocumentElements.TextMarkerStyle.Decimal,
+                    items)
+            ];
+        }
+
+        private IEnumerable<DocumentElement> RenderFootnoteBlocks(
+            Footnote footnote,
+            string documentSource,
+            ParseStatus status)
+        {
+            foreach (var block in footnote)
+            {
+                var source = SliceSource(documentSource, block);
+
+                if (block is ParagraphBlock paragraph && paragraph.Inline is { } paragraphInline)
+                {
+                    CInline[] inlines;
+                    if (CanUseStandardInlinePipeline(source, paragraphInline))
+                    {
+                        // Generated backlink nodes are intentionally skipped by
+                        // RenderStandardInlines until viewer-local anchor navigation
+                        // is available. They must never be sent to the external URL command.
+                        inlines = RenderStandardInlines(paragraphInline).ToArray();
+                    }
+                    else
+                    {
+                        inlines = PrivateRunSpanGamut(source).ToArray();
+                    }
+
+                    DecodeHtmlEntities(inlines);
+                    NormalizeInlineWhitespaceBoundaries(inlines);
+                    yield return new CTextBlockElement(inlines, ParagraphClass);
+                    continue;
+                }
+
+                if (block is HeadingBlock heading && heading.Inline is { } headingInline)
+                {
+                    var inlines = CanUseStandardInlinePipeline(source, headingInline)
+                        ? RenderStandardInlines(headingInline).ToArray()
+                        : PrivateRunSpanGamut(source).ToArray();
+                    DecodeHtmlEntities(inlines);
+                    NormalizeInlineWhitespaceBoundaries(inlines);
+                    yield return new HeaderElement(inlines, heading.Level);
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(source))
+                    continue;
+
+                var nestedSource = source.EndsWith('\n') ? source : source + "\n";
+                foreach (var nested in RunStandardBlockPipeline(nestedSource, status))
+                    yield return nested;
+            }
+        }
+
+        private static string SliceSource(string documentSource, MarkdownObject node)
+        {
+            var span = node.Span;
+            if (span.Start < 0 || span.End < span.Start || span.Start >= documentSource.Length)
+                return string.Empty;
+
+            var end = Math.Min(span.End, documentSource.Length - 1);
+            return documentSource.Substring(span.Start, end - span.Start + 1);
         }
 
         private IEnumerable<DocumentElement> PrivateRunBlockGamut(string text, ParseStatus status)
@@ -516,13 +1087,406 @@ namespace Markdown.Avalonia
         private IEnumerable<CInline> PrivateRunSpanGamut(string text)
         {
             // Debug：初始解析入口
-            var rtn = new List<CInline>();
+            var standardRoot = StandardMarkdownParser.ParseInline(text);
+            var useStandardPipeline = CanUseStandardInlinePipeline(text, standardRoot);
+            List<CInline> rtn;
+            if (useStandardPipeline)
+            {
+                rtn = RenderStandardInlines(standardRoot).ToList();
+            }
+            else
+            {
+                var protectedText = ProtectCodeInlines(text, standardRoot, out var codeInlines);
+                rtn = RestoreCodeInlinePlaceholders(
+                    ParseAllNestedPairs(protectedText, 1),
+                    codeInlines).ToList();
+            }
 
             // 步骤1：先递归处理所有成对符号（分阶段核心：成对匹配优先）
-            var pairParsedResult = ParseAllNestedPairs(text, 1);
-            rtn.AddRange(pairParsedResult);
+            DecodeHtmlEntities(rtn);
+            NormalizeInlineWhitespaceBoundaries(rtn);
 
             return rtn;
+        }
+
+        internal static string ProtectCodeInlines(
+            string text,
+            ContainerInline? root,
+            out IReadOnlyDictionary<int, string> codeInlines)
+        {
+            var replacements = new Dictionary<int, string>();
+            if (root is null)
+            {
+                codeInlines = replacements;
+                return text;
+            }
+
+            var codeNodes = EnumerateInlineTree(root)
+                .OfType<CodeInline>()
+                .Where(code => code.Span.Start >= 0
+                               && code.Span.End >= code.Span.Start
+                               && code.Span.End < text.Length)
+                .OrderBy(code => code.Span.Start)
+                .ToArray();
+
+            var protectedText = text;
+            for (var index = codeNodes.Length - 1; index >= 0; index--)
+            {
+                var code = codeNodes[index];
+                replacements[index] = code.Content;
+                protectedText = protectedText.Remove(
+                        code.Span.Start,
+                        code.Span.End - code.Span.Start + 1)
+                    .Insert(code.Span.Start, CreateCodeInlinePlaceholder(index));
+            }
+
+            codeInlines = replacements;
+            return protectedText;
+        }
+
+        private static string CreateCodeInlinePlaceholder(int index) => $"\uE000CODE{index}\uE001";
+
+        private static readonly Regex _codeInlinePlaceholderPattern = new(
+            "\\uE000CODE(?<index>[0-9]+)\\uE001",
+            RegexOptions.Compiled);
+
+        private static IEnumerable<CInline> RestoreCodeInlinePlaceholders(
+            IEnumerable<CInline> inlines,
+            IReadOnlyDictionary<int, string> replacements)
+        {
+            foreach (var inline in inlines)
+            {
+                if (inline is CRun run && _codeInlinePlaceholderPattern.IsMatch(run.Text))
+                {
+                    var position = 0;
+                    foreach (Match match in _codeInlinePlaceholderPattern.Matches(run.Text))
+                    {
+                        if (match.Index > position)
+                            yield return new CRun { Text = run.Text.Substring(position, match.Index - position) };
+
+                        if (int.TryParse(match.Groups["index"].Value, out var index)
+                            && replacements.TryGetValue(index, out var code))
+                        {
+                            yield return new CCode([new CRun { Text = code }]);
+                        }
+                        else
+                        {
+                            yield return new CRun { Text = match.Value };
+                        }
+
+                        position = match.Index + match.Length;
+                    }
+
+                    if (position < run.Text.Length)
+                        yield return new CRun { Text = run.Text.Substring(position) };
+                    continue;
+                }
+
+                if (inline is CSpan span)
+                    span.Content = RestoreCodeInlinePlaceholders(span.Content, replacements).ToArray();
+
+                yield return inline;
+            }
+        }
+
+        private static bool CanUseStandardInlinePipeline(string text, ContainerInline? root)
+        {
+            // HTML is detected from Markdig's actual node types below. A textual '<'
+            // can also be a CommonMark autolink and must not force the HTML fallback.
+            if (text.Contains("%{") || text.Contains('$') || text.Contains('@'))
+                return false;
+
+            return root is not null && EnumerateInlineTree(root).All(node => node is
+                LiteralInline or HtmlEntityInline or CodeInline or EmphasisInline or LineBreakInline
+                or AutolinkInline or LinkInline or FootnoteLink);
+        }
+
+        private static bool ContainsForwardFootnoteLink(ContainerInline root)
+            => EnumerateInlineTree(root).OfType<FootnoteLink>().Any(link => !link.IsBackLink);
+
+        private IEnumerable<CInline> RenderStandardInlines(ContainerInline? root)
+        {
+            if (root is null) yield break;
+
+            for (var node = root.FirstChild; node is not null; node = node.NextSibling)
+            {
+                switch (node)
+                {
+                    case LiteralInline literal:
+                        yield return new CRun { Text = ReplaceEmojiShortcodes(literal.Content.ToString()) };
+                        break;
+                    case HtmlEntityInline entity:
+                        // Entity decoding is centralized after rendering so nested entities
+                        // such as &amp;lt; are decoded exactly once.
+                        yield return new CRun { Text = entity.Original.ToString() };
+                        break;
+                    case CodeInline code:
+                        yield return new CCode([new CRun { Text = code.Content }]);
+                        break;
+                    case LineBreakInline lineBreak:
+                        yield return lineBreak.IsHard ? new CLineBreak() : new CRun { Text = " " };
+                        break;
+                    case EmphasisInline emphasis:
+                    {
+                        var children = RenderStandardInlines(emphasis).ToArray();
+                        yield return emphasis.DelimiterChar switch
+                        {
+                            '~' => new CStrikethrough(children),
+                            '=' => CreateMarkedInline(children),
+                            _ => emphasis.DelimiterCount >= 2
+                                ? new CBold(children)
+                                : new CItalic(children)
+                        };
+                        break;
+                    }
+                    case LinkInline link when !link.IsImage:
+                    {
+                        var target = link.GetDynamicUrl?.Invoke() ?? link.Url ?? string.Empty;
+                        yield return new CHyperlink(RenderStandardInlines(link))
+                        {
+                            Command = url =>
+                            {
+                                if (HyperlinkCommand?.CanExecute(url) == true) HyperlinkCommand.Execute(url);
+                            },
+                            CommandParameter = target
+                        };
+                        break;
+                    }
+                    case LinkInline image when image.IsImage:
+                    {
+                        var target = image.GetDynamicUrl?.Invoke() ?? image.Url ?? string.Empty;
+                        yield return LoadImage(target, image.Title ?? string.Empty);
+                        break;
+                    }
+                    case AutolinkInline autolink:
+                    {
+                        var display = autolink.Url;
+                        var target = autolink.IsEmail ? $"mailto:{display}" : display;
+                        yield return new CHyperlink([new CRun { Text = display }])
+                        {
+                            Command = url =>
+                            {
+                                if (HyperlinkCommand?.CanExecute(url) == true) HyperlinkCommand.Execute(url);
+                            },
+                            CommandParameter = target
+                        };
+                        break;
+                    }
+                    case FootnoteLink footnoteLink when !footnoteLink.IsBackLink:
+                        yield return CreateFootnoteReference(footnoteLink.Footnote.Order);
+                        break;
+                }
+            }
+        }
+
+        private CHyperlink CreateFootnoteReference(int order)
+        {
+            var reference = new CHyperlink([new CRun { Text = $"[{order}]" }])
+            {
+                IsUnderline = false,
+                TextVerticalAlignment = TextVerticalAlignment.Top,
+                Command = url =>
+                {
+                    var command = HyperlinkCommand;
+                    if (command?.CanExecute(url) == true)
+                        command.Execute(url);
+                },
+                CommandParameter = $"#fn:{order}"
+            };
+            reference.Classes.Add(ClassNames.FootnoteReferenceClass);
+            return reference;
+        }
+
+        private IEnumerable<CInline> RenderMixedFootnoteInlines(
+            string blockSource,
+            int blockSourceStart,
+            ContainerInline root)
+        {
+            var links = EnumerateInlineTree(root)
+                .OfType<FootnoteLink>()
+                .Where(link => !link.IsBackLink)
+                .OrderBy(link => link.Span.Start)
+                .ToArray();
+
+            if (links.Length == 0)
+                return PrivateRunSpanGamut(blockSource);
+
+            var replacements = new Dictionary<int, int>();
+            var source = blockSource;
+            for (var index = links.Length - 1; index >= 0; index--)
+            {
+                var link = links[index];
+                var localStart = link.Span.Start - blockSourceStart;
+                var localEnd = link.Span.End - blockSourceStart;
+                if (localStart < 0 || localEnd < localStart || localEnd >= source.Length)
+                    continue;
+
+                replacements[index] = link.Footnote.Order;
+                source = source.Remove(localStart, localEnd - localStart + 1)
+                    .Insert(localStart, CreateFootnotePlaceholder(index));
+            }
+
+            return ReplaceFootnotePlaceholders(PrivateRunSpanGamut(source), replacements).ToArray();
+        }
+
+        private static string CreateFootnotePlaceholder(int index) => $"\uE000FN{index}\uE001";
+
+        private static readonly Regex _footnotePlaceholderPattern = new(
+            "\\uE000FN(?<index>[0-9]+)\\uE001",
+            RegexOptions.Compiled);
+
+        private IEnumerable<CInline> ReplaceFootnotePlaceholders(
+            IEnumerable<CInline> inlines,
+            IReadOnlyDictionary<int, int> replacements)
+        {
+            foreach (var inline in inlines)
+            {
+                if (inline is CRun run && _footnotePlaceholderPattern.IsMatch(run.Text))
+                {
+                    var position = 0;
+                    foreach (Match match in _footnotePlaceholderPattern.Matches(run.Text))
+                    {
+                        if (match.Index > position)
+                            yield return new CRun { Text = run.Text.Substring(position, match.Index - position) };
+
+                        if (int.TryParse(match.Groups["index"].Value, out var index) &&
+                            replacements.TryGetValue(index, out var order))
+                        {
+                            yield return CreateFootnoteReference(order);
+                        }
+                        else
+                        {
+                            yield return new CRun { Text = match.Value };
+                        }
+
+                        position = match.Index + match.Length;
+                    }
+
+                    if (position < run.Text.Length)
+                        yield return new CRun { Text = run.Text.Substring(position) };
+                    continue;
+                }
+
+                if (inline is CSpan span)
+                    span.Content = ReplaceFootnotePlaceholders(span.Content, replacements).ToArray();
+
+                yield return inline;
+            }
+        }
+
+        private static IEnumerable<Inline> EnumerateInlineTree(ContainerInline root)
+        {
+            for (var node = root.FirstChild; node is not null; node = node.NextSibling)
+            {
+                yield return node;
+                if (node is ContainerInline container)
+                    foreach (var child in EnumerateInlineTree(container)) yield return child;
+            }
+        }
+
+        private sealed class RoutedHyperlinkCommand(Markdown owner) : ICommand
+        {
+            public event EventHandler? CanExecuteChanged
+            {
+                add { }
+                remove { }
+            }
+
+            public bool CanExecute(object? parameter)
+            {
+                if (parameter is string target && target.TrimStart().StartsWith('#'))
+                {
+                    var provider = (IDocumentAnchorProvider)owner;
+                    if (provider.AnchorNavigationRequested is not null)
+                        return true;
+                }
+
+                var external = owner.ExternalHyperlinkCommand;
+                return external?.CanExecute(parameter) == true;
+            }
+
+            public void Execute(object? parameter)
+            {
+                if (parameter is string target && target.TrimStart().StartsWith('#'))
+                {
+                    var provider = (IDocumentAnchorProvider)owner;
+                    if (provider.AnchorNavigationRequested is { } navigate)
+                    {
+                        navigate(NormalizeAnchor(target));
+                        return;
+                    }
+                }
+
+                var external = owner.ExternalHyperlinkCommand;
+                if (external?.CanExecute(parameter) == true)
+                    external.Execute(parameter);
+            }
+        }
+
+        private static readonly Regex _emojiShortcode = new(
+            @":(?<name>[a-z0-9_+\-]+):",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static string ReplaceEmojiShortcodes(string text)
+            => _emojiShortcode.Replace(text, match =>
+                EmojiTable.TryGet(match.Groups["name"].Value, out var emoji)
+                    ? emoji ?? match.Value
+                    : match.Value);
+
+        private static CSpan CreateMarkedInline(IEnumerable<CInline> inlines)
+        {
+            var marked = new CSpan(inlines);
+            marked.Classes.Add("Mark");
+            return marked;
+        }
+
+        private static void DecodeHtmlEntities(IEnumerable<CInline> inlines)
+        {
+            foreach (var inline in inlines)
+            {
+                switch (inline)
+                {
+                    case CRun run:
+                        run.Text = WebUtility.HtmlDecode(run.Text);
+                        break;
+                    case CSpan span:
+                        DecodeHtmlEntities(span.Content);
+                        break;
+                }
+            }
+        }
+
+        private static void NormalizeInlineWhitespaceBoundaries(IEnumerable<CInline> inlines)
+        {
+            CRun? previous = null;
+            foreach (var run in EnumerateRuns(inlines))
+            {
+                if (previous is not null
+                    && previous.Text.EndsWith(' ')
+                    && run.Text.StartsWith(' '))
+                {
+                    run.Text = run.Text.TrimStart(' ');
+                }
+
+                if (run.Text.Length > 0)
+                    previous = run;
+            }
+
+            static IEnumerable<CRun> EnumerateRuns(IEnumerable<CInline> source)
+            {
+                foreach (var inline in source)
+                {
+                    if (inline is CRun run)
+                    {
+                        yield return run;
+                    }
+                    else if (inline is CSpan span)
+                    {
+                        foreach (var child in EnumerateRuns(span.Content))
+                            yield return child;
+                    }
+                }
+            }
         }
         #region html辅助
 
@@ -709,9 +1673,12 @@ namespace Markdown.Avalonia
             Func<IEnumerable<CInline>, CInline> ElementFactory
             )>(
             // 优先级：长符号 > 短符号（避免 "**" 被 "*" 截断）
+            ("***", "***", inlines => new CBold([new CItalic(inlines)])),
+            ("___", "___", inlines => new CBold([new CItalic(inlines)])),
             ("**", "**", inlines => new CBold(inlines)), // 加粗
             ("__", "__", inlines => new CBold(inlines)), // 下划线
             ("~~", "~~", inlines => new CStrikethrough(inlines)), // 删除线
+            ("==", "==", CreateMarkedInline),
             ("*", "*", inlines => new CItalic(inlines)), // 斜体
             ("_", "_", inlines => new CItalic(inlines)) // 斜体（下划线版）
             // 可扩展添加其他成对符号，例如：
@@ -818,8 +1785,18 @@ namespace Markdown.Avalonia
                 if (htmlStart > lastPosition)
                 {
                     string markdownText = text.Substring(lastPosition, htmlStart - lastPosition);
-                    var markdownInlines = ParsePureMarkdownPairs(markdownText, level + 1);
-                    result.AddRange(markdownInlines);
+                    if (string.IsNullOrWhiteSpace(markdownText))
+                    {
+                        // HTML collapses inter-element whitespace to one visible
+                        // space. A standalone regular-space run can lose its width
+                        // in the custom formatter, so preserve it as NBSP.
+                        result.Add(new CRun { Text = "\u00A0" });
+                    }
+                    else
+                    {
+                        var markdownInlines = ParsePureMarkdownPairs(markdownText, level + 1);
+                        result.AddRange(markdownInlines);
+                    }
                 }
 
                 // 2. 处理HTML块（交给 HTML 插件处理）
@@ -839,8 +1816,10 @@ namespace Markdown.Avalonia
                             remainingMarkdown = remainingMarkdown.TrimStart('\n', '\r');
                             if (!string.IsNullOrEmpty(remainingMarkdown))
                             {
-                                var remainingInlines = ParsePureMarkdownPairs(remainingMarkdown, level + 1);
-                                result.AddRange(remainingInlines);
+                                if (string.IsNullOrWhiteSpace(remainingMarkdown))
+                                    result.Add(new CRun { Text = "\u00A0" });
+                                else
+                                    result.AddRange(ParsePureMarkdownPairs(remainingMarkdown, level + 1));
                             }
                         }
 
@@ -1494,6 +2473,43 @@ namespace Markdown.Avalonia
         #endregion
 
         #region grammer - image or href
+
+        private static readonly Regex _autoLink = new(@"
+            (?<![\w@])
+            (?:
+                <(?<angle>(?:https?://|mailto:)[^>\s]+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})>
+                |
+                (?<url>https?://[^\s<>]+?[A-Z0-9/#])(?=$|[\s\p{P}])
+                |
+                (?<email>[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})
+            )",
+            RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace | RegexOptions.Compiled);
+
+        private CInline AutoLinkEvaluator(Match match)
+        {
+            var value = match.Groups["angle"].Success
+                ? match.Groups["angle"].Value
+                : match.Groups["url"].Success
+                    ? match.Groups["url"].Value
+                    : match.Groups["email"].Value;
+
+            var isEmail = !value.Contains("://", StringComparison.Ordinal)
+                          && !value.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase);
+            var target = isEmail ? $"mailto:{value}" : value;
+            var display = value.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)
+                ? value[7..]
+                : value;
+
+            return new CHyperlink([new CRun { Text = display }])
+            {
+                Command = url =>
+                {
+                    if (HyperlinkCommand?.CanExecute(url) == true)
+                        HyperlinkCommand.Execute(url);
+                },
+                CommandParameter = target
+            };
+        }
 
         private static readonly Regex _imageOrHrefInline = new(string.Format(@"
                 (                           # wrap whole match in $1
@@ -2238,7 +3254,12 @@ namespace Markdown.Avalonia
         }
 
         public int CompareTo(Candidate<T> other)
-            => Match.Index.CompareTo(other.Match.Index);
+        {
+            var indexComparison = Match.Index.CompareTo(other.Match.Index);
+            return indexComparison != 0
+                ? indexComparison
+                : other.Match.Length.CompareTo(Match.Length);
+        }
     }
 
     internal class UnclosableStream : Stream

@@ -24,6 +24,7 @@ public class TooltipBlock : TemplatedControl
     private bool _isInsideButton;
     private bool _isPointerOverBorder;
     private bool _isPointerOverFlyout;
+    private bool _androidTooltipOpen;
     private CancellationTokenSource? _closeDelayCts;
 
     private const int CloseDelayMs = 300;
@@ -117,6 +118,12 @@ public class TooltipBlock : TemplatedControl
         {
             _topLevel.PointerMoved += OnTopLevelPointerMoved;
             _topLevel.PointerExited += OnTopLevelPointerExited;
+            if (OperatingSystem.IsAndroid())
+                _topLevel.AddHandler(
+                    PointerPressedEvent,
+                    OnAndroidTopLevelPointerPressed,
+                    RoutingStrategies.Tunnel,
+                    handledEventsToo: true);
         }
 
         // 检测是否位于 Button/ToggleButton 内部
@@ -144,6 +151,8 @@ public class TooltipBlock : TemplatedControl
         {
             _topLevel.PointerMoved -= OnTopLevelPointerMoved;
             _topLevel.PointerExited -= OnTopLevelPointerExited;
+            if (OperatingSystem.IsAndroid())
+                _topLevel.RemoveHandler(PointerPressedEvent, OnAndroidTopLevelPointerPressed);
             _topLevel = null;
         }
 
@@ -172,6 +181,8 @@ public class TooltipBlock : TemplatedControl
     /// </summary>
     private void OnParentPointerMoved(object? sender, PointerEventArgs e)
     {
+        if (OperatingSystem.IsAndroid())
+            return;
         if (_border == null) return;
 
         var position = e.GetPosition(_border);
@@ -207,6 +218,8 @@ public class TooltipBlock : TemplatedControl
 
     private void OnPointerEnter(object? sender, PointerEventArgs e)
     {
+        if (OperatingSystem.IsAndroid())
+            return;
         _isPointerOverBorder = true;
         CancelPendingClose();
         _ = AnimateOpacity(HoverOpacity);
@@ -225,6 +238,8 @@ public class TooltipBlock : TemplatedControl
 
     private void OnTopLevelPointerMoved(object? sender, PointerEventArgs e)
     {
+        if (OperatingSystem.IsAndroid())
+            return;
         if (sender is not TopLevel topLevel)
             return;
 
@@ -253,6 +268,8 @@ public class TooltipBlock : TemplatedControl
 
     private void OnTopLevelPointerExited(object? sender, PointerEventArgs e)
     {
+        if (OperatingSystem.IsAndroid())
+            return;
         if (!_isPointerOverBorder && !_isPointerOverFlyout)
             return;
 
@@ -345,6 +362,7 @@ public class TooltipBlock : TemplatedControl
 
     private void OnFlyoutClosed(object? sender, EventArgs e)
     {
+        _androidTooltipOpen = false;
         _isPointerOverFlyout = false;
         if (!_isPointerOverBorder)
             _ = AnimateOpacity(NormalOpacity);
@@ -370,6 +388,34 @@ public class TooltipBlock : TemplatedControl
             return;
 
         FlyoutBase.ShowAttachedFlyout(_border);
+    }
+
+    private void OnAndroidTopLevelPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!OperatingSystem.IsAndroid() || sender is not TopLevel topLevel)
+            return;
+
+        var isInside = IsPointerInControlScreenRegion(_border, topLevel, e);
+        if (isInside)
+        {
+            if (_androidTooltipOpen)
+            {
+                _attachedFlyout?.Hide();
+                return;
+            }
+
+            _isPointerOverBorder = true;
+            _androidTooltipOpen = true;
+            CancelPendingClose();
+            _ = AnimateOpacity(HoverOpacity);
+            ShowFlyout();
+            return;
+        }
+
+        // Touch has no hover exit event. Treat a tap outside both the indicator and its
+        // flyout as an explicit dismissal while preserving scrolling inside the content.
+        if (_androidTooltipOpen && !IsPointerInControlScreenRegion(_flyoutContentControl, topLevel, e))
+            _attachedFlyout?.Hide();
     }
 
     private void CancelPendingClose()

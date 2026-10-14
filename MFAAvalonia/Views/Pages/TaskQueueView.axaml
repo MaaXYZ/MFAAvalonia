@@ -90,6 +90,22 @@
         </ContextMenu>
     </UserControl.Resources>
     <UserControl.Styles>
+        <Style Selector="Path.TaskRunSpinner">
+            <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+            <Setter Property="RenderTransform">
+                <RotateTransform Angle="0" />
+            </Setter>
+            <Style.Animations>
+                <Animation Duration="0:0:0.9" IterationCount="INFINITE">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="RotateTransform.Angle" Value="0" />
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="RotateTransform.Angle" Value="360" />
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
         <Style Selector="Button.SyncButton Path">
             <Setter Property="RenderTransformOrigin" Value="50%,50%" />
             <Setter Property="Margin" Value="1" />
@@ -1201,49 +1217,102 @@
                                 <Grid ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.TooltipDragLabel}}"
                                       Background="Transparent"
                                       extensions:DragDropExtensions.LimitDragDrop="True"
-                                      ColumnDefinitions="*,Auto"
+                                      ColumnDefinitions="Auto,*,36,20,3,18"
                                       ContextMenu="{StaticResource TaskMenu}"
                                       PointerPressed="TaskItem_OnPointerPressed"
                                       ContextRequested="TaskItem_OnContextRequested"
                                       x:Name="ListGrid">
                                     <CheckBox IsThreeState="True"
-                                              Content="{Binding }"
                                               Grid.Column="0"
-                                              MinWidth="150"
+                                              MinWidth="0"
+                                              Margin="0,0,8,0"
                                               extensions:CheckBoxExtensions.EnableRightClickNull="{Binding !IsResourceOptionItem}"
-                                              HorizontalAlignment="Left"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
                                               extensions:CheckBoxExtensions.LimitDragDrop="True"
                                               IsEnabled="{Binding !IsResourceOptionItem}"
-                                              IsChecked="{Binding IsCheckedWithNull}">
-                                        <CheckBox.ContentTemplate>
-                                            <DataTemplate x:DataType="valueType:DragItemViewModel">
-                                                <Grid ColumnDefinitions="Auto,*">
-                                                    <controls:DisplayIcon Grid.Column="0"
-                                                                          IconSource="{Binding ResolvedIcon}"
-                                                                          IconSize="20"
-                                                                          IsVisible="{Binding HasIcon}"
-                                                                          Margin="0,0,6,0"
-                                                                          VerticalAlignment="Center" />
-                                                    <TextBlock Grid.Column="1"
-                                                               Text="{Binding Name}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               TextWrapping="NoWrap" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </CheckBox.ContentTemplate>
-                                    </CheckBox>
+                                              IsChecked="{Binding IsCheckedWithNull}" />
+                                    <Grid Grid.Column="1"
+                                          ColumnDefinitions="Auto,*"
+                                          Background="Transparent"
+                                          MinWidth="0"
+                                          VerticalAlignment="Center">
+                                        <controls:DisplayIcon Grid.Column="0"
+                                                              IconSource="{Binding ResolvedIcon}"
+                                                              IconSize="20"
+                                                              IsVisible="{Binding HasIcon}"
+                                                              Margin="0,0,6,0"
+                                                              VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Name}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="NoWrap"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                    <TextBlock Grid.Column="2"
+                                               Width="36"
+                                               Text="{Binding RunElapsedText}"
+                                               Foreground="{DynamicResource SukiLowText}"
+                                               FontSize="11"
+                                               TextAlignment="Right"
+                                               IsVisible="{Binding IsRunElapsedVisible}"
+                                               VerticalAlignment="Center" />
                                     <RadioButton Classes="Icon"
                                                  Background="Transparent"
                                                  IsHitTestVisible="False"
                                                  BorderThickness="0"
                                                  IsChecked="{Binding EnableSetting}"
-                                                 Grid.Column="1"
+                                                 Grid.Column="3"
+                                                 Width="24"
+                                                 MinWidth="0"
+                                                 Padding="0"
                                                  extensions:IconElement.Width="16"
                                                  extensions:IconElement.Height="16"
                                                  extensions:IconElement.Geometry="{x:Static suki:Icons.Setting}"
                                                  GroupName="TaskSettings"
                                                  IsVisible="{Binding IsVisible}"
-                                                 HorizontalContentAlignment="Right" />
+                                                 HorizontalContentAlignment="Center" />
+                                    <Grid Grid.Column="5" Width="18" Height="20"
+                                          IsVisible="{Binding IsRunStatusVisible}"
+                                          VerticalAlignment="Center">
+                                        <Path Width="15" Height="15" Stretch="Uniform"
+                                              Classes="TaskRunSpinner"
+                                              Data="{x:Static suki:Icons.Refresh}"
+                                              Fill="{DynamicResource SukiPrimaryColor}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              IsVisible="{Binding IsRunRunning}" />
+                                        <Path Width="15" Height="15" Stretch="Uniform"
+                                              Data="{x:Static suki:Icons.CircleCheck}"
+                                              Fill="{DynamicResource SukiSuccessColor}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              IsVisible="{Binding IsRunSucceeded}" />
+                                        <Path Width="15" Height="15" Stretch="Uniform"
+                                              Data="{x:Static suki:Icons.CircleClose}"
+                                              Fill="{DynamicResource SukiDangerColor}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              IsVisible="{Binding IsRunFailed}" />
+                                        <Path Width="15" Height="15" Stretch="Uniform"
+                                              Data="{x:Static suki:Icons.CircleOutline}"
+                                              Fill="{DynamicResource SukiLowText}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              IsVisible="{Binding IsRunQueued}" />
+                                        <Path Width="15" Height="15" Stretch="Uniform"
+                                              Data="{x:Static suki:Icons.Cancel}"
+                                              Fill="{DynamicResource SukiLowText}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              IsVisible="{Binding IsRunStopped}" />
+                                        <Path Width="15" Height="15" Stretch="Uniform"
+                                              Data="{x:Static suki:Icons.CircleOutlineMinus}"
+                                              Fill="{DynamicResource SukiLowText}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              IsVisible="{Binding IsRunSkipped}" />
+                                    </Grid>
                                 </Grid>
                                 </Panel>
                             </DataTemplate>

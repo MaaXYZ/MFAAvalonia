@@ -6,6 +6,7 @@ using MFAAvalonia.Extensions;
 using MFAAvalonia.Helper;
 using MFAAvalonia.Views.Pages;
 using MFAAvalonia.Views.Windows;
+using MFAAvalonia.Views.Mobile;
 using SukiUI.Dialogs;
 using System;
 using System.Collections.Generic;
@@ -13,6 +14,8 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using MFAAvalonia.Extensions.MaaFW;
 
 namespace MFAAvalonia.ViewModels.Windows;
 
@@ -27,6 +30,8 @@ public class AnnouncementItem
 public partial class AnnouncementViewModel : ViewModelBase
 {
     public static readonly string AnnouncementFolder = "announcement";
+    private static readonly string LegacyAnnouncementFolder = "Announcement";
+    private static readonly object PublicAnnouncementLock = new();
     private static List<AnnouncementItem> _publicAnnouncementItems = new();
 
     [ObservableProperty] private AvaloniaList<AnnouncementItem> _announcementItems = new();
@@ -35,6 +40,27 @@ public partial class AnnouncementViewModel : ViewModelBase
     [ObservableProperty] private bool _doNotRemindThisAnnouncementAgain = Convert.ToBoolean(
         GlobalConfiguration.GetValue(ConfigurationKeys.DoNotShowAnnouncementAgain, bool.FalseString));
     [ObservableProperty] private bool _isLoading = true;
+
+    private static string GetAnnouncementDirectory()
+    {
+        var resourcePath = AppPaths.ResourceDirectory;
+        var standardPath = Path.Combine(resourcePath, AnnouncementFolder);
+        if (Directory.Exists(standardPath))
+        {
+            return standardPath;
+        }
+
+        var legacyPath = Path.Combine(resourcePath, LegacyAnnouncementFolder);
+        return Directory.Exists(legacyPath) ? legacyPath : standardPath;
+    }
+
+    private static bool HasPublicAnnouncements()
+    {
+        lock (PublicAnnouncementLock)
+        {
+            return _publicAnnouncementItems.Count > 0;
+        }
+    }
 
     private CancellationTokenSource? _loadCts; // 加载取消令牌
 
@@ -95,12 +121,11 @@ public partial class AnnouncementViewModel : ViewModelBase
             return;
         }
 
-        SplitFirstLine(resolvedContent, out var firstLine, out var remainingContent);
-        var parsedTitle = firstLine.TrimStart('#', ' ').Trim();
+        ParseAnnouncement(resolvedContent, out var parsedTitle, out var remainingContent);
         var item = new AnnouncementItem
         {
             Title = string.IsNullOrWhiteSpace(parsedTitle) ? (title ?? "Welcome") : parsedTitle,
-            Content = TaskQueueView.ConvertCustomMarkup(string.IsNullOrWhiteSpace(remainingContent) ? resolvedContent : remainingContent)
+            Content = TaskQueueView.ConvertCustomMarkup(remainingContent)
         };
 
         var normalizedContent = NormalizeAnnouncementContent(item.Content);
@@ -115,7 +140,75 @@ public partial class AnnouncementViewModel : ViewModelBase
             return;
         }
 
-        _publicAnnouncementItems.Add(item);
+        lock (PublicAnnouncementLock)
+        {
+            _publicAnnouncementItems.Add(item);
+        }
+    }
+
+    /// <summary>
+    /// Replaces PI-provided announcements and records their complete ordered declaration.
+    /// </summary>
+    public static async Task SetWelcomeAnnouncementsAsync(
+        IReadOnlyList<MaaInterface.MaaInterfaceWelcome>? welcome,
+        string? projectDir = null)
+    {
+        var declarations = welcome ?? [];
+        var snapshot = JsonConvert.SerializeObject(
+            declarations.Select(item => new { item.Label, item.Content, item.IsLegacyString }).ToList(),
+            Formatting.None);
+        var previousSnapshot = GlobalConfiguration.GetValue(
+            ConfigurationKeys.WelcomeAnnouncementSnapshot, string.Empty);
+        var shouldRecordSnapshot = welcome != null || !string.IsNullOrEmpty(previousSnapshot);
+        if (shouldRecordSnapshot
+            && !string.Equals(previousSnapshot, snapshot, StringComparison.Ordinal))
+        {
+            GlobalConfiguration.SetValue(ConfigurationKeys.WelcomeAnnouncementSnapshot, snapshot);
+            GlobalConfiguration.SetValue(ConfigurationKeys.DoNotShowAnnouncementAgain, bool.FalseString);
+        }
+
+        var items = new List<AnnouncementItem>();
+        foreach (var declaration in declarations)
+        {
+            if (string.IsNullOrWhiteSpace(declaration.Content))
+            {
+                LoggerHelper.Warning("已跳过缺少 content 的 welcome 公告。");
+                continue;
+            }
+
+            var resolvedContent = await declaration.Content.ResolveContentAsync(projectDir)
+                .ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(resolvedContent))
+                continue;
+
+            string title;
+            string content;
+            if (declaration.IsLegacyString)
+            {
+                ParseAnnouncement(resolvedContent, out var parsedTitle, out var remainingContent);
+                title = parsedTitle;
+                content = remainingContent;
+            }
+            else
+            {
+                title = LanguageHelper.GetLocalizedString(declaration.Label);
+                content = resolvedContent;
+            }
+
+            var item = new AnnouncementItem
+            {
+                Title = title,
+                FilePath = declaration.Content,
+                Content = TaskQueueView.ConvertCustomMarkup(content),
+            };
+            if (!string.IsNullOrWhiteSpace(NormalizeAnnouncementContent(item.Content)))
+                items.Add(item);
+        }
+
+        lock (PublicAnnouncementLock)
+        {
+            _publicAnnouncementItems = items;
+        }
     }
 
     /// <summary>
@@ -127,19 +220,15 @@ public partial class AnnouncementViewModel : ViewModelBase
         {
             IsLoading = true;
 
-            var resourcePath = AppPaths.ResourceDirectory;
-            var announcementDir = Path.Combine(resourcePath, AnnouncementFolder);
-
-            if (!Directory.Exists(announcementDir))
-            {
-                LoggerHelper.Warning($"公告文件夹不存在: {announcementDir}");
-                return;
-            }
+            var announcementDir = GetAnnouncementDirectory();
 
             // 后台线程获取 Markdown 文件列表并读取内容
             var tempItems = await Task.Run(() =>
             {
                 var items = new List<AnnouncementItem>();
+                if (!Directory.Exists(announcementDir))
+                    return items;
+
                 var mdFiles = Directory.GetFiles(announcementDir, "*.md")
                     .OrderBy(Path.GetFileName)
                     .ToList();
@@ -150,8 +239,7 @@ public partial class AnnouncementViewModel : ViewModelBase
                     {
                         // 读取第一行作为标题（Markdown 标题可能以 # 开头）
                         var fileContent = File.ReadAllText(mdFile);
-                        SplitFirstLine(fileContent, out string firstLine, out var content);
-                        var title = firstLine.TrimStart('#', ' ').Trim();
+                        ParseAnnouncement(fileContent, out var title, out var content);
                         items.Add(new AnnouncementItem
                         {
                             Title = title,
@@ -174,9 +262,13 @@ public partial class AnnouncementViewModel : ViewModelBase
                 .Where(content => !string.IsNullOrWhiteSpace(content))
                 .ToHashSet(StringComparer.Ordinal);
 
-            var publicItems = _publicAnnouncementItems
-                .Where(item => !tempContentSet.Contains(NormalizeAnnouncementContent(item.Content)))
-                .ToList();
+            List<AnnouncementItem> publicItems;
+            lock (PublicAnnouncementLock)
+            {
+                publicItems = _publicAnnouncementItems
+                    .Where(item => !tempContentSet.Contains(NormalizeAnnouncementContent(item.Content)))
+                    .ToList();
+            }
 
             await DispatcherHelper.RunOnMainThreadAsync(() =>
             {
@@ -238,6 +330,31 @@ public partial class AnnouncementViewModel : ViewModelBase
         }
     }
 
+    private static void ParseAnnouncement(string content, out string title, out string body)
+    {
+        SplitFirstLine(content, out var firstLine, out var remainingContent);
+        title = firstLine.TrimStart('#', ' ').Trim();
+        body = string.IsNullOrWhiteSpace(remainingContent) ? content : remainingContent;
+
+        // Strip YAML front matter before handing the document to Markdown.Avalonia.
+        // Announcement files commonly start with `---` and end the metadata with a
+        // second `---`; the title field remains the list item title.
+        if (!string.Equals(firstLine.Trim(), "---", StringComparison.Ordinal))
+            return;
+
+        var lines = remainingContent.Replace("\r\n", "\n").Split('\n');
+        var closingIndex = Array.FindIndex(lines, line => line.Trim() == "---");
+        if (closingIndex < 0)
+            return;
+
+        var titleLine = lines.FirstOrDefault(line =>
+            line.TrimStart().StartsWith("title:", StringComparison.OrdinalIgnoreCase));
+        if (titleLine != null)
+            title = titleLine[(titleLine.IndexOf(':') + 1)..].Trim().Trim('"', '\'');
+
+        body = string.Join("\n", lines.Skip(closingIndex + 1)).TrimStart('\n');
+    }
+
     private static string NormalizeAnnouncementContent(string? content)
     {
         return string.IsNullOrWhiteSpace(content)
@@ -264,21 +381,21 @@ public partial class AnnouncementViewModel : ViewModelBase
                 return;
             }
 
-            var resourcePath = AppPaths.ResourceDirectory;
-            var announcementDir = Path.Combine(resourcePath, AnnouncementFolder);
+            var announcementDir = GetAnnouncementDirectory();
 
             var scanResult = await Task.Run(() =>
             {
                 if (!Directory.Exists(announcementDir))
                 {
-                    return (exists: false, hasAnnouncements: false);
+                    return (exists: false, hasAnnouncements: HasPublicAnnouncements());
                 }
 
-                var hasAnnouncements = Directory.EnumerateFiles(announcementDir, "*.md").Any();
+                var hasAnnouncements = Directory.EnumerateFiles(announcementDir, "*.md").Any()
+                                       || HasPublicAnnouncements();
                 return (exists: true, hasAnnouncements);
             }).ConfigureAwait(false);
 
-            if (!scanResult.exists)
+            if (!scanResult.exists && !scanResult.hasAnnouncements)
             {
                 LoggerHelper.Warning($"公告文件夹不存在: {announcementDir}");
                 return;
@@ -302,18 +419,20 @@ public partial class AnnouncementViewModel : ViewModelBase
                     return;
                 }
 
-                var content = viewModel.AnnouncementItems[0].Content;
-
                 DispatcherHelper.PostOnMainThread(() =>
+                {
+                    var announcementContent = new MobileAnnouncementView(viewModel);
+                    viewModel.SelectedAnnouncement = viewModel.AnnouncementItems[0];
                     Instances.DialogManager.CreateDialog()
                         .WithTitle(LangKeys.Announcement.ToLocalization())
-                        .WithContent(content)
+                        .WithContent(announcementContent)
                         .WithActionButton(LangKeys.ShowDisclaimerNoMore.ToLocalization(), _ =>
                         {
                             GlobalConfiguration.SetValue(ConfigurationKeys.DoNotShowAnnouncementAgain, bool.TrueString);
                         })
                         .WithActionButton(LangKeys.Ok.ToLocalization(), _ => { }, true)
-                        .TryShow());
+                        .TryShow();
+                });
 
                 return;
             }

@@ -22,12 +22,14 @@
                 <ColumnDefinition Width="*"></ColumnDefinition>
                 <ColumnDefinition Width="*"></ColumnDefinition>
             </Grid.ColumnDefinitions>
-            <Button Grid.Column="0" IsEnabled="{Binding CurrentInstanceIdle, Source={x:Static helper:Instances.RootViewModel}}"
-                    Margin="10" 
+            <Button Grid.Column="0"
+                    IsEnabled="{Binding CurrentInstanceIdle, Source={x:Static helper:Instances.RootViewModel}}"
+                    Margin="10"
                     HorizontalAlignment="Right" VerticalAlignment="Center" Command="{Binding ScreenshotCommand}"
                     Content="{markup:I18n {x:Static helper:LangKeys.ScreenshotTest}}">
             </Button>
-            <Button Grid.Column="1" IsEnabled="{Binding CurrentInstanceIdle, Source={x:Static helper:Instances.RootViewModel}}"
+            <Button Grid.Column="1"
+                    IsEnabled="{Binding CurrentInstanceIdle, Source={x:Static helper:Instances.RootViewModel}}"
                     Margin="10"
                     HorizontalAlignment="Left" VerticalAlignment="Center" Command="{Binding SaveScreenshotCommand}"
                     Content="{markup:I18n {x:Static helper:LangKeys.SaveScreenshot}}">

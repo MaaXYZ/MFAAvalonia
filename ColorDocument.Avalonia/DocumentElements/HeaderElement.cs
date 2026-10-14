@@ -3,9 +3,13 @@ using System.Collections.Generic;
 
 namespace ColorDocument.Avalonia.DocumentElements
 {
-    public class HeaderElement : CTextBlockElement
+    public class HeaderElement : CTextBlockElement, IDocumentHeading
     {
+        private readonly global::Avalonia.Controls.Border? _container;
+
         public int Level { get; }
+
+        public override global::Avalonia.Controls.Control Control => _container ?? base.Control;
 
         public HeaderElement(IEnumerable<CInline> inlines, int level) :
             base(inlines, level switch
@@ -27,6 +31,12 @@ namespace ColorDocument.Avalonia.DocumentElements
                 5 => 5,
                 _ => 6,
             };
+
+            if (Level <= 2)
+            {
+                _container = new global::Avalonia.Controls.Border { Child = base.Control };
+                _container.Classes.Add(Level == 1 ? "Heading1Container" : "Heading2Container");
+            }
         }
     }
 }

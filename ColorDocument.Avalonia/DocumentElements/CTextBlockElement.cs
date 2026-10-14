@@ -13,10 +13,11 @@ namespace ColorDocument.Avalonia.DocumentElements
     {
         private Lazy<CTextBlock> _text;
         private readonly string _contentString;
+        private readonly string _plainText;
         private readonly string? _appendClass;
         private readonly TextAlignment? _alignment;
 
-        public string Text => _text.Value.Text;
+        public string Text => _text.IsValueCreated ? _text.Value.Text : _plainText;
 
         public override Control Control => _text.Value;
 
@@ -26,6 +27,7 @@ namespace ColorDocument.Avalonia.DocumentElements
         {
             var inlineList = inlines.ToList();
             _contentString = BuildInlinesString(inlineList);
+            _plainText = string.Concat(inlineList.Select(inline => inline.AsString()));
             _appendClass = null;
             _alignment = null;
             _text = new Lazy<CTextBlock>(() =>
@@ -41,6 +43,7 @@ namespace ColorDocument.Avalonia.DocumentElements
         {
             var inlineList = inlines.ToList();
             _contentString = BuildInlinesString(inlineList);
+            _plainText = string.Concat(inlineList.Select(inline => inline.AsString()));
             _appendClass = appendClass;
             _alignment = null;
 
@@ -59,6 +62,7 @@ namespace ColorDocument.Avalonia.DocumentElements
         {
             var inlineList = inlines.ToList();
             _contentString = BuildInlinesString(inlineList);
+            _plainText = string.Concat(inlineList.Select(inline => inline.AsString()));
             _appendClass = appendClass;
             _alignment = alignment;
 

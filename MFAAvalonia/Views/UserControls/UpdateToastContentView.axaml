@@ -1,0 +1,25 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:full="https://github.com/whistyun/Markdown.Avalonia"
+    xmlns:extensions="clr-namespace:MFAAvalonia.Extensions"
+    x:Class="MFAAvalonia.Views.UserControls.UpdateToastContentView"
+    x:DataType="x:String">
+    <Border MinHeight="56" MaxHeight="280" Width="340" Margin="0,0,8,0">
+        <full:MarkdownScrollViewer
+            Markdown="{Binding}"
+            EnableVirtualization="True"
+            HorizontalScrollBarVisibility="Disabled"
+            VerticalScrollBarVisibility="Auto">
+            <full:MarkdownScrollViewer.Engine>
+                <extensions:MarkdownExtension />
+            </full:MarkdownScrollViewer.Engine>
+            <full:MarkdownScrollViewer.Plugins>
+                <StaticResource ResourceKey="MdXamlPlugin" />
+            </full:MarkdownScrollViewer.Plugins>
+            <full:MarkdownScrollViewer.Styles>
+                <StyleInclude Source="avares://MFAAvalonia.Core/Assets/Style/MdXamlStyles.axaml" />
+            </full:MarkdownScrollViewer.Styles>
+        </full:MarkdownScrollViewer>
+    </Border>
+</UserControl>

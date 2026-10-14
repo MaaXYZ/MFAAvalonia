@@ -1,6 +1,7 @@
 ﻿using Avalonia.Threading;
 using MFAAvalonia.Extensions;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
 
@@ -104,7 +105,11 @@ public static class JsonHelper
     private static T? TryDeserialize<T>(string json, JsonConverter[] converters)
     {
         var settings = GetDeserializerSettings(converters);
-        return JsonConvert.DeserializeObject<T>(json, settings);
+        var token = JToken.Parse(json, new JsonLoadSettings
+        {
+            CommentHandling = CommentHandling.Ignore
+        });
+        return token.ToObject<T>(JsonSerializer.Create(settings));
     }
 
     // 辅助方法：创建JSON序列化设置

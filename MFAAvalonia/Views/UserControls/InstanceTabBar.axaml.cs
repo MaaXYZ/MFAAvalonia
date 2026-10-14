@@ -2,7 +2,10 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Lang.Avalonia.MarkupExtensions;
 using MFAAvalonia.Controls;
@@ -11,8 +14,11 @@ using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Extensions;
 using MFAAvalonia.Helper;
 using MFAAvalonia.ViewModels.Other;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace MFAAvalonia.Views.UserControls;
@@ -117,6 +123,84 @@ public partial class InstanceTabBar : UserControl
             await DuplicateInstanceAsync(vm, tab);
         };
 
+        var copyIdItem = new MenuItem
+        {
+            Header = "CopyInstanceId".ToLocalization(),
+            Icon = new FluentIcons.Avalonia.Fluent.FluentIcon
+            {
+                Icon = FluentIcons.Common.Icon.Clipboard,
+                IconSize = FluentIcons.Common.IconSize.Size16,
+                IconVariant = FluentIcons.Common.IconVariant.Regular
+            }
+        };
+        copyIdItem.Click += async (_, _) =>
+        {
+            if (container.DataContext is not InstanceTabViewModel tab) return;
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard == null) return;
+
+            await clipboard.SetTextAsync(tab.InstanceId);
+            ToastHelper.Info(LangKeys.CopiedToClipboard.ToLocalization());
+        };
+
+        var exportItem = new MenuItem
+        {
+            Header = LangKeys.ExportInstanceConfig.ToLocalization(),
+            Icon = CreateMenuIcon(FluentIcons.Common.Icon.Copy)
+        };
+        var exportClipboardItem = new MenuItem
+        {
+            Header = LangKeys.ExportToClipboard.ToLocalization(),
+            Icon = CreateMenuIcon(FluentIcons.Common.Icon.Clipboard)
+        };
+        exportClipboardItem.Click += async (_, _) =>
+        {
+            if (container.DataContext is InstanceTabViewModel tab)
+                await ExportInstanceToClipboardAsync(tab);
+        };
+        var exportFileItem = new MenuItem
+        {
+            Header = LangKeys.ExportToFile.ToLocalization(),
+            Icon = CreateMenuIcon(FluentIcons.Common.Icon.FolderArrowLeft)
+        };
+        exportFileItem.Click += async (_, _) =>
+        {
+            if (container.DataContext is InstanceTabViewModel tab)
+                await ExportInstanceToFileAsync(tab);
+        };
+        exportItem.Items.Add(exportClipboardItem);
+        exportItem.Items.Add(exportFileItem);
+
+        var importItem = new MenuItem
+        {
+            Header = LangKeys.ImportInstanceConfig.ToLocalization(),
+            Icon = CreateMenuIcon(FluentIcons.Common.Icon.FolderArrowLeft)
+        };
+        var importClipboardItem = new MenuItem
+        {
+            Header = LangKeys.ImportFromClipboard.ToLocalization(),
+            Icon = CreateMenuIcon(FluentIcons.Common.Icon.Clipboard)
+        };
+        importClipboardItem.Click += async (_, _) =>
+        {
+            if (container.DataContext is not InstanceTabViewModel tab) return;
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard == null) return;
+            await ImportInstanceAsync(await clipboard.TryGetTextAsync() ?? string.Empty, tab);
+        };
+        var importFileItem = new MenuItem
+        {
+            Header = LangKeys.ImportFromFile.ToLocalization(),
+            Icon = CreateMenuIcon(FluentIcons.Common.Icon.FolderArrowLeft)
+        };
+        importFileItem.Click += async (_, _) =>
+        {
+            if (container.DataContext is InstanceTabViewModel tab)
+                await ImportInstanceFromFileAsync(tab);
+        };
+        importItem.Items.Add(importClipboardItem);
+        importItem.Items.Add(importFileItem);
+
         var renameItem = new MenuItem();
         renameItem.Header = "重命名";
         renameItem.Icon = new FluentIcons.Avalonia.Fluent.FluentIcon
@@ -199,6 +283,9 @@ public partial class InstanceTabBar : UserControl
             {
                 addItem,
                 copyItem,
+                copyIdItem,
+                exportItem,
+                importItem,
                 renameItem,
                 new Separator(),
                 closeItem,
@@ -232,6 +319,231 @@ public partial class InstanceTabBar : UserControl
 
         return menu;
     }
+
+    private static FluentIcons.Avalonia.Fluent.FluentIcon CreateMenuIcon(FluentIcons.Common.Icon icon) => new()
+    {
+        Icon = icon,
+        IconSize = FluentIcons.Common.IconSize.Size16,
+        IconVariant = FluentIcons.Common.IconVariant.Regular
+    };
+
+    private static string GetShareProjectName() =>
+        string.IsNullOrWhiteSpace(MaaProcessor.Interface?.Name) ? "MFAAvalonia" : MaaProcessor.Interface.Name;
+
+    private static string BuildInstanceExportText(InstanceTabViewModel tab)
+    {
+        var vm = tab.TaskQueueViewModel;
+        vm.PersistConfigurationState();
+        var config = tab.Processor.InstanceConfiguration;
+        var payload = new InstanceConfigSharePayload
+        {
+            ControllerType = vm.CurrentController.ToString(),
+            ControllerName = vm.GetCurrentControllerName(),
+            ResourceName = vm.CurrentResource,
+            Tasks = vm.TaskItemViewModels
+                .Where(item => !item.IsResourceOptionItem && item.InterfaceItem != null)
+                .Select(item => item.InterfaceItem!)
+                .ToList(),
+            GlobalOptions = config.GetValue(ConfigurationKeys.GlobalOptionItems, new List<MaaInterface.MaaInterfaceSelectOption>()),
+            ControllerOptions = config.GetValue(ConfigurationKeys.ControllerOptionItems,
+                new Dictionary<string, List<MaaInterface.MaaInterfaceSelectOption>>()),
+            ResourceOptions = config.GetValue(ConfigurationKeys.ResourceOptionItems,
+                new Dictionary<string, List<MaaInterface.MaaInterfaceSelectOption>>())
+        };
+        return InstanceConfigShareService.BuildExportText(GetShareProjectName(), tab.Name, payload);
+    }
+
+    private async Task ExportInstanceToClipboardAsync(InstanceTabViewModel tab)
+    {
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard == null) throw new InvalidOperationException("Clipboard is unavailable.");
+            await clipboard.SetTextAsync(BuildInstanceExportText(tab));
+            ToastHelper.Success(LangKeys.ExportInstanceConfig.ToLocalization(), LangKeys.ExportInstanceConfigSuccess.ToLocalization());
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Error("Failed to export instance configuration to clipboard.", ex);
+            ToastHelper.Error(LangKeys.ExportInstanceConfig.ToLocalization(), LangKeys.ExportInstanceConfigFailed.ToLocalization());
+        }
+    }
+
+    private async Task ExportInstanceToFileAsync(InstanceTabViewModel tab)
+    {
+        try
+        {
+            var storageProvider = TopLevel.GetTopLevel(this)?.StorageProvider;
+            if (storageProvider == null) throw new InvalidOperationException("Storage provider is unavailable.");
+            var projectName = GetShareProjectName();
+            var file = await storageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = LangKeys.ExportInstanceConfig.ToLocalization(),
+                DefaultExtension = "txt",
+                SuggestedFileName = $"{InstanceConfigShareService.SanitizeFileName(projectName)}-{InstanceConfigShareService.SanitizeFileName(tab.Name)}.txt",
+                FileTypeChoices = [new FilePickerFileType("Text") { Patterns = ["*.txt"] }]
+            });
+            if (file == null) return;
+
+            await using var stream = await file.OpenWriteAsync();
+            stream.SetLength(0);
+            await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+            await writer.WriteAsync(BuildInstanceExportText(tab));
+            ToastHelper.Success(LangKeys.ExportInstanceConfig.ToLocalization(), LangKeys.ExportInstanceConfigSuccess.ToLocalization());
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Error("Failed to export instance configuration to file.", ex);
+            ToastHelper.Error(LangKeys.ExportInstanceConfig.ToLocalization(), LangKeys.ExportInstanceConfigFailed.ToLocalization());
+        }
+    }
+
+    private async Task ImportInstanceFromFileAsync(InstanceTabViewModel? templateTab = null)
+    {
+        var storageProvider = TopLevel.GetTopLevel(this)?.StorageProvider;
+        if (storageProvider == null) return;
+        var files = await storageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = LangKeys.ImportInstanceConfig.ToLocalization(),
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("Text") { Patterns = ["*.txt"] }]
+        });
+        if (files.Count == 0) return;
+
+        try
+        {
+            await using var stream = await files[0].OpenReadAsync();
+            using var reader = new StreamReader(stream, Encoding.UTF8, true);
+            await ImportInstanceAsync(await reader.ReadToEndAsync(), templateTab);
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Error("Failed to read instance configuration file.", ex);
+            ToastHelper.Error(LangKeys.ImportInstanceConfig.ToLocalization(), LangKeys.ImportInstanceConfigInvalid.ToLocalization());
+        }
+    }
+
+    private async Task ImportInstanceAsync(string rawText, InstanceTabViewModel? templateTab = null)
+    {
+        string? createdInstanceId = null;
+        try
+        {
+            var result = InstanceConfigShareService.ParseImportText(GetShareProjectName(), rawText);
+            var payload = result.Payload;
+            var interfaceTasks = MaaProcessor.Interface?.Task ?? [];
+            var exactKeys = interfaceTasks.Select(task => (task.Name, task.Entry)).ToHashSet();
+            var entries = interfaceTasks.Where(task => !string.IsNullOrWhiteSpace(task.Entry))
+                .Select(task => task.Entry!).ToHashSet(StringComparer.Ordinal);
+            var filteredTasks = payload.Tasks.Where(task =>
+                    exactKeys.Contains((task.Name, task.Entry))
+                    || (!string.IsNullOrWhiteSpace(task.Entry) && entries.Contains(task.Entry!))
+                    || (!string.IsNullOrWhiteSpace(task.Entry) && ViewModels.UsersControls.Settings.AddTaskDialogViewModel.SpecialActionNames.Contains(task.Entry!)))
+                .ToList();
+
+            var currentTasks = interfaceTasks
+                .Where(task => !string.IsNullOrWhiteSpace(task.Name) && !string.IsNullOrWhiteSpace(task.Entry))
+                .Select(task => $"{task.Name}{TaskLoader.NEW_SEPARATOR}{task.Entry}")
+                .ToList();
+            currentTasks.AddRange(filteredTasks
+                .Where(task => !string.IsNullOrWhiteSpace(task.Name) && !string.IsNullOrWhiteSpace(task.Entry))
+                .Select(task => $"{task.Name}{TaskLoader.NEW_SEPARATOR}{task.Entry}"));
+
+            if (DataContext is not InstanceTabBarViewModel vm)
+                throw new InvalidOperationException("Instance tab bar is unavailable.");
+
+            templateTab ??= vm.ActiveTab ?? vm.Tabs.LastOrDefault();
+            var newId = MaaProcessorManager.CreateInstanceId();
+            createdInstanceId = newId;
+            templateTab?.TaskQueueViewModel.PersistConfigurationState();
+            templateTab?.Processor.InstanceConfiguration.CopyToNewInstance(newId);
+
+            var config = new InstanceConfiguration(newId);
+            config.SetValues(new Dictionary<string, object>
+            {
+                [ConfigurationKeys.CurrentController] = payload.ControllerType ?? MaaControllerTypes.Adb.ToString(),
+                [ConfigurationKeys.CurrentControllerName] = payload.ControllerName ?? string.Empty,
+                [ConfigurationKeys.Resource] = payload.ResourceName ?? string.Empty,
+                [ConfigurationKeys.TaskItems] = filteredTasks,
+                [ConfigurationKeys.CurrentTasks] = currentTasks.Distinct().ToList(),
+                [ConfigurationKeys.GlobalOptionItems] = payload.GlobalOptions ?? [],
+                [ConfigurationKeys.ControllerOptionItems] = payload.ControllerOptions ?? [],
+                [ConfigurationKeys.ResourceOptionItems] = payload.ResourceOptions ?? []
+            });
+            config.RemoveValue(ConfigurationKeys.InstancePresetKey);
+
+            var processor = MaaProcessorManager.Instance.CreateInstance(newId, false);
+            var instanceName = string.IsNullOrWhiteSpace(result.InstanceName)
+                ? MaaProcessorManager.Instance.GetInstanceName(newId)
+                : result.InstanceName;
+            MaaProcessorManager.Instance.SetInstanceName(newId, instanceName);
+            if (!await Task.Run(() => processor.InitializeData()))
+                throw new InvalidOperationException("Failed to initialize the imported instance configuration.");
+
+            LoggerHelper.UserAction(
+                "导入实例配置",
+                $"new={instanceName} ({newId}), tasks={filteredTasks.Count}",
+                operation: "ImportInstanceConfig",
+                instanceId: newId,
+                instanceName: instanceName);
+
+            vm.ReloadTabs();
+            var importedTab = vm.Tabs.FirstOrDefault(item => item.Processor == processor);
+            if (importedTab != null)
+            {
+                importedTab.UpdateName();
+                vm.ActiveTab = importedTab;
+            }
+            vm.IsAddMenuOpen = false;
+            createdInstanceId = null;
+            ToastHelper.Success(LangKeys.ImportInstanceConfig.ToLocalization(),
+                LangKeys.ImportInstanceConfigSuccess.ToLocalizationFormatted(false, filteredTasks.Count.ToString()));
+        }
+        catch (InstanceConfigImportException ex)
+        {
+            RollbackImportedInstance(createdInstanceId);
+            var message = ex.Error switch
+            {
+                InstanceConfigImportError.ProjectMismatch => LangKeys.ImportInstanceConfigProjectMismatch,
+                InstanceConfigImportError.UnsupportedVersion => LangKeys.ImportInstanceConfigUnsupportedVersion,
+                _ => LangKeys.ImportInstanceConfigInvalid
+            };
+            ToastHelper.Error(LangKeys.ImportInstanceConfig.ToLocalization(), message.ToLocalization());
+        }
+        catch (Exception ex)
+        {
+            RollbackImportedInstance(createdInstanceId);
+            LoggerHelper.Error("Failed to import instance configuration.", ex);
+            ToastHelper.Error(LangKeys.ImportInstanceConfig.ToLocalization(), LangKeys.ImportInstanceConfigInvalid.ToLocalization());
+        }
+    }
+
+    private static void RollbackImportedInstance(string? instanceId)
+    {
+        if (string.IsNullOrWhiteSpace(instanceId)) return;
+        if (!MaaProcessorManager.Instance.RemoveInstance(instanceId))
+            new InstanceConfiguration(instanceId).DeleteConfigFile();
+    }
+
+    private async void OnImportInstanceFromClipboardClick(object? sender, RoutedEventArgs e)
+    {
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard == null) return;
+        await ImportInstanceAsync(await clipboard.TryGetTextAsync() ?? string.Empty);
+    }
+
+    private async void OnImportInstanceFromFileClick(object? sender, RoutedEventArgs e)
+    {
+        await ImportInstanceFromFileAsync();
+    }
+
+    private static void OnPresetDescriptionTogglePointerPressed(object? sender, PointerPressedEventArgs e)
+        => e.Handled = true;
+
+    private static void OnPresetDescriptionTogglePointerReleased(object? sender, PointerReleasedEventArgs e)
+        => e.Handled = true;
+
+    private static void OnPresetDescriptionToggleClick(object? sender, RoutedEventArgs e)
+        => e.Handled = true;
 
     private static async Task DuplicateInstanceAsync(InstanceTabBarViewModel vm, InstanceTabViewModel sourceTab)
     {

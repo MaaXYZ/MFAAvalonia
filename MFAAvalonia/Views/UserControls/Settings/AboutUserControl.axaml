@@ -341,5 +341,22 @@
                 </StackPanel>
             </DockPanel>
         </suki:GlassCard>
+        <suki:GlassCard Padding="25">
+            <DockPanel>
+                <ToggleSwitch Classes="Switch"
+                              DockPanel.Dock="Right"
+                              IsChecked="{Binding HelpImproveSoftware}"
+                              VerticalAlignment="Top" />
+                <StackPanel HorizontalAlignment="Left">
+                    <TextBlock FontSize="16"
+                               FontWeight="SemiBold"
+                               Text="{markup:I18n {x:Static helper:LangKeys.HelpImproveSoftware}}" />
+                    <TextBlock Foreground="{DynamicResource SukiLowText}"
+                               Margin="0,12,70,0"
+                               Text="{markup:I18n {x:Static helper:LangKeys.HelpImproveSoftwareDescription}}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </DockPanel>
+        </suki:GlassCard>
     </StackPanel>
 </UserControl>

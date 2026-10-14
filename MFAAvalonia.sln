@@ -26,6 +26,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MFAAvalonia.Android", "MFAA
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MFAAvalonia.Desktop", "MFAAvalonia.Desktop\MFAAvalonia.Desktop.csproj", "{B68D4668-1F6B-47C6-A06C-DE0ACEB3CCE1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Markdown.Avalonia.Html.Tests", "Markdown.Avalonia.Html.Tests\Markdown.Avalonia.Html.Tests.csproj", "{9242A40F-DD92-4013-BD6F-B895DB1FBF2B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Markdown.Avalonia.Math", "Markdown.Avalonia.Math\Markdown.Avalonia.Math.csproj", "{85DCB45E-18A7-4EE4-A205-A55AA1FA23E9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -82,5 +86,13 @@ Global
 		{B68D4668-1F6B-47C6-A06C-DE0ACEB3CCE1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B68D4668-1F6B-47C6-A06C-DE0ACEB3CCE1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B68D4668-1F6B-47C6-A06C-DE0ACEB3CCE1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9242A40F-DD92-4013-BD6F-B895DB1FBF2B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9242A40F-DD92-4013-BD6F-B895DB1FBF2B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9242A40F-DD92-4013-BD6F-B895DB1FBF2B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9242A40F-DD92-4013-BD6F-B895DB1FBF2B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{85DCB45E-18A7-4EE4-A205-A55AA1FA23E9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{85DCB45E-18A7-4EE4-A205-A55AA1FA23E9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{85DCB45E-18A7-4EE4-A205-A55AA1FA23E9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{85DCB45E-18A7-4EE4-A205-A55AA1FA23E9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

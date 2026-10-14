@@ -63,6 +63,51 @@ namespace Markdown.Avalonia.Utils
             return line.Substring(realIdx);
         }
 
+        public static string DetentLinesBestEffort(string text, int indentCount)
+        {
+            var output = new StringBuilder(text.Length);
+            var lineStart = 0;
+            var firstLine = true;
+
+            while (lineStart <= text.Length)
+            {
+                var lineEnd = text.IndexOf('\n', lineStart);
+                if (lineEnd < 0)
+                    lineEnd = text.Length;
+
+                if (!firstLine)
+                    output.Append('\n');
+                firstLine = false;
+
+                var realIndex = lineStart;
+                var visualIndex = 0;
+                while (visualIndex < indentCount && realIndex < lineEnd)
+                {
+                    if (text[realIndex] == ' ')
+                    {
+                        realIndex++;
+                        visualIndex++;
+                    }
+                    else if (text[realIndex] == '\t')
+                    {
+                        realIndex++;
+                        visualIndex = ((visualIndex >> 2) + 1) << 2;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                output.Append(text, realIndex, lineEnd - realIndex);
+                if (lineEnd == text.Length)
+                    break;
+                lineStart = lineEnd + 1;
+            }
+
+            return output.ToString();
+        }
+
 
         /// <summary>
         /// Removes the leading white-space. the number of removed spaces is `indentCount`.

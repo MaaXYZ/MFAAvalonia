@@ -2,6 +2,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mdc="clr-namespace:Markdown.Avalonia.Controls;assembly=Markdown.Avalonia"
         xmlns:ctxt="clr-namespace:ColorTextBlock.Avalonia;assembly=ColorTextBlock.Avalonia"
+        xmlns:animations="clr-namespace:SukiUI.Animations;assembly=SukiUI"
+        xmlns:helper="clr-namespace:MFAAvalonia.Helper"
+        xmlns:markup="https://codewf.com"
+        xmlns:suki="https://github.com/kikipoulet/SukiUI"
         xmlns:avaloniaEdit="https://github.com/avaloniaui/avaloniaedit">
 
     <!-- ==================== 默认字体资源 ==================== -->
@@ -94,13 +98,39 @@
         <Setter Property="CornerRadius" Value="4" />
         <Setter Property="Padding" Value="4,2" />
     </Style>
+    <Style Selector=".Markdown_Avalonia_MarkdownViewer ctxt|CCode.Kbd">
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+        <Setter Property="Background" Value="{DynamicResource SukiCardBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource SukiControlBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1,1,1,2" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="Padding" Value="3,0" />
+        <Setter Property="Margin" Value="1,0" />
+        <Setter Property="BoxShadow" Value="0 1 1 0 #24000000" />
+    </Style>
+    <Style Selector=".Markdown_Avalonia_MarkdownViewer ctxt|CSpan.Big">
+        <Setter Property="FontSize" Value="16" />
+    </Style>
+    <Style Selector=".Markdown_Avalonia_MarkdownViewer ctxt|CSpan.Small">
+        <Setter Property="FontSize" Value="10.5" />
+    </Style>
+    <Style Selector=".Markdown_Avalonia_MarkdownViewer ctxt|CSpan.Teletype">
+        <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,Microsoft YaHei UI,monospace" />
+    </Style>
+    <Style Selector=".Markdown_Avalonia_MarkdownViewer ctxt|CSpan.Mark">
+        <Setter Property="Foreground" Value="#3D3200" />
+        <Setter Property="Background" Value="#FFE58F" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="Padding" Value="2,0" />
+    </Style>
 
     <!-- ==================== 代码块样式 ==================== -->
     <Style Selector=".Markdown_Avalonia_MarkdownViewer Border.CodeBlock">
         <Setter Property="BorderBrush" Value="{DynamicResource SukiBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="6" />
-        <Setter Property="Margin" Value="5,5,5,5" />
+        <Setter Property="Margin" Value="0,8" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Background" Value="{DynamicResource SukiMediumBorderBrush}" />
     </Style>
@@ -109,7 +139,7 @@
         <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
     </Style>
     <Style Selector=".Markdown_Avalonia_MarkdownViewer ScrollViewer.CodeBlock">
-        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Padding" Value="12,8" />
     </Style>
     <!-- TextEditor 代码编辑器样式 -->
     <Style Selector=".Markdown_Avalonia_MarkdownViewer avaloniaEdit|TextEditor.CodeBlockEditor">
@@ -141,6 +171,12 @@
     <Style Selector=".Markdown_Avalonia_MarkdownViewer PathIcon.CodeBlockCopyIcon">
         <Setter Property="Foreground" Value="{DynamicResource SukiLowText}" />
     </Style>
+    <Style Selector=".Markdown_Avalonia_MarkdownViewer Button.CodeBlockCopyButton">
+        <Setter Property="animations:FloatingTextExtensions.Text"
+                Value="{markup:I18n {x:Static helper:LangKeys.CopySuccess}}" />
+        <Setter Property="animations:FloatingTextExtensions.Duration" Value="900" />
+        <Setter Property="animations:FloatingTextExtensions.Distance" Value="44" />
+    </Style>
     <Style
         Selector=".Markdown_Avalonia_MarkdownViewer Button.CodeBlockCopyButton:pointerover PathIcon.CodeBlockCopyIcon">
         <Setter Property="Foreground" Value="{DynamicResource SukiPrimaryColor}" />
@@ -167,8 +203,71 @@
     <Style Selector=".Markdown_Avalonia_MarkdownViewer Grid.List">
         <Setter Property="Margin" Value="0,0,0,0" />
     </Style>
+    <Style Selector=".Markdown_Avalonia_MarkdownViewer Grid.List Grid.List">
+        <Setter Property="Margin" Value="20,0,0,0" />
+    </Style>
     <Style Selector=".Markdown_Avalonia_MarkdownViewer ctxt|CTextBlock.ListMarker">
         <Setter Property="Margin" Value="0,0,5,0" />
+    </Style>
+    <Style Selector=".Markdown_Avalonia_MarkdownViewer CheckBox.MarkdownTaskListMarker">
+        <Setter Property="Width" Value="14" />
+        <Setter Property="Height" Value="14" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Margin" Value="0,2,8,0" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="Auto,*">
+                    <suki:GlassCard Name="border"
+                                    Width="14"
+                                    Height="14"
+                                    VerticalAlignment="Center"
+                                    Classes="Control"
+                                    Classes.PrimaryOpaque="{Binding IsChecked,
+                                        RelativeSource={RelativeSource TemplatedParent},
+                                        Converter={suki:IsCheckedToClassConverter}}"
+                                    CornerRadius="4"
+                                    IsInteractive="True">
+                        <Panel>
+                            <Path Name="checkMark"
+                                  Width="7"
+                                  Height="7"
+                                  Margin="0.5,0.5,0,0"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Data="M 1145.607177734375,430 C1145.607177734375,430 1141.449951171875,435.0772705078125 1141.449951171875,435.0772705078125 1141.449951171875,435.0772705078125 1139.232177734375,433.0999755859375 1139.232177734375,433.0999755859375 1139.232177734375,433.0999755859375 1138,434.5538330078125 1138,434.5538330078125 1138,434.5538330078125 1141.482177734375,438 1141.482177734375,438 1141.482177734375,438 1141.96875,437.9375 1141.96875,437.9375 1141.96875,437.9375 1147,431.34619140625 1147,431.34619140625 1147,431.34619140625 1145.607177734375,430 1145.607177734375,430 z"
+                                  Fill="White"
+                                  FlowDirection="LeftToRight"
+                                  Opacity="1"
+                                  Stretch="Uniform" />
+                            <Border Name="IndetBorder"
+                                    Width="6"
+                                    Height="2"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Background="White"
+                                    CornerRadius="1"
+                                    Opacity="0" />
+                        </Panel>
+                    </suki:GlassCard>
+                    <Border Name="TaskUncheckedOutline"
+                            Width="14"
+                            Height="14"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            BorderBrush="{DynamicResource SukiText}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            IsHitTestVisible="False"
+                            Opacity="0.28" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector=".Markdown_Avalonia_MarkdownViewer CheckBox.MarkdownTaskListMarker:checked /template/ Border#TaskUncheckedOutline">
+        <Setter Property="IsVisible" Value="False" />
     </Style>
 
 
@@ -218,17 +317,26 @@
     <Style Selector=".Markdown_Avalonia_MarkdownViewer StackPanel.Blockquote">
         <Setter Property="Margin" Value="5,0,5,0" />
     </Style>
-    
+
     <!-- ==================== 超链接样式 ==================== -->
     <Style Selector=".Markdown_Avalonia_MarkdownViewer ctxt|CHyperlink">
         <Setter Property="IsUnderline" Value="True" />
         <Setter Property="Foreground" Value="{DynamicResource SukiPrimaryColor}" />
         <Setter Property="HoverForeground" Value="{DynamicResource SukiAccentColor}" />
     </Style>
+    <Style Selector=".Markdown_Avalonia_MarkdownViewer ctxt|CHyperlink.FootnoteReference">
+        <Setter Property="IsUnderline" Value="False" />
+        <Setter Property="FontSize" Value="9.5" />
+        <Setter Property="TextVerticalAlignment" Value="Top" />
+    </Style>
 
     <!-- ==================== 分隔线样式 ==================== -->
     <Style Selector=".Markdown_Avalonia_MarkdownViewer mdc|Rule">
         <Setter Property="Margin" Value="0,3" />
+    </Style>
+    <Style Selector=".Markdown_Avalonia_MarkdownViewer mdc|Rule.FootnoteRule">
+        <Setter Property="SingleLineWidth" Value="1" />
+        <Setter Property="Margin" Value="0,8,0,4" />
     </Style>
     <!-- ==================== 段落样式 ==================== -->
     <Style Selector=".Markdown_Avalonia_MarkdownViewer ctxt|CTextBlock.Paragraph">

@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Reflection;
 using System.Text;
-
+//已废弃
 public class Program
 {
     private const int InitDelay = 2500;

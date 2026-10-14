@@ -11,7 +11,10 @@ namespace Markdown.Avalonia.Html
             "area", "base", "br", "col", "embed", "hr", "img", "input", "keygen", "link", "meta", "param", "source",
         });
 
-        private static readonly Regex s_tagPattern = new(@"<(?'close'/?)[\t ]*(?'tagname'[a-z][a-z0-9]*)(?'attributes'[ \t][^>]*|/)?>",
+        private static readonly Regex s_tagPattern = new(@"<(?'close'/?)[\t ]*(?'tagname'[a-z][a-z0-9:-]*)(?'attributes'[ \t][^>]*|/)?>",
+            RegexOptions.Multiline | RegexOptions.IgnorePatternWhitespace | RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        private static readonly Regex s_tagStartPattern = new(@"<[\t ]*(?'tagname'[a-z][a-z0-9:-]*)(?'attributes'[ \t][^>]*|/)?>",
             RegexOptions.Multiline | RegexOptions.IgnorePatternWhitespace | RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         private static readonly Regex s_emptylinePattern = new(@"\n{2}", RegexOptions.Compiled);
@@ -23,6 +26,8 @@ namespace Markdown.Avalonia.Html
             return new Regex(@$"<[\t ]*(?'tagname'{taglist})(?'attributes'[ \t][^>]*|/)?>",
                 RegexOptions.Multiline | RegexOptions.IgnorePatternWhitespace | RegexOptions.Compiled | RegexOptions.IgnoreCase);
         }
+
+        public static Regex CreateAnyTagStartPattern() => s_tagStartPattern;
 
         public static int SearchTagRange(string text, Match tagStartPatternMatch)
         {

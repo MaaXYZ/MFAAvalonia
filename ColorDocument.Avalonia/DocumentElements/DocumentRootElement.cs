@@ -37,7 +37,10 @@ namespace ColorDocument.Avalonia.DocumentElements
         /// <param name="elements">要追加的元素</param>
         public void AppendElements(IEnumerable<DocumentElement> elements)
         {
-            var panel = _block.Value;
+            // In virtualization mode the root StackPanel is intentionally never
+            // materialized. The virtualizing panel is the sole visual owner of
+            // child controls, while this root only tracks document semantics.
+            var panel = _block.IsValueCreated ? _block.Value : null;
             foreach (var element in elements)
             {
                 // 设置 Helper
@@ -50,7 +53,7 @@ namespace ColorDocument.Avalonia.DocumentElements
                 _childrenList.Add(element);
 
                 // 添加到 Panel
-                panel.Children.Add(element.Control);
+                panel?.Children.Add(element.Control);
             }
 
             // 更新枚举器

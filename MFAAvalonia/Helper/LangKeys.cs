@@ -46,6 +46,7 @@ public static class LangKeys
 	public static readonly string BackgroundStyleTitle = "BackgroundStyleTitle";
 	public static readonly string BackgroundTransitionsDescription = "BackgroundTransitionsDescription";
 	public static readonly string BackgroundTransitionsTitle = "BackgroundTransitionsTitle";
+	public static readonly string Back = "Back";
 	public static readonly string BaseTheme = "BaseTheme";
 	public static readonly string BlueStacks = "BlueStacks";
 	public static readonly string ButtonAdd = "ButtonAdd";
@@ -55,6 +56,7 @@ public static class LangKeys
 	public static readonly string ButtonSave = "ButtonSave";
 	public static readonly string CannotStart = "CannotStart";
 	public static readonly string CaptureModeOption = "CaptureModeOption";
+	public static readonly string VirtualGamepadType = "VirtualGamepadType";
 	public static readonly string CheckMFA = "CheckMFA";
 	public static readonly string CheckUpdate = "CheckUpdate";
 	public static readonly string CheckResource = "CheckResource";
@@ -86,6 +88,7 @@ public static class LangKeys
 	public static readonly string ConnectionSettings = "ConnectionSettings";
 	public static readonly string ControllerType = "ControllerType";
 	public static readonly string CopiedToClipboard = "CopiedToClipboard";
+	public static readonly string CopySuccess = "CopySuccess";
 	public static readonly string Copy = "Copy";
 	public static readonly string CopyErrorMessage = "CopyErrorMessage";
 	public static readonly string CopyKey = "CopyKey";
@@ -105,6 +108,11 @@ public static class LangKeys
 	public static readonly string DingTalk = "DingTalk";
 	public static readonly string DingTalkMessageAsync = "DingTalkMessageAsync";
 	public static readonly string DownloadFailed = "DownloadFailed";
+	public static readonly string DroppedResourceNameMismatch = "DroppedResourceNameMismatch";
+	public static readonly string DroppedResourcePackageInvalid = "DroppedResourcePackageInvalid";
+	public static readonly string DroppedResourceRidMismatch = "DroppedResourceRidMismatch";
+	public static readonly string DroppedResourceUpdateConfirm = "DroppedResourceUpdateConfirm";
+	public static readonly string DroppedResourceVersionTooLow = "DroppedResourceVersionTooLow";
 	public static readonly string Downloading = "Downloading";
 	public static readonly string DuplicateTaskError = "DuplicateTaskError";
 	public static readonly string DuplicateTaskNameError = "DuplicateTaskNameError";
@@ -422,6 +430,7 @@ public static class LangKeys
 	public static readonly string GlobalHotkeyServiceError = "GlobalHotkeyServiceError";
 	public static readonly string UpcomingChanges = "UpcomingChanges";
 	public static readonly string TaskFailed = "TaskFailed";
+	public static readonly string TaskFailedWithName = "TaskFailedWithName";
 	public static readonly string ExternalNotificationCustomNotificationContentFailure = "ExternalNotificationCustomNotificationContentFailure";
 	public static readonly string ExternalNotificationCustomNotificationContentSuccess = "ExternalNotificationCustomNotificationContentSuccess";
 	public static readonly string BetaVersion = "BetaVersion";
@@ -458,6 +467,7 @@ public static class LangKeys
 	public static readonly string PlatformNotSupportedOperation = "PlatformNotSupportedOperation";
 	public static readonly string StopTaskBeforeExportLog = "StopTaskBeforeExportLog";
 	public static readonly string StopTaskBeforeClearCache = "StopTaskBeforeClearCache";
+	public static readonly string StopTaskBeforeUpdateResource = "StopTaskBeforeUpdateResource";
 	public static readonly string MirrorCdkEmpty = "MirrorCdkEmpty";
 	public static readonly string ContinueRunningWhenError = "ContinueRunningWhenError";
 	public static readonly string CurrentOtherUpdatingTask = "CurrentOtherUpdatingTask";
@@ -491,6 +501,16 @@ public static class LangKeys
 	public static readonly string Notification = "Notification";
 	public static readonly string NotificationDescription = "NotificationDescription";
 	public static readonly string EmulatorMultiInstanceQuickSettings = "EmulatorMultiInstanceQuickSettings";
+	public static readonly string GlobalBatchStartup = "GlobalBatchStartup";
+	public static readonly string GlobalBatchStartupDescription = "GlobalBatchStartupDescription";
+	public static readonly string InstanceStartupSettings = "InstanceStartupSettings";
+	public static readonly string RefreshInstanceList = "RefreshInstanceList";
+	public static readonly string IncludeInBatchStartup = "IncludeInBatchStartup";
+	public static readonly string ExtraLaunchItems = "ExtraLaunchItems";
+	public static readonly string ExtraLaunchItem = "ExtraLaunchItem";
+	public static readonly string AddExtraLaunchItem = "AddExtraLaunchItem";
+	public static readonly string RemoveExtraLaunchItem = "RemoveExtraLaunchItem";
+	public static readonly string LaunchItemName = "LaunchItemName";
 	public static readonly string EmulatorMultiInstanceEditor = "EmulatorMultiInstanceEditor";
 	public static readonly string MuMuEmulator = "MuMuEmulator";
 	public static readonly string XYAZ = "XYAZ";
@@ -538,6 +558,8 @@ public static class LangKeys
 	public static readonly string FontScaleTitle = "FontScaleTitle";
 	public static readonly string FontScaleDescription = "FontScaleDescription";
 	public static readonly string FontScaleValue = "FontScaleValue";
+	public static readonly string HelpImproveSoftware = "HelpImproveSoftware";
+	public static readonly string HelpImproveSoftwareDescription = "HelpImproveSoftwareDescription";
 	public static readonly string ResourceAutoSwitched = "ResourceAutoSwitched";
 	public static readonly string ResourceNotSupportController = "ResourceNotSupportController";
 	public static readonly string ResourceNotSelected = "ResourceNotSelected";
@@ -632,6 +654,7 @@ public static class LangKeys
 	public static readonly string SpecialTask_KillProcess = "SpecialTask_KillProcess";
 	public static readonly string SpecialTask_ComputerOperation = "SpecialTask_ComputerOperation";
 	public static readonly string SpecialTask_Webhook = "SpecialTask_Webhook";
+	public static readonly string SpecialTask_SwitchInstance = "SpecialTask_SwitchInstance";
 	public static readonly string SpecialTask_CountdownDesc = "SpecialTask_CountdownDesc";
 	public static readonly string SpecialTask_TimedWaitDesc = "SpecialTask_TimedWaitDesc";
 	public static readonly string SpecialTask_ToastDesc = "SpecialTask_ToastDesc";
@@ -639,7 +662,9 @@ public static class LangKeys
 	public static readonly string SpecialTask_KillProcessDesc = "SpecialTask_KillProcessDesc";
 	public static readonly string SpecialTask_ComputerOperationDesc = "SpecialTask_ComputerOperationDesc";
 	public static readonly string SpecialTask_WebhookDesc = "SpecialTask_WebhookDesc";
+	public static readonly string SpecialTask_SwitchInstanceDesc = "SpecialTask_SwitchInstanceDesc";
 	public static readonly string SpecialTask_CountdownSeconds = "SpecialTask_CountdownSeconds";
+	public static readonly string SpecialTask_SwitchInstanceTarget = "SpecialTask_SwitchInstanceTarget";
 	public static readonly string SpecialTask_WaitUntilTime = "SpecialTask_WaitUntilTime";
 	public static readonly string SpecialTask_NotificationTitle = "SpecialTask_NotificationTitle";
 	public static readonly string SpecialTask_NotificationContent = "SpecialTask_NotificationContent";
@@ -664,6 +689,8 @@ public static class LangKeys
 	public static readonly string InstanceAddTooltip = "InstanceAddTooltip";
 	public static readonly string InstanceAddFollowLast = "InstanceAddFollowLast";
 	public static readonly string InstancePresetTaskCountFormat = "InstancePresetTaskCountFormat";
+	public static readonly string ExpandDescription = "ExpandDescription";
+	public static readonly string CollapseDescription = "CollapseDescription";
 	public static readonly string InstanceCannotCloseLast = "InstanceCannotCloseLast";
 	public static readonly string InstanceRunningCloseConfirm = "InstanceRunningCloseConfirm";
 	public static readonly string InstanceCloseTitle = "InstanceCloseTitle";
@@ -685,6 +712,18 @@ public static class LangKeys
 	public static readonly string RemoveTimer = "RemoveTimer";
 	public static readonly string TimerStopConnectedProcess = "TimerStopConnectedProcess";
 	public static readonly string TimerStopMFA = "TimerStopMFA";
+	public static readonly string ExportInstanceConfig = "ExportInstanceConfig";
+	public static readonly string ImportInstanceConfig = "ImportInstanceConfig";
+	public static readonly string ExportToClipboard = "ExportToClipboard";
+	public static readonly string ExportToFile = "ExportToFile";
+	public static readonly string ImportFromClipboard = "ImportFromClipboard";
+	public static readonly string ImportFromFile = "ImportFromFile";
+	public static readonly string ExportInstanceConfigSuccess = "ExportInstanceConfigSuccess";
+	public static readonly string ExportInstanceConfigFailed = "ExportInstanceConfigFailed";
+	public static readonly string ImportInstanceConfigSuccess = "ImportInstanceConfigSuccess";
+	public static readonly string ImportInstanceConfigInvalid = "ImportInstanceConfigInvalid";
+	public static readonly string ImportInstanceConfigProjectMismatch = "ImportInstanceConfigProjectMismatch";
+	public static readonly string ImportInstanceConfigUnsupportedVersion = "ImportInstanceConfigUnsupportedVersion";
 	
 }
 

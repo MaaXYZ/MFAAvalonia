@@ -6,6 +6,9 @@
              xmlns:controls="clr-namespace:MFAAvalonia.Controls"
              xmlns:suki="https://github.com/kikipoulet/SukiUI"
              xmlns:fluent="clr-namespace:FluentIcons.Avalonia.Fluent;assembly=FluentIcons.Avalonia.Fluent"
+             xmlns:full="clr-namespace:Markdown.Avalonia.Full;assembly=Markdown.Avalonia.Full"
+             xmlns:ctxt="clr-namespace:ColorTextBlock.Avalonia;assembly=ColorTextBlock.Avalonia"
+             xmlns:extensions="clr-namespace:MFAAvalonia.Extensions"
              xmlns:helper="clr-namespace:MFAAvalonia.Helper"
              xmlns:markup="https://codewf.com"
              xmlns:userControls="clr-namespace:MFAAvalonia.Views.UserControls"
@@ -211,6 +214,43 @@
             <Setter Property="BorderBrush" Value="{DynamicResource SukiPrimaryColor75}" />
         </Style>
 
+        <Style Selector="Border.PresetDescriptionClip">
+            <Setter Property="ClipToBounds" Value="True" />
+            <Setter Property="MaxHeight" Value="34" />
+        </Style>
+
+        <Style Selector="Border.PresetDescriptionClip.expanded">
+            <Setter Property="MaxHeight" Value="1000" />
+        </Style>
+
+        <Style Selector="full|MarkdownScrollViewer.PresetDescriptionMarkdown">
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="VerticalScrollBarVisibility" Value="Hidden" />
+        </Style>
+
+        <Style Selector="ToggleButton.PresetDescriptionToggle">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,-2,-3,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="ToolTip.Tip" Value="{markup:I18n {x:Static helper:LangKeys.ExpandDescription}}" />
+        </Style>
+
+        <Style Selector="ToggleButton.PresetDescriptionToggle:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SukiPrimaryColor15}" />
+        </Style>
+
+        <Style Selector="ToggleButton.PresetDescriptionToggle:checked">
+            <Setter Property="ToolTip.Tip" Value="{markup:I18n {x:Static helper:LangKeys.CollapseDescription}}" />
+        </Style>
+
+        <Style Selector="ToggleButton.PresetDescriptionToggle:checked fluent|FluentIcon">
+            <Setter Property="RenderTransform" Value="rotate(180deg)" />
+        </Style>
+
     </UserControl.Styles>
 
     <Grid RowDefinitions="Auto,*">
@@ -269,7 +309,7 @@
         <ContentControl Grid.Row="1"
                         Content="{Binding ActiveTab.View}"
                         Margin="0" />
-        <!-- 预设菜单 Popup（有预设时点击+号弹出，PlacementTarget 由 code-behind 动态设为 PART_AddItemButton） -->
+        <!-- 新建实例菜单 Popup，PlacementTarget 由 code-behind 动态设为 PART_AddItemButton -->
         <Popup x:Name="PresetMenuPopup"
                IsOpen="{Binding IsAddMenuOpen, Mode=TwoWay}"
                Placement="Bottom"
@@ -310,8 +350,9 @@
                         <Border Grid.Row="1" Background="{DynamicResource SukiControlBorderBrush}" Height="1" Margin="8,0,8,6" />
                         <!-- 预设列表 -->
                         <ScrollViewer x:Name="PresetMenuScrollViewer"
-                                      Grid.Row="2"  Margin="0,0,5,0"
+                                      Grid.Row="2" Margin="0,0,5,0"
                                       MaxHeight="320"
+                                      IsVisible="{Binding HasInstancePresets}"
                                       HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto">
                             <ItemsControl ItemsSource="{Binding FilteredInstancePresets}"
@@ -354,13 +395,55 @@
                                                                    FontSize="11"
                                                                    VerticalAlignment="Center" />
                                                     </Grid>
-                                                    <TextBlock Grid.Row="1"
-                                                               Text="{Binding DisplayDescription}"
-                                                               Foreground="{DynamicResource SukiLowText}"
-                                                               FontSize="12"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               MaxLines="2"
-                                                               IsVisible="{Binding HasDescription}" />
+                                                    <Grid Grid.Row="1"
+                                                          ColumnDefinitions="*,Auto"
+                                                          ColumnSpacing="4"
+                                                          IsVisible="{Binding HasDescription}">
+                                                        <Border Classes="PresetDescriptionClip"
+                                                                Classes.expanded="{Binding IsChecked, ElementName=DescriptionToggle}">
+                                                            <full:MarkdownScrollViewer Classes="PresetDescriptionMarkdown"
+                                                                                       Markdown="{Binding DisplayDescription}"
+                                                                                       EnableVirtualization="False"
+                                                                                       EnableProgressiveRendering="False"
+                                                                                       Focusable="False"
+                                                                                       IsHitTestVisible="False">
+                                                                <full:MarkdownScrollViewer.Engine>
+                                                                    <extensions:MarkdownExtension Directory="." />
+                                                                </full:MarkdownScrollViewer.Engine>
+                                                                <full:MarkdownScrollViewer.Plugins>
+                                                                    <StaticResource ResourceKey="MdXamlPlugin" />
+                                                                </full:MarkdownScrollViewer.Plugins>
+                                                                <full:MarkdownScrollViewer.Styles>
+                                                                    <StyleInclude Source="avares://MFAAvalonia.Core/Assets/Style/MdXamlStyles.axaml" />
+                                                                    <Style Selector=".Markdown_Avalonia_MarkdownViewer ctxt|CTextBlock">
+                                                                        <Setter Property="FontSize" Value="12" />
+                                                                        <Setter Property="Margin" Value="0" />
+                                                                        <Setter Property="Foreground" Value="{DynamicResource SukiLowText}" />
+                                                                    </Style>
+                                                                    <Style Selector=".Markdown_Avalonia_MarkdownViewer ctxt|CTextBlock.Paragraph">
+                                                                        <Setter Property="Margin" Value="0" />
+                                                                    </Style>
+                                                                    <Style Selector=".Markdown_Avalonia_MarkdownViewer ctxt|CTextBlock.Heading1, .Markdown_Avalonia_MarkdownViewer ctxt|CTextBlock.Heading2, .Markdown_Avalonia_MarkdownViewer ctxt|CTextBlock.Heading3">
+                                                                        <Setter Property="FontSize" Value="14" />
+                                                                        <Setter Property="Margin" Value="0,0,0,4" />
+                                                                    </Style>
+                                                                </full:MarkdownScrollViewer.Styles>
+                                                            </full:MarkdownScrollViewer>
+                                                        </Border>
+                                                        <ToggleButton x:Name="DescriptionToggle"
+                                                                      Grid.Column="1"
+                                                                      Classes="PresetDescriptionToggle"
+                                                                      IsVisible="{Binding CanExpandDescription}"
+                                                                      VerticalAlignment="Bottom"
+                                                                      PointerPressed="OnPresetDescriptionTogglePointerPressed"
+                                                                      PointerReleased="OnPresetDescriptionTogglePointerReleased"
+                                                                      Click="OnPresetDescriptionToggleClick">
+                                                            <fluent:FluentIcon Icon="ChevronDown"
+                                                                               IconSize="Size12"
+                                                                               Foreground="{DynamicResource SukiLowText}"
+                                                                               RenderTransformOrigin="50%,50%" />
+                                                        </ToggleButton>
+                                                    </Grid>
                                                 </Grid>
                                             </Border>
                                         </Button>
@@ -368,17 +451,48 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </ScrollViewer>
-                        <TextBox Grid.Row="3" Margin="8,2,4,8"
-                                 Text="{Binding PresetSearchText, Mode=TwoWay}"
-                                 Watermark="{markup:I18n {x:Static helper:LangKeys.Search}}">
-                            <TextBox.InnerRightContent>
-                                <fluent:FluentIcon Margin="0,-2,0,0"
-                                                   VerticalAlignment="Center"
-                                                   Foreground="{DynamicResource SukiDisabledText}"
-                                                   Icon="Search"
-                                                   IconSize="Size16" />
-                            </TextBox.InnerRightContent>
-                        </TextBox>
+                        <StackPanel Grid.Row="3" Margin="8,2,4,8" Spacing="4">
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <Button Grid.Column="0"
+                                        Classes="PresetFollowItem"
+                                        Margin="0"
+                                        Padding="8,7"
+                                        Click="OnImportInstanceFromClipboardClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                        <fluent:FluentIcon Icon="Clipboard" IconSize="Size16" />
+                                        <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.ImportFromClipboard}}"
+                                                   FontSize="12"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="1"
+                                        Classes="PresetFollowItem"
+                                        Margin="0"
+                                        Padding="8,7"
+                                        HorizontalContentAlignment="Stretch"
+                                        Click="OnImportInstanceFromFileClick">
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                            <fluent:FluentIcon Icon="FolderArrowLeft" IconSize="Size16" />
+                                            <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.ImportFromFile}}"
+                                                       FontSize="12"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                            </Grid>
+                            <TextBox IsVisible="{Binding HasInstancePresets}"
+                                     Text="{Binding PresetSearchText, Mode=TwoWay}"
+                                     Watermark="{markup:I18n {x:Static helper:LangKeys.Search}}">
+                                <TextBox.InnerRightContent>
+                                    <fluent:FluentIcon Margin="0,-2,0,0"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource SukiDisabledText}"
+                                                       Icon="Search"
+                                                       IconSize="Size16" />
+                                </TextBox.InnerRightContent>
+                            </TextBox>
+                        </StackPanel>
                     </Grid>
                 </Border>
             </Border>

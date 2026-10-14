@@ -5,6 +5,7 @@ using MFAAvalonia.Extensions;
 using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.ValueType;
+using MFAAvalonia.ViewModels.Pages;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SukiUI.Dialogs;
@@ -32,6 +33,7 @@ public partial class AddTaskDialogViewModel : ViewModelBase, IDisposable
         "KillProcessAction",
         "ComputerOperationAction",
         "WebhookAction",
+        "SwitchInstanceAction",
     };
 
     private ObservableCollection<AddTaskItemViewModel> _items;
@@ -54,10 +56,13 @@ public partial class AddTaskDialogViewModel : ViewModelBase, IDisposable
 
     public bool HasUngroupedItems => Items.Count > 0;
 
-    public AddTaskDialogViewModel(ISukiDialog dialog, ICollection<DragItemViewModel> sources)
+    public AddTaskDialogViewModel(ISukiDialog dialog, ICollection<DragItemViewModel> sources, TaskQueueViewModel taskQueueViewModel)
     {
         Dialog = dialog;
-        Sources = sources.Select(s => new AddTaskItemViewModel(s)).ToList();
+        Sources = sources
+            .Where(source => IsTaskAvailableForCurrentContext(source, taskQueueViewModel))
+            .Select(s => new AddTaskItemViewModel(s))
+            .ToList();
         _items = [];
 
         SpecialTasks = new ObservableCollection<AddTaskItemViewModel>
@@ -69,10 +74,30 @@ public partial class AddTaskDialogViewModel : ViewModelBase, IDisposable
             new() { Name = LangKeys.SpecialTask_KillProcess.ToLocalization(), IsSpecialTask = true, SpecialActionName = "KillProcessAction", SpecialIcon = "⛔" },
             new() { Name = LangKeys.SpecialTask_ComputerOperation.ToLocalization(), IsSpecialTask = true, SpecialActionName = "ComputerOperationAction", SpecialIcon = "⚡" },
             new() { Name = LangKeys.SpecialTask_Webhook.ToLocalization(), IsSpecialTask = true, SpecialActionName = "WebhookAction", SpecialIcon = "🔔" },
+            new() { Name = LangKeys.SpecialTask_SwitchInstance.ToLocalization(), IsSpecialTask = true, SpecialActionName = "SwitchInstanceAction", SpecialIcon = "🔁" },
         };
 
         LanguageHelper.LanguageChanged += OnLanguageChanged;
         ApplyFilter(string.Empty);
+    }
+
+    private static bool IsTaskAvailableForCurrentContext(DragItemViewModel source, TaskQueueViewModel taskQueueViewModel)
+    {
+        if (source.IsResourceOptionItem)
+            return false;
+
+        var interfaceItem = source.InterfaceItem;
+        if (interfaceItem == null)
+            return false;
+
+        return MaaInterfaceActivationHelper.IsTaskSupportedByResource(
+                   MaaProcessor.Interface,
+                   interfaceItem,
+                   taskQueueViewModel.CurrentResource)
+               && MaaInterfaceActivationHelper.IsTaskSupportedByController(
+                   MaaProcessor.Interface,
+                   interfaceItem,
+                   taskQueueViewModel.GetCurrentControllerName());
     }
 
     [RelayCommand]
@@ -137,6 +162,7 @@ public partial class AddTaskDialogViewModel : ViewModelBase, IDisposable
             "KillProcessAction" => new JObject { ["kill_self_process"] = true, ["process_name"] = "" },
             "ComputerOperationAction" => new JObject { ["operation"] = "shutdown" },
             "WebhookAction" => new JObject { ["url"] = "", ["method"] = "GET", ["body"] = "", ["content_type"] = "application/json" },
+            "SwitchInstanceAction" => new JObject { ["target_instance"] = "" },
             _ => new JObject()
         };
     }
@@ -186,6 +212,7 @@ public partial class AddTaskDialogViewModel : ViewModelBase, IDisposable
             "KillProcessAction" => LangKeys.SpecialTask_KillProcessDesc,
             "ComputerOperationAction" => LangKeys.SpecialTask_ComputerOperationDesc,
             "WebhookAction" => LangKeys.SpecialTask_WebhookDesc,
+            "SwitchInstanceAction" => LangKeys.SpecialTask_SwitchInstanceDesc,
             _ => LangKeys.SpecialTask
         };
     }

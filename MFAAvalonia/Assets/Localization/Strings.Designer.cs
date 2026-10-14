@@ -679,6 +679,15 @@ namespace MFAAvalonia.Assets.Localization {
                 return ResourceManager.GetString("CopiedToClipboard", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to 复制成功.
+        /// </summary>
+        public static string CopySuccess {
+            get {
+                return ResourceManager.GetString("CopySuccess", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to 复制.

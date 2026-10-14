@@ -93,6 +93,41 @@ public static class GlobalConfiguration
         }
     }
 
+    public static void RemoveValues(IEnumerable<string> keys)
+    {
+        lock (_fileLock)
+        {
+            try
+            {
+                var configPath = ConfigFilePath;
+                if (!File.Exists(configPath)) return;
+
+                var json = File.ReadAllText(configPath);
+                var configDict = JsonSerializer.Deserialize<Dictionary<string, string>>(json)
+                    ?? new Dictionary<string, string>();
+                var changed = false;
+                foreach (var key in keys)
+                    changed |= configDict.Remove(key);
+
+                if (!changed) return;
+
+                File.WriteAllText(configPath,
+                    JsonSerializer.Serialize(configDict, new JsonSerializerOptions
+                    {
+                        WriteIndented = true
+                    }));
+            }
+            catch (IOException ex)
+            {
+                ReportFileAccessError(ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                ReportFileAccessError(ex);
+            }
+        }
+    }
+
     public static string GetValue(string key, string defaultValue = "")
     {
         var config = LoadConfiguration();

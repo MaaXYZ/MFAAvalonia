@@ -6,6 +6,7 @@ using HtmlAgilityPack;
 using Markdown.Avalonia.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace Markdown.Avalonia.Html.Core.Parsers;
@@ -40,20 +41,29 @@ public class FontParser : IInlineTagParser
 
         // 创建行内文本容器（CSpan是ColorTextBlock的行内容器）
         var fontSpan = new CSpan();
+        fontSpan.Classes.Add("Font");
 
         // 1. 解析并应用颜色（color属性）
         ApplyColor(node, fontSpan);
 
         // 2. 解析并应用字体大小（size属性）
-        ApplyFontSize(node, fontSpan);
+        var fontSize = ReadFontSize(node);
+        if (fontSize.HasValue)
+            fontSpan.FontSize = fontSize.Value;
 
-        // 3. 解析并应用对齐样式（align属性或style中的text-align）
+        // 3. HTML face属性和CSS font-family都应作用于内部文本。
+        var fontFamily = ReadFontFamily(node);
+        if (fontFamily is not null)
+            fontSpan.FontFamily = fontFamily;
+
+        // 4. 解析并应用对齐样式（align属性或style中的text-align）
         ApplyAlignment(node, fontSpan, manager);
 
-        // 4. 解析<font>标签的子内容并添加到容器中
+        // 5. 解析<font>标签的子内容并添加到容器中
         var childInlines = manager.ParseChildrenJagging(node).ToArray();
         if (childInlines.TryCast<CInline>(out var parsedInlines))
         {
+            ApplyTypographyToChildren(parsedInlines, fontSize, fontFamily);
             fontSpan.Content = AddRange(fontSpan.Content, parsedInlines);
         }
         else
@@ -105,12 +115,12 @@ public class FontParser : IInlineTagParser
     /// 解析<font>的size属性并应用到CSpan
     /// 支持两种格式：1. 数字（1-7，对应相对字号）；2. 带单位的像素值（如12px、16pt）
     /// </summary>
-    private void ApplyFontSize(HtmlNode node, CSpan span)
+    private static double? ReadFontSize(HtmlNode node)
     {
         var sizeAttr = node.Attributes["size"];
         if (sizeAttr == null || string.IsNullOrWhiteSpace(sizeAttr.Value))
         {
-            return;
+            return DocUtils.GetFontSize(node);
         }
 
         var sizeValue = sizeAttr.Value.Trim().ToLower();
@@ -136,30 +146,66 @@ public class FontParser : IInlineTagParser
             // 情况2：带单位的字号（如12px、16pt、2em）
             else if (sizeValue.EndsWith("px"))
             {
-                fontSize = double.Parse(sizeValue.Replace("px", ""));
+                fontSize = double.Parse(sizeValue.Replace("px", ""), CultureInfo.InvariantCulture);
             }
             else if (sizeValue.EndsWith("pt"))
             {
                 // 1pt = 1.333px（近似转换）
-                fontSize = double.Parse(sizeValue.Replace("pt", "")) * 1.333;
+                fontSize = double.Parse(sizeValue.Replace("pt", ""), CultureInfo.InvariantCulture) * 1.333;
             }
             else if (sizeValue.EndsWith("em"))
             {
                 // 1em = 当前默认字号（12px）
-                fontSize = double.Parse(sizeValue.Replace("em", "")) * 12;
+                fontSize = double.Parse(sizeValue.Replace("em", ""), CultureInfo.InvariantCulture) * 12;
             }
             else
             {
                 // 不支持的单位，返回默认值
-                return;
+                return null;
             }
 
             // 设置字体大小（限制最小值为8px，避免过小）
-            span.FontSize = Math.Max(fontSize, 8);
+            return Math.Max(fontSize, 8);
         }
         catch
         {
             // 字号解析失败时不修改字体大小
+            return null;
+        }
+    }
+
+    private static FontFamily? ReadFontFamily(HtmlNode node)
+    {
+        var face = node.Attributes["face"]?.Value;
+        if (string.IsNullOrWhiteSpace(face))
+            return DocUtils.GetFontFamily(node);
+
+        var familyName = face.Trim().Trim('\'', '"');
+        try
+        {
+            return new FontFamily(familyName);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void ApplyTypographyToChildren(
+        IEnumerable<CInline> inlines,
+        double? fontSize,
+        FontFamily? fontFamily)
+    {
+        foreach (var inline in inlines)
+        {
+            // Nested font/style tags keep their explicitly assigned values.
+            if (fontSize.HasValue && !inline.IsSet(CInline.FontSizeProperty))
+                inline.FontSize = fontSize.Value;
+            if (fontFamily is not null && !inline.IsSet(CInline.FontFamilyProperty))
+                inline.FontFamily = fontFamily;
+
+            if (inline is CSpan span)
+                ApplyTypographyToChildren(span.Content, fontSize, fontFamily);
         }
     }
 

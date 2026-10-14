@@ -31,7 +31,7 @@ namespace Markdown.Avalonia.Html.Core
             _blockBindParsers = new();
             _bindParsers = new();
 
-            UnknownTags = UnknownTagsOption.PassThrough;
+            UnknownTags = UnknownTagsOption.Bypass;
 
             Register(new CommentParser());
             Register(new TagIgnoreParser());
@@ -366,9 +366,7 @@ namespace Markdown.Avalonia.Html.Core
                     => EnumerableExt.Empty<Control>(),
 
                 UnknownTagsOption.Bypass
-                    => node.ChildNodes
-                        .SkipComment()
-                        .SelectMany(nd => ParseBlock(nd)),
+                    => ParseChildrenAndGroup(node),
 
                 _ => throw new UnknownTagException(node)
             };

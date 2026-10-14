@@ -20,6 +20,8 @@ namespace MFAAvalonia.Helper;
 
 public class ToastNotification
 {
+    // Android notifications must not depend on the Avalonia window being foreground.
+    public static Action<string, string>? PlatformShowNotification { get; set; }
     // 单例实例
     public static ToastNotification Instance { get; } = new();
 
@@ -38,6 +40,9 @@ public class ToastNotification
 
     private ToastNotification()
     {
+        if (OperatingSystem.IsAndroid())
+            return;
+
         try
         {
             // 订阅原生事件：任何屏幕变化（任务栏隐藏/显示、分辨率/缩放变化）都会触发
@@ -59,6 +64,18 @@ public class ToastNotification
         // 检查是否启用了 Toast 通知
         if (!ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableToastNotification, true))
         {
+            return;
+        }
+
+        if (OperatingSystem.IsAndroid())
+        {
+            var notificationTitle = title?.ToString() ?? string.Empty;
+            var notificationContent = content?.ToString() ?? string.Empty;
+            PlatformShowNotification?.Invoke(notificationTitle, notificationContent);
+            ToastHelper.Info(
+                notificationTitle,
+                content,
+                Math.Max(1, (int)Math.Ceiling(duration / 1000d)));
             return;
         }
         

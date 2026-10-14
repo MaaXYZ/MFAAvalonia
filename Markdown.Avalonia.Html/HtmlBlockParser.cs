@@ -12,9 +12,9 @@ namespace Markdown.Avalonia.Html
     public class HtmlBlockParser : BlockParser
     {
         private static readonly Regex s_emptyLine = new Regex("\n{2,}", RegexOptions.Compiled);
-        private static readonly Regex s_headTagPattern = new(@"^<[\t ]*(?'tagname'[a-z][a-z0-9]*)(?'attributes'[ \t][^>]*|/)?>",
+        private static readonly Regex s_headTagPattern = new(@"^<[\t ]*(?'tagname'[a-z][a-z0-9:-]*)(?'attributes'[ \t][^>]*|/)?>",
             RegexOptions.Multiline | RegexOptions.IgnorePatternWhitespace | RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        private static readonly Regex s_tagPattern = new(@"<(?'close'/?)[\t ]*(?'tagname'[a-z][a-z0-9]*)(?'attributes'[ \t][^>]*|/)?>",
+        private static readonly Regex s_tagPattern = new(@"<(?'close'/?)[\t ]*(?'tagname'[a-z][a-z0-9:-]*)(?'attributes'[ \t][^>]*|/)?>",
             RegexOptions.Multiline | RegexOptions.IgnorePatternWhitespace | RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         private ReplaceManager _replacer;

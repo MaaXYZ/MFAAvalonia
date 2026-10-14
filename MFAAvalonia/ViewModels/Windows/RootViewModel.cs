@@ -20,6 +20,11 @@ public partial class RootViewModel : ViewModelBase
 
     protected override void Initialize()
     {
+        if (OperatingSystem.IsAndroid())
+        {
+            return;
+        }
+
         DispatcherHelper.PostOnMainThread(() =>
         {
             HookActiveInstanceState();
@@ -100,7 +105,7 @@ public partial class RootViewModel : ViewModelBase
             // var minor = version.Minor >= 0 ? version.Minor : 0;
             // var patch = version.Build >= 0 ? version.Build : 0;
             // return $"v{SemVersion.Parse($"{major}.{minor}.{patch}")}";
-            return "v2.12.1"; // Hardcoded version for now, replace with dynamic versioning later
+            return "v2.16.3-beta.1"; // Hardcoded version for now, replace with dynamic versioning later
         }
     }
 
@@ -108,15 +113,39 @@ public partial class RootViewModel : ViewModelBase
    
     [ObservableProperty] private string? _windowUpdateInfo = "";
 
-    [ObservableProperty] private string? _resourceName;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ApplicationDisplayName))]
+    private string? _resourceName;
 
-    [ObservableProperty] private bool _isResourceNameVisible;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ApplicationDisplayName))]
+    private bool _isResourceNameVisible;
 
     [ObservableProperty] private string? _resourceVersion;
 
-    [ObservableProperty] private string? _customTitle;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ApplicationDisplayName))]
+    private string? _customTitle;
 
-    [ObservableProperty] private bool _isCustomTitleVisible;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ApplicationDisplayName))]
+    private bool _isCustomTitleVisible;
+
+    public string ApplicationDisplayName
+    {
+        get
+        {
+            if (IsCustomTitleVisible && !string.IsNullOrWhiteSpace(CustomTitle))
+                return CustomTitle.Trim();
+
+            if (IsResourceNameVisible && !string.IsNullOrWhiteSpace(ResourceName))
+                return ResourceName.Trim();
+
+            return LangKeys.AppTitle.ToLocalization();
+        }
+    }
+
+    public void RefreshApplicationDisplayName() => OnPropertyChanged(nameof(ApplicationDisplayName));
 
     [ObservableProperty] private bool _lockController;
 
@@ -153,14 +182,14 @@ public partial class RootViewModel : ViewModelBase
         TempResourceUpdateAction?.Invoke();
     }
     
-        partial void OnLockControllerChanged(bool value)
+    partial void OnLockControllerChanged(bool value)
+    {
+        var vm = Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel;
+        if (value && vm?.SelectedController != null)
         {
-            var vm = Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel;
-            if (value && vm?.SelectedController != null)
-            {
-                vm.ShouldShow = (int)vm.SelectedController.ControllerType;
-            }
+            vm.ShouldShow = (int)vm.SelectedController.ControllerType;
         }
+    }
 
     public void CheckDebug()
     {
@@ -179,7 +208,7 @@ public partial class RootViewModel : ViewModelBase
 
     public void SetUpdating(bool isUpdating)
     {
-        IsUpdating = isUpdating;
+        DispatcherHelper.RunOnMainThread(() => IsUpdating = isUpdating);
     }
     
     partial void OnIsDebugModeChanged(bool value)

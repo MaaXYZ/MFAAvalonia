@@ -177,6 +177,41 @@
             </StackPanel>
         </suki:GlassCard>
         <suki:GlassCard
+            IsVisible="{calcBinding:Binding 'CurrentControllerType == maa:MaaControllerTypes.MacOS'}"
+            Margin="0,25,0,0"
+            Padding="25,10,25,10">
+            <StackPanel Spacing="15">
+                <DockPanel>
+                    <ComboBox
+                        DockPanel.Dock="Right"
+                        HorizontalAlignment="Center"
+                        IsEnabled="{calcBinding:Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
+                        ItemsSource="{Binding MacOSControlScreenCapTypes}"
+                        SelectedValue="{Binding MacOSControlScreenCapType}"
+                        Width="215" />
+                    <TextBlock
+                        FontSize="16"
+                        FontWeight="SemiBold"
+                        Text="{markup:I18n {x:Static helper:LangKeys.CaptureModeOption}}"
+                        VerticalAlignment="Center" />
+                </DockPanel>
+                <DockPanel>
+                    <ComboBox
+                        DockPanel.Dock="Right"
+                        HorizontalAlignment="Center"
+                        IsEnabled="{calcBinding:Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
+                        ItemsSource="{Binding MacOSControlInputTypes}"
+                        SelectedValue="{Binding MacOSControlInputType}"
+                        Width="215" />
+                    <TextBlock
+                        FontSize="16"
+                        FontWeight="SemiBold"
+                        Text="{markup:I18n {x:Static helper:LangKeys.InputModeOption}}"
+                        VerticalAlignment="Center" />
+                </DockPanel>
+            </StackPanel>
+        </suki:GlassCard>
+        <suki:GlassCard
             IsVisible="{calcBinding:Binding 'CurrentControllerType == maa:MaaControllerTypes.Win32'}"
             Margin="0,25,0,0"
             Padding="25,10,25,10">
@@ -261,6 +296,35 @@
                             Text="{markup:I18n {x:Static helper:LangKeys.AutoConnectAfterRefresh}}"
                             VerticalAlignment="Center" />
                     </StackPanel>
+                </DockPanel>
+            </StackPanel>
+        </suki:GlassCard>
+        <suki:GlassCard
+            IsVisible="{calcBinding:Binding 'CurrentControllerType == maa:MaaControllerTypes.Gamepad'}"
+            Margin="0,25,0,0"
+            Padding="25,10,25,10">
+            <StackPanel Spacing="15">
+                <DockPanel>
+                    <ComboBox
+                        DockPanel.Dock="Right"
+                        IsEnabled="{calcBinding:Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
+                        ItemsSource="{Binding GamepadControlScreenCapTypes}"
+                        SelectedValue="{Binding GamepadControlScreenCapType}"
+                        Width="215" />
+                    <TextBlock FontSize="16" FontWeight="SemiBold"
+                               Text="{markup:I18n {x:Static helper:LangKeys.CaptureModeOption}}"
+                               VerticalAlignment="Center" />
+                </DockPanel>
+                <DockPanel>
+                    <ComboBox
+                        DockPanel.Dock="Right"
+                        IsEnabled="{calcBinding:Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
+                        ItemsSource="{Binding GamepadTypes}"
+                        SelectedValue="{Binding GamepadType}"
+                        Width="215" />
+                    <TextBlock FontSize="16" FontWeight="SemiBold"
+                               Text="{markup:I18n {x:Static helper:LangKeys.VirtualGamepadType}}"
+                               VerticalAlignment="Center" />
                 </DockPanel>
             </StackPanel>
         </suki:GlassCard>

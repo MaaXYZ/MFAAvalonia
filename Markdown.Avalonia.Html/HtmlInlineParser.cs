@@ -15,10 +15,10 @@ namespace Markdown.Avalonia.Html
 
         public HtmlInlineParser(SyntaxHighlight highlight, SetupInfo info) : this(new ReplaceManager(highlight, info)) { }
 
-        private HtmlInlineParser(ReplaceManager replacer) : base(SimpleHtmlUtils.CreateTagstartPattern(replacer.InlineTags), nameof(HtmlInlineParser))
+        private HtmlInlineParser(ReplaceManager replacer) : base(SimpleHtmlUtils.CreateAnyTagStartPattern(), nameof(HtmlInlineParser))
         {
             _replacer = replacer;
-            FirstMatchPattern = SimpleHtmlUtils.CreateTagstartPattern(_replacer.InlineTags);
+            FirstMatchPattern = SimpleHtmlUtils.CreateAnyTagStartPattern();
         }
 
         public Regex FirstMatchPattern { get; }

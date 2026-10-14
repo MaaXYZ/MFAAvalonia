@@ -1,7 +1,4 @@
 ﻿using Avalonia;
-using Avalonia.Data;
-using Avalonia.Data.Converters;
-using Avalonia.Layout;
 using ColorTextBlock.Avalonia;
 using ColorTextBlock.Avalonia.Utils;
 using HtmlAgilityPack;
@@ -9,7 +6,6 @@ using Markdown.Avalonia.Html.Core.Utils;
 using Markdown.Avalonia.Plugins;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 
 namespace Markdown.Avalonia.Html.Core.Parsers
@@ -56,51 +52,7 @@ namespace Markdown.Avalonia.Html.Core.Parsers
             }
 
 
-            if (Length.TryParse(heightTxt, out var heightLen))
-            {
-                if (heightLen.Unit == Unit.Percentage)
-                {
-                    image.Bind(CImage.LayoutHeightProperty,
-                        new Binding(nameof(Layoutable.Height))
-                        {
-                            RelativeSource = new RelativeSource()
-                            {
-                                Mode = RelativeSourceMode.FindAncestor,
-                                AncestorType = typeof(CTextBlock),
-                            },
-                            Converter = new MultiplyConverter(heightLen.Value / 100)
-                        });
-                }
-                else
-                {
-                    image.LayoutHeight = heightLen.ToPoint();
-                }
-            }
-
-            // Bind size so document is updated when image is downloaded
-            if (Length.TryParse(widthTxt, out var widthLen))
-            {
-                if (widthLen.Unit == Unit.Percentage)
-                {
-                    image.Bind(CImage.LayoutHeightProperty,
-                        new Binding(nameof(Layoutable.Width))
-                        {
-                            RelativeSource = new RelativeSource()
-                            {
-                                Mode = RelativeSourceMode.FindAncestor,
-                                AncestorType = typeof(CTextBlock),
-                            },
-                            Converter = new MultiplyConverter(widthLen.Value / 100)
-                        });
-                }
-                else
-                {
-                    if (image.LayoutHeight.HasValue)
-                        image.LayoutWidth = widthLen.ToPoint();
-                    else
-                        image.RelativeWidth = widthLen.ToPoint();
-                }
-            }
+            ApplyDimensions(image, widthTxt, heightTxt);
 
             generated =
             [
@@ -109,16 +61,26 @@ namespace Markdown.Avalonia.Html.Core.Parsers
             return true;
         }
 
-        class MultiplyConverter(double Value) : IValueConverter
+        internal static void ApplyDimensions(CImage image, string? widthText, string? heightText)
         {
-            public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+            if (Length.TryParse(heightText, out var height) && height.Unit != Unit.Percentage)
             {
-                return value is null ? 0d : Value * (Double)value;
+                image.LayoutHeight = height.ToPoint();
             }
 
-            public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+            if (!Length.TryParse(widthText, out var width))
+                return;
+
+            if (width.Unit == Unit.Percentage)
             {
-                return value is null ? 0d : ((Double)value) / Value;
+                // CImage measures RelativeWidth against the complete text line.
+                // It is an inline StyledElement, so a visual-ancestor binding
+                // is invalid while the document is being built.
+                image.RelativeWidth = Math.Clamp(width.Value / 100d, 0d, 1d);
+            }
+            else
+            {
+                image.LayoutWidth = width.ToPoint();
             }
         }
     }

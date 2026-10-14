@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Metadata;
 using Avalonia.Platform;
+using Avalonia.Reactive;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ColorDocument.Avalonia;
@@ -126,6 +127,17 @@ namespace Markdown.Avalonia
             AvaloniaProperty.Register<MarkdownScrollViewer, bool>(
                 nameof(SaveScrollValueWhenContentUpdated),
                 defaultValue: false);
+
+        public static readonly StyledProperty<ScrollBarVisibility> HorizontalScrollBarVisibilityProperty =
+            AvaloniaProperty.Register<MarkdownScrollViewer, ScrollBarVisibility>(
+                nameof(HorizontalScrollBarVisibility),
+                defaultValue: ScrollBarVisibility.Disabled);
+
+        public static readonly StyledProperty<ScrollBarVisibility> VerticalScrollBarVisibilityProperty =
+            AvaloniaProperty.Register<MarkdownScrollViewer, ScrollBarVisibility>(
+                nameof(VerticalScrollBarVisibility),
+                defaultValue: ScrollBarVisibility.Auto);
+
         public static readonly StyledProperty<bool> EnableProgressiveRenderingProperty =
             AvaloniaProperty.Register<MarkdownScrollViewer, bool>(
                 nameof(EnableProgressiveRendering),
@@ -215,6 +227,7 @@ namespace Markdown.Avalonia
         /// 大文件阈值（行数），超过此值启用渐进式渲染
         /// </summary>
         private const int LargeFileThreshold = 200;
+        private const int LargeFileCharacterThreshold = 512 * 1024;
 
         /// <summary>
         /// 当前渐进式渲染的取消令牌源
@@ -241,10 +254,7 @@ namespace Markdown.Avalonia
         /// </summary>
         private int _renderedLineCount;
 
-        /// <summary>
-        /// 当前渲染的所有行
-        /// </summary>
-        private string[]? _currentLines;
+        private readonly SemaphoreSlim _largeDocumentParseGate = new(1, 1);
 
         /// <summary>
         /// 渲染性能计时器
@@ -258,6 +268,8 @@ namespace Markdown.Avalonia
         private DocumentElement? _document;
         private IBrush? _selectionBrush;
         private Wrapper _wrapper;
+        private IDocumentAnchorProvider? _anchorProvider;
+        private string? _pendingAnchor;
 
         public MarkdownScrollViewer()
         {
@@ -270,6 +282,7 @@ namespace Markdown.Avalonia
             md.Plugins = _plugins;
 
             _engine = md;
+            AttachAnchorProvider(_engine);
 
             if (nvl(ThemeDetector.IsFluentAvaloniaUsed))
             {
@@ -298,9 +311,13 @@ namespace Markdown.Avalonia
             {
                 // TODO: ScrollViewer does not seem to take Padding into account in 11.0.0-preview1
                 Padding = new Thickness(0),
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             };
+            _viewer.Bind(
+                ScrollViewer.HorizontalScrollBarVisibilityProperty,
+                this.GetObservable(HorizontalScrollBarVisibilityProperty));
+            _viewer.Bind(
+                ScrollViewer.VerticalScrollBarVisibilityProperty,
+                this.GetObservable(VerticalScrollBarVisibilityProperty));
 
             ((ISetLogicalParent)_viewer).SetParent(this);
             VisualChildren.Add(_viewer);
@@ -340,7 +357,7 @@ namespace Markdown.Avalonia
             _viewer.PointerReleased -= _viewer_PointerReleased;
 
             // 清理文档内容
-            if (_wrapper.Document?.Control is Control contentControl)
+            if (_wrapper.ContentControl is Control contentControl)
             {
                 contentControl.SizeChanged -= OnViewportSizeChanged;
             }
@@ -360,6 +377,7 @@ namespace Markdown.Avalonia
             _markdown = null;
             _source = null;
             _AssetPathRoot = null;
+            DetachAnchorProvider();
 
             // 清理样式引用
             if (_markdownStyle != null)
@@ -524,18 +542,32 @@ namespace Markdown.Avalonia
                 if (_document is null) return;
 
                 _headerRects = new List<HeaderRect>();
-                foreach (var doc in _document.Children.OfType<HeaderElement>())
+                foreach (var heading in _document.Children.OfType<IDocumentHeading>())
                 {
-                    var t = doc.GetRect(this);
-                    var rect = new Rect(t.Left, t.Top + offsetY, t.Width, t.Height);
-                    _headerRects.Add(new HeaderRect(rect, doc));
+                    var element = (DocumentElement)heading;
+                    Rect rect;
+                    if (_wrapper.VirtualizingPanel?.TryGetElementBounds(element, out var virtualBounds) == true)
+                    {
+                        rect = virtualBounds;
+                    }
+                    else
+                    {
+                        var visualBounds = element.GetRect(this);
+                        rect = new Rect(
+                            visualBounds.Left,
+                            visualBounds.Top + offsetY,
+                            visualBounds.Width,
+                            visualBounds.Height);
+                    }
+
+                    _headerRects.Add(new HeaderRect(rect, heading.Level, heading.Text));
                 }
             }
 
             var tree = new Header?[5];
             var viewing = new List<Header>();
 
-            tree[0] = _headerRects.Where(rct => rct.Header.Level == 1)
+            tree[0] = _headerRects.Where(rct => rct.Level == 1)
                 .Select(rct => CreateHeader(rct))
                 .FirstOrDefault();
 
@@ -567,8 +599,7 @@ namespace Markdown.Avalonia
 
             static Header CreateHeader(HeaderRect headerRect)
             {
-                var header = headerRect.Header;
-                return new Header(header.Level, header.Text);
+                return new Header(headerRect.Level, headerRect.Text);
             }
         }
 
@@ -672,13 +703,25 @@ namespace Markdown.Avalonia
             }
             _isProgressiveRendering = false;
             _renderedLineCount = 0;
-            _currentLines = null;
         }
 
         private void UpdateMarkdown()
         {
-            if (_wrapper.Document is null && String.IsNullOrEmpty(Markdown))
+            if (String.IsNullOrEmpty(Markdown))
+            {
+                CancelProgressiveRendering();
+
+                if (_wrapper.ContentControl is Control oldContentControl)
+                {
+                    oldContentControl.SizeChanged -= OnViewportSizeChanged;
+                }
+
+                _document = null;
+                _wrapper.Document = null;
+                _currentContentHash = null;
+                _headerRects = null;
                 return;
+            }
 
             // 首先取消任何正在进行的渐进式渲染
             CancelProgressiveRendering();
@@ -700,37 +743,35 @@ namespace Markdown.Avalonia
                 // 注意：不再使用文档缓存，因为缓存 Avalonia 控件会导致内存泄漏
                 // Avalonia 控件持有对样式系统的引用，缓存这些控件会阻止 GC 回收
 
-                // 检查是否需要渐进式渲染
-                var lines = markdownContent.Split(new[]
-                {
-                    "\r\n",
-                    "\r",
-                    "\n"
-                }, StringSplitOptions.None);
-                bool shouldUseProgressiveRendering = EnableProgressiveRendering && lines.Length > LargeFileThreshold;
+                var totalLines = CountLines(markdownContent);
+                bool shouldUseProgressiveRendering =
+                    EnableProgressiveRendering &&
+                    (totalLines > LargeFileThreshold ||
+                     markdownContent.Length > LargeFileCharacterThreshold);
+                _wrapper.UseVirtualization =
+                    EnableVirtualization || shouldUseProgressiveRendering;
 
                 if (shouldUseProgressiveRendering)
                 {
-                    // 使用渐进式渲染
-                    StartProgressiveRendering(markdownContent, lines, contentHash, ofst);
+                    StartProgressiveRendering(markdownContent, totalLines, contentHash, ofst);
                     return;
                 }
 
                 var newDocument = _engine.TransformElement(markdownContent);
-                newDocument.Control.Classes.Add("Markdown_Avalonia_MarkdownViewer");
+                PrepareDocumentForDisplay(newDocument);
 
                 // 全量更新
                 _document = newDocument;
                 _currentContentHash = contentHash;
 
-                if (_wrapper.Document?.Control is Control oldContentControl)
+                if (_wrapper.ContentControl is Control oldContentControl)
                 {
                     oldContentControl.SizeChanged -= OnViewportSizeChanged;
                 }
 
                 _wrapper.Document = _document;
 
-                if (_wrapper.Document?.Control is Control newContentControl)
+                if (_wrapper.ContentControl is Control newContentControl)
                 {
                     newContentControl.SizeChanged += OnViewportSizeChanged;
                 }
@@ -767,110 +808,139 @@ namespace Markdown.Avalonia
                 CreateErrorDocument($"Markdown 内容解析失败: {errorMsg}");
             }
         }
-        /// <summary>
-        /// 启动渐进式渲染（优化版本）
-        /// </summary>
-        private void StartProgressiveRendering(string fullContent, string[] lines, string contentHash, Vector savedOffset)
+
+        private void PrepareDocumentForDisplay(DocumentElement document)
         {
-            // 检查是否已释放
+            // A virtualized root must stay purely semantic. Materializing its
+            // StackPanel here would attach every child control to a hidden
+            // parent before the virtualizing panel can realize it.
+            if (_wrapper.UseVirtualization && document is DocumentRootElement)
+                return;
+
+            document.Control.Classes.Add("Markdown_Avalonia_MarkdownViewer");
+        }
+        /// <summary>
+        /// Starts progressive realization from one authoritative full-document
+        /// parse. Markdown is never split into independent parser inputs.
+        /// </summary>
+        private void StartProgressiveRendering(
+            string fullContent,
+            int totalLines,
+            string contentHash,
+            Vector savedOffset)
+        {
             if (_disposed)
                 return;
 
-            // 取消之前的渐进式渲染
             CancelProgressiveRendering();
 
             _progressiveRenderCts = new CancellationTokenSource();
             _isProgressiveRendering = true;
-            _currentLines = lines;
             _renderedLineCount = 0;
 
             var ct = _progressiveRenderCts.Token;
-
-            // 计算安全的初始渲染行数（不在代码块中间分割）
-            int initialLines = FindSafeBreakPoint(lines, Math.Min(InitialRenderLines, lines.Length));
-            string initialContent = string.Join("\n", lines.Take(initialLines));
-
             _renderStopwatch.Restart();
+
+            if (_wrapper.UseVirtualization && _engine is Markdown markdownEngine)
+            {
+                Markdown.DeferredParseOptions options;
+                try
+                {
+                    options = markdownEngine.PrepareDeferredParsing();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"大文档解析器初始化失败: {ex.Message}");
+                    _isProgressiveRendering = false;
+                    _renderStopwatch.Stop();
+                    CreateErrorDocument($"Markdown 解析器初始化失败: {ex.Message}");
+                    return;
+                }
+
+                _ = StartDeferredProgressiveRenderingAsync(
+                    markdownEngine,
+                    options,
+                    fullContent,
+                    contentHash,
+                    totalLines,
+                    savedOffset,
+                    ct);
+                return;
+            }
 
             try
             {
-                // 先渲染初始部分
-                var initialDocument = _engine.TransformElement(initialContent);
-                initialDocument.Control.Classes.Add("Markdown_Avalonia_MarkdownViewer");
-
-                // 更新显示
-                _document = initialDocument;
-                _currentContentHash = null; // 暂时不设置哈希，因为还没渲染完
-                _renderedLineCount = initialLines;
-
-                if (_wrapper.Document?.Control is Control oldContentControl)
+                // Parse the complete source once so every element comes from
+                // the same AST and retains document-wide context.
+                var authoritativeDocument = _engine.TransformElement(fullContent);
+                if (authoritativeDocument is not DocumentRootElement authoritativeRoot)
                 {
-                    oldContentControl.SizeChanged -= OnViewportSizeChanged;
+                    PrepareDocumentForDisplay(authoritativeDocument);
+                    ReplaceDocument(authoritativeDocument, savedOffset, SaveScrollValueWhenContentUpdated);
+                    CompleteProgressiveRendering(contentHash, totalLines);
+                    return;
                 }
 
-                _wrapper.Document = _document;
+                var allElements = authoritativeRoot.Children.ToList();
+                var ranges = CreateProgressiveElementRanges(
+                    allElements.Count,
+                    totalLines,
+                    InitialRenderLines,
+                    ProgressiveRenderBatchSize);
 
-                if (_wrapper.Document?.Control is Control newContentControl)
+                if (ranges.Count == 0)
                 {
-                    newContentControl.SizeChanged += OnViewportSizeChanged;
+                    PrepareDocumentForDisplay(authoritativeDocument);
+                    ReplaceDocument(authoritativeDocument, savedOffset, SaveScrollValueWhenContentUpdated);
+                    CompleteProgressiveRendering(contentHash, totalLines);
+                    return;
                 }
 
+                var initialRange = ranges[0];
+                var progressiveDocument = new DocumentRootElement(
+                    allElements.Take(initialRange.Count));
+                PrepareDocumentForDisplay(progressiveDocument);
+                ReplaceDocument(progressiveDocument, savedOffset, SaveScrollValueWhenContentUpdated);
+
+                _currentContentHash = null;
+                _renderedLineCount = initialRange.RenderedLines;
                 _headerRects = null;
 
-                if (SaveScrollValueWhenContentUpdated)
-                    _viewer.Offset = savedOffset;
-
                 var elapsed = _renderStopwatch.ElapsedMilliseconds;
-                System.Diagnostics.Debug.WriteLine($"初始渲染 {initialLines} 行，耗时 {elapsed}ms");
+                System.Diagnostics.Debug.WriteLine(
+                    $"初始挂载 {initialRange.Count}/{allElements.Count} 个完整块，耗时 {elapsed}ms");
+                ProgressiveRenderingProgress?.Invoke(
+                    this,
+                    new ProgressiveRenderingProgressEventArgs(initialRange.RenderedLines, totalLines));
 
-                // 触发进度事件
-                ProgressiveRenderingProgress?.Invoke(this, new ProgressiveRenderingProgressEventArgs(initialLines, lines.Length));
-
-                // 如果还有剩余内容，异步加载
-                if (initialLines < lines.Length)
+                if (ranges.Count > 1)
                 {
-                    // 使用优化的增量渲染
-                    _ = ContinueProgressiveRenderingOptimizedAsync(lines, initialLines, contentHash, ct);
+                    _ = ContinueProgressiveRenderingOptimizedAsync(
+                        progressiveDocument,
+                        allElements,
+                        ranges,
+                        contentHash,
+                        totalLines,
+                        ct);
                 }
                 else
                 {
-                    // 渲染完成
-                    _currentContentHash = contentHash;
-                    _isProgressiveRendering = false;
-                    _renderStopwatch.Stop();
-                    ProgressiveRenderingCompleted?.Invoke(this, EventArgs.Empty);
+                    CompleteProgressiveRendering(contentHash, totalLines);
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"渐进式渲染初始部分失败: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"渐进式渲染初始化失败: {ex.Message}");
                 _isProgressiveRendering = false;
                 _renderStopwatch.Stop();
 
-                // 回退到普通渲染
                 try
                 {
                     var fallbackDocument = _engine.TransformElement(fullContent);
-                    fallbackDocument.Control.Classes.Add("Markdown_Avalonia_MarkdownViewer");
-                    _document = fallbackDocument;
+                    PrepareDocumentForDisplay(fallbackDocument);
+                    ReplaceDocument(fallbackDocument, savedOffset, SaveScrollValueWhenContentUpdated);
                     _currentContentHash = contentHash;
-
-                    if (_wrapper.Document?.Control is Control oldCtrl)
-                    {
-                        oldCtrl.SizeChanged -= OnViewportSizeChanged;
-                    }
-
-                    _wrapper.Document = _document;
-
-                    if (_wrapper.Document?.Control is Control newCtrl)
-                    {
-                        newCtrl.SizeChanged += OnViewportSizeChanged;
-                    }
-
                     _headerRects = null;
-
-                    if (SaveScrollValueWhenContentUpdated)
-                        _viewer.Offset = savedOffset;
                 }
                 catch (Exception fallbackEx)
                 {
@@ -880,307 +950,150 @@ namespace Markdown.Avalonia
             }
         }
 
-
-        /// <summary>
-        /// 代码块开始标记的正则表达式（匹配 ``` 或 ~~~，可能带语言标识）
-        /// </summary>
-        private static readonly Regex s_codeBlockStartRegex = new Regex(@"^(\s*)(```|~~~)(\w*)\s*$", RegexOptions.Compiled);
-
-        /// <summary>
-        /// 代码块结束标记的正则表达式
-        /// </summary>
-        private static readonly Regex s_codeBlockEndRegex = new Regex(@"^(\s*)(```|~~~)\s*$", RegexOptions.Compiled);
-
-        /// <summary>
-        /// HTML 块级标签开始的正则表达式（匹配 details, summary, div 等）
-        /// </summary>
-        private static readonly Regex s_htmlBlockStartRegex = new Regex(@"^\s*<(details|summary|div|section|article|aside|nav|header|footer|main|figure|figcaption|blockquote|pre|table|ul|ol|dl)(\s[^>]*)?>", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-        /// <summary>
-        /// HTML 块级标签结束的正则表达式
-        /// </summary>
-        private static readonly Regex s_htmlBlockEndRegex = new Regex(@"</(details|summary|div|section|article|aside|nav|header|footer|main|figure|figcaption|blockquote|pre|table|ul|ol|dl)>\s*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-        /// <summary>
-        /// 查找安全的分割点（不在代码块或 HTML 块级标签中间）
-        /// </summary>
-        /// <param name="lines">所有行</param>
-        /// <param name="targetLine">目标行号</param>
-        /// <returns>安全的分割行号</returns>
-        private int FindSafeBreakPoint(string[] lines, int targetLine)
+        internal static int CountLines(string text)
         {
-            if (targetLine >= lines.Length)
-                return lines.Length;
+            if (text.Length == 0)
+                return 1;
 
-            // 跟踪代码块状态
-            bool inCodeBlock = false;
-            string? codeBlockMarker = null;
-            
-            // 跟踪 HTML 块级标签状态（使用栈来处理嵌套）
-            var htmlTagStack = new Stack<string>();
-            int lastSafePoint = 0;
-
-            for (int i = 0; i < targetLine && i < lines.Length; i++)
+            var count = 1;
+            for (var index = 0; index < text.Length; index++)
             {
-                var line = lines[i];
-
-                if (!inCodeBlock)
+                if (text[index] == '\n')
                 {
-                    // 检查是否是代码块开始
-                    var codeStartMatch = s_codeBlockStartRegex.Match(line);
-                    if (codeStartMatch.Success)
-                    {
-                        inCodeBlock = true;
-                        codeBlockMarker = codeStartMatch.Groups[2].Value;
-                        continue;
-                    }
-
-                    // 检查 HTML 块级标签
-                    CheckHtmlTags(line, htmlTagStack);
-
-                    // 只有在不在任何块级结构内时才是安全点
-                    if (htmlTagStack.Count == 0)
-                    {
-                        lastSafePoint = i + 1;
-                    }
+                    count++;
                 }
-                else
+                else if (text[index] == '\r')
                 {
-                    // 在代码块内，检查是否是代码块结束
-                    var codeEndMatch = s_codeBlockEndRegex.Match(line);
-                    if (codeEndMatch.Success && codeEndMatch.Groups[2].Value == codeBlockMarker)
-                    {
-                        inCodeBlock = false;
-                        codeBlockMarker = null;
-                        // 代码块结束后，如果没有未闭合的 HTML 标签，是安全点
-                        if (htmlTagStack.Count == 0)
-                        {
-                            lastSafePoint = i + 1;
-                        }
-                    }
+                    count++;
+                    if (index + 1 < text.Length && text[index + 1] == '\n')
+                        index++;
                 }
             }
-
-            // 如果目标行在代码块内，需要找到代码块结束的位置
-            if (inCodeBlock)
-            {
-                for (int i = targetLine; i < lines.Length; i++)
-                {
-                    var line = lines[i];
-                    var endMatch = s_codeBlockEndRegex.Match(line);
-                    if (endMatch.Success && endMatch.Groups[2].Value == codeBlockMarker)
-                    {
-                        // 继续检查后续是否有未闭合的 HTML 标签
-                        return FindHtmlSafePoint(lines, i + 1, htmlTagStack);
-                    }
-                }
-                return lines.Length;
-            }
-
-            // 如果目标行在 HTML 块级标签内，需要找到标签结束的位置
-            if (htmlTagStack.Count > 0)
-            {
-                return FindHtmlSafePoint(lines, targetLine, htmlTagStack);
-            }
-
-            return targetLine;
+            return count;
         }
 
-        /// <summary>
-        /// 检查一行中的 HTML 块级标签，更新标签栈
-        /// </summary>
-        private void CheckHtmlTags(string line, Stack<string> tagStack)
+        private async Task StartDeferredProgressiveRenderingAsync(
+            Markdown markdownEngine,
+            Markdown.DeferredParseOptions options,
+            string fullContent,
+            string contentHash,
+            int totalLines,
+            Vector savedOffset,
+            CancellationToken cancellationToken)
         {
-            // 检查开始标签
-            var startMatches = s_htmlBlockStartRegex.Matches(line);
-            foreach (Match match in startMatches)
-            {
-                var tagName = match.Groups[1].Value.ToLowerInvariant();
-                tagStack.Push(tagName);
-            }
-
-            // 检查结束标签
-            var endMatches = s_htmlBlockEndRegex.Matches(line);
-            foreach (Match match in endMatches)
-            {
-                var tagName = match.Groups[1].Value.ToLowerInvariant();
-                // 从栈中移除匹配的标签
-                if (tagStack.Count > 0 && tagStack.Peek() == tagName)
-                {
-                    tagStack.Pop();
-                }
-            }
-        }
-
-        /// <summary>
-        /// 从指定行开始查找 HTML 安全分割点
-        /// </summary>
-        private int FindHtmlSafePoint(string[] lines, int startLine, Stack<string> tagStack)
-        {
-            for (int i = startLine; i < lines.Length; i++)
-            {
-                var line = lines[i];
-                
-                // 跳过代码块
-                var codeStartMatch = s_codeBlockStartRegex.Match(line);
-                if (codeStartMatch.Success)
-                {
-                    var marker = codeStartMatch.Groups[2].Value;
-                    // 找到代码块结束
-                    for (int j = i + 1; j < lines.Length; j++)
-                    {
-                        var endMatch = s_codeBlockEndRegex.Match(lines[j]);
-                        if (endMatch.Success && endMatch.Groups[2].Value == marker)
-                        {
-                            i = j;
-                            break;
-                        }
-                    }
-                    continue;
-                }
-
-                CheckHtmlTags(line, tagStack);
-
-                // 如果所有标签都已闭合，这是一个安全点
-                if (tagStack.Count == 0)
-                {
-                    return i + 1;
-                }
-            }
-
-            // 如果没找到安全点，返回所有行
-            return lines.Length;
-        }
-        /// <summary>
-        /// 异步继续渐进式渲染（优化版本）
-        /// 使用增量追加模式，避免每次重新解析整个内容
-        /// </summary>
-        private async Task ContinueProgressiveRenderingOptimizedAsync(string[] lines, int startLine, string contentHash, CancellationToken ct)
-        {
-            int currentLine = startLine;
-            int batchSize = ProgressiveRenderBatchSize;
-            int delayMs = ProgressiveRenderDelayMs;
-            int totalLines = lines.Length;
-
-            // 动态调整批次大小
-            int adaptiveBatchSize = batchSize;
-
+            var gateEntered = false;
             try
             {
-                while (currentLine < totalLines && !ct.IsCancellationRequested)
+                await _largeDocumentParseGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                gateEntered = true;
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var plan = await Task.Run(
+                    () => markdownEngine.BuildDeferredDocument(
+                        fullContent,
+                        options,
+                        cancellationToken),
+                    cancellationToken).ConfigureAwait(false);
+
+                cancellationToken.ThrowIfCancellationRequested();
+                await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    // 使用 Task.Yield 而非 Task.Delay，减少延迟
-                    if (delayMs > 0)
-                    {
-                        await Task.Delay(delayMs, ct);
-                    }
-                    else
-                    {
-                        await Task.Yield();
-                    }
+                    if (cancellationToken.IsCancellationRequested ||
+                        _disposed ||
+                        !ReferenceEquals(_engine, markdownEngine))
+                        return;
 
-                    if (ct.IsCancellationRequested)
-                        break;
+                    markdownEngine.ActivateDeferredDocument(plan);
+                    PrepareDocumentForDisplay(plan.Document);
+                    ReplaceDocument(
+                        plan.Document,
+                        savedOffset,
+                        SaveScrollValueWhenContentUpdated);
 
-                    // 计算这一批次要渲染到的行数（使用安全分割点）
-                    int targetEndLine = Math.Min(currentLine + adaptiveBatchSize, totalLines);
-                    int endLine = FindSafeBreakPoint(lines, targetEndLine);
-
-                    // 如果安全分割点没有前进，强制前进到目标位置或文档末尾
-                    if (endLine <= currentLine)
-                    {
-                        endLine = Math.Min(targetEndLine, totalLines);
-                    }
-
-                    var batchStopwatch = Stopwatch.StartNew();
-
-                    // 尝试使用增量追加模式
-                    bool useIncremental = _document is DocumentRootElement;
-
-                    // 在UI线程上更新
+                    _headerRects = null;
+                    ProgressiveRenderingProgress?.Invoke(
+                        this,
+                        new ProgressiveRenderingProgressEventArgs(totalLines, totalLines));
+                    CompleteProgressiveRendering(contentHash, totalLines);
+                }, DispatcherPriority.Background, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                System.Diagnostics.Debug.WriteLine("大文档解析被取消");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"大文档延迟解析失败: {ex.Message}\n{ex.StackTrace}");
+                if (!cancellationToken.IsCancellationRequested && !_disposed)
+                {
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        if (ct.IsCancellationRequested)
+                        if (!cancellationToken.IsCancellationRequested)
+                        {
+                            _isProgressiveRendering = false;
+                            _renderStopwatch.Stop();
+                            CreateErrorDocument($"Markdown 大文档解析失败: {ex.Message}");
+                        }
+                    }, DispatcherPriority.Background);
+                }
+            }
+            finally
+            {
+                if (gateEntered)
+                    _largeDocumentParseGate.Release();
+            }
+        }
+
+        /// <summary>
+        /// 异步挂载完整文档解析出的顶层元素。
+        /// </summary>
+        private async Task ContinueProgressiveRenderingOptimizedAsync(
+            DocumentRootElement progressiveDocument,
+            IReadOnlyList<DocumentElement> allElements,
+            IReadOnlyList<ProgressiveElementRange> ranges,
+            string contentHash,
+            int totalLines,
+            CancellationToken ct)
+        {
+            try
+            {
+                for (var rangeIndex = 1; rangeIndex < ranges.Count; rangeIndex++)
+                {
+                    if (ProgressiveRenderDelayMs > 0)
+                        await Task.Delay(ProgressiveRenderDelayMs, ct);
+                    else
+                        await Task.Yield();
+
+                    ct.ThrowIfCancellationRequested();
+                    var range = ranges[rangeIndex];
+                    var batch = allElements.Skip(range.Start).Take(range.Count).ToArray();
+
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        if (ct.IsCancellationRequested ||
+                            !ReferenceEquals(_document, progressiveDocument))
                             return;
 
-                        try
-                        {
-                            if (useIncremental && _document is DocumentRootElement rootElement)
-                            {
-                                // 增量模式：只解析新增的部分
-                                string incrementalContent = string.Join("\n", lines.Skip(currentLine).Take(endLine - currentLine));
-                                var incrementalElements = _engine.ParseGamutElement(incrementalContent, new Parsers.ParseStatus(true)).ToList();
-                                rootElement.AppendElements(incrementalElements);
+                        // The root owns semantic order. The virtualizing panel is
+                        // the sole visual owner when virtualization is enabled.
+                        progressiveDocument.AppendElements(batch);
+                        if (_wrapper.UseVirtualization && _wrapper.VirtualizingPanel is { } panel)
+                            panel.AppendElements(batch);
 
-                                if (_wrapper.UseVirtualization && _wrapper.VirtualizingPanel != null)
-                                {
-                                    _wrapper.VirtualizingPanel.AppendElements(incrementalElements);
-                                }
-
-                                _renderedLineCount = endLine;
-                            }
-                            else
-                            {
-                                // 回退到替换模式
-                                string contentSoFar = string.Join("\n", lines.Take(endLine));
-                                var newDocument = _engine.TransformElement(contentSoFar);
-                                newDocument.Control.Classes.Add("Markdown_Avalonia_MarkdownViewer");
-                                ReplaceDocument(newDocument);
-                                _renderedLineCount = endLine;
-                            }
-
-                            _headerRects = null;
-
-                            // 触发进度事件
-                            ProgressiveRenderingProgress?.Invoke(this, new ProgressiveRenderingProgressEventArgs(endLine, totalLines));
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"增量渲染批次失败: {ex.Message}，回退到替换模式");
-                            // 回退到替换模式
-                            try
-                            {
-                                string contentSoFar = string.Join("\n", lines.Take(endLine));
-                                var newDocument = _engine.TransformElement(contentSoFar);
-                                newDocument.Control.Classes.Add("Markdown_Avalonia_MarkdownViewer");
-                                ReplaceDocument(newDocument);
-                                _renderedLineCount = endLine;
-                            }
-                            catch (Exception fallbackEx)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"替换模式也失败: {fallbackEx.Message}");
-                            }
-                        }
+                        _renderedLineCount = range.RenderedLines;
+                        _headerRects = null;
+                        ProgressiveRenderingProgress?.Invoke(
+                            this,
+                            new ProgressiveRenderingProgressEventArgs(range.RenderedLines, totalLines));
                     }, DispatcherPriority.Background, ct);
-
-                    batchStopwatch.Stop();
-                    var batchTime = batchStopwatch.ElapsedMilliseconds;
-
-                    // 动态调整批次大小：如果渲染很快，增加批次大小；如果很慢，减少批次大小
-                    if (batchTime < 16) // 小于一帧的时间（60fps）
-                    {
-                        adaptiveBatchSize = Math.Min(adaptiveBatchSize * 2, 2000); // 最大2000行
-                    }
-                    else if (batchTime > 50) // 超过50ms
-                    {
-                        adaptiveBatchSize = Math.Max(adaptiveBatchSize / 2, 100); // 最小100行
-                    }
-
-                    currentLine = endLine;
                 }
 
-                // 渲染完成
-                if (!ct.IsCancellationRequested)
+                if (!ct.IsCancellationRequested && ReferenceEquals(_document, progressiveDocument))
                 {
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        _currentContentHash = contentHash;
-                        _isProgressiveRendering = false;
-                        _renderStopwatch.Stop();
-                        var totalTime = _renderStopwatch.ElapsedMilliseconds;
-                        System.Diagnostics.Debug.WriteLine($"渐进式渲染完成，总计 {totalLines} 行，耗时 {totalTime}ms");
-                        ProgressiveRenderingCompleted?.Invoke(this, EventArgs.Empty);
-                    }, DispatcherPriority.Background);
+                    await Dispatcher.UIThread.InvokeAsync(
+                        () => CompleteProgressiveRendering(contentHash, totalLines),
+                        DispatcherPriority.Background,
+                        ct);
                 }
             }
             catch (OperationCanceledException)
@@ -1189,114 +1102,187 @@ namespace Markdown.Avalonia
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"渐进式渲染异常: {ex.Message}");
-            }
-            finally
-            {
-                _isProgressiveRendering = false;
-                _renderStopwatch.Stop();
+                System.Diagnostics.Debug.WriteLine($"渐进式挂载异常: {ex.Message}");
+
+                // Keep the already displayed document stable and append every
+                // missing authoritative block exactly once.
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (ct.IsCancellationRequested ||
+                        !ReferenceEquals(_document, progressiveDocument))
+                        return;
+
+                    var appended = progressiveDocument.Children.Count();
+                    var remaining = allElements.Skip(appended).ToArray();
+                    progressiveDocument.AppendElements(remaining);
+                    if (_wrapper.UseVirtualization && _wrapper.VirtualizingPanel is { } panel)
+                        panel.AppendElements(remaining);
+
+                    CompleteProgressiveRendering(contentHash, totalLines);
+                }, DispatcherPriority.Background);
             }
         }
 
-        /// <summary>
-        /// 异步继续渐进式渲染（替换模式 - 作为回退方案）
-        /// 每次重新解析从开始到当前位置的所有内容，确保代码块等结构完整
-        /// </summary>
-        private async Task ContinueProgressiveRenderingReplaceAsync(string[] lines, int startLine, string contentHash, string fullContent, CancellationToken ct)
+        internal readonly record struct ProgressiveElementRange(
+            int Start,
+            int Count,
+            int RenderedLines);
+
+        internal static IReadOnlyList<ProgressiveElementRange> CreateProgressiveElementRanges(
+            int totalElements,
+            int totalLines,
+            int initialLines,
+            int batchLines)
         {
-            int currentLine = startLine;
-            int batchSize = ProgressiveRenderBatchSize;
-            int delayMs = ProgressiveRenderDelayMs;
+            if (totalElements <= 0)
+                return Array.Empty<ProgressiveElementRange>();
 
-            try
+            totalLines = Math.Max(1, totalLines);
+            var initialCount = ScaleLineBudgetToElementCount(
+                totalElements,
+                totalLines,
+                Math.Max(1, initialLines));
+            var batchCount = ScaleLineBudgetToElementCount(
+                totalElements,
+                totalLines,
+                Math.Max(1, batchLines));
+
+            var ranges = new List<ProgressiveElementRange>();
+            var start = 0;
+            while (start < totalElements)
             {
-                while (currentLine < lines.Length && !ct.IsCancellationRequested)
-                {
-                    // 等待一小段时间，让UI有机会响应
-                    if (delayMs > 0)
-                    {
-                        await Task.Delay(delayMs, ct);
-                    }
-                    else
-                    {
-                        await Task.Yield();
-                    }
-
-                    if (ct.IsCancellationRequested)
-                        break;
-
-                    // 计算这一批次要渲染到的行数（使用安全分割点）
-                    int targetEndLine = Math.Min(currentLine + batchSize, lines.Length);
-                    int endLine = FindSafeBreakPoint(lines, targetEndLine);
-
-                    // 如果安全分割点没有前进，强制前进到目标位置或文档末尾
-                    if (endLine <= currentLine)
-                    {
-                        endLine = Math.Min(targetEndLine, lines.Length);
-                    }
-
-                    // 解析从开始到当前位置的所有内容
-                    string contentSoFar = string.Join("\n", lines.Take(endLine));
-
-                    // 在UI线程上更新
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        if (ct.IsCancellationRequested)
-                            return;
-
-                        try
-                        {
-                            // 重新解析整个内容到当前位置
-                            var newDocument = _engine.TransformElement(contentSoFar);
-                            newDocument.Control.Classes.Add("Markdown_Avalonia_MarkdownViewer");
-                            ReplaceDocument(newDocument);
-
-                            _headerRects = null;
-
-                            // 触发进度事件
-                            ProgressiveRenderingProgress?.Invoke(this, new ProgressiveRenderingProgressEventArgs(endLine, lines.Length));
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"渐进式渲染批次失败: {ex.Message}");
-                        }
-                    }, DispatcherPriority.Background, ct);
-
-                    currentLine = endLine;
-                }
-
-                // 渲染完成
-                if (!ct.IsCancellationRequested)
-                {
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        _currentContentHash = contentHash;
-                        _isProgressiveRendering = false;
-                        ProgressiveRenderingCompleted?.Invoke(this, EventArgs.Empty);
-                    }, DispatcherPriority.Background);
-                }
+                var count = Math.Min(start == 0 ? initialCount : batchCount, totalElements - start);
+                var end = start + count;
+                var renderedLines = end == totalElements
+                    ? totalLines
+                    : Math.Min(totalLines, Math.Max(1,
+                        (int)Math.Ceiling(end * (double)totalLines / totalElements)));
+                ranges.Add(new ProgressiveElementRange(start, count, renderedLines));
+                start = end;
             }
-            catch (OperationCanceledException)
+
+            return ranges;
+        }
+
+        private static int ScaleLineBudgetToElementCount(
+            int totalElements,
+            int totalLines,
+            int lineBudget)
+        {
+            return Math.Clamp(
+                (int)Math.Ceiling(totalElements * (double)lineBudget / totalLines),
+                1,
+                totalElements);
+        }
+
+        private void CompleteProgressiveRendering(string contentHash, int totalLines)
+        {
+            _renderedLineCount = totalLines;
+            _currentContentHash = contentHash;
+            _isProgressiveRendering = false;
+            _renderStopwatch.Stop();
+            var totalTime = _renderStopwatch.ElapsedMilliseconds;
+            System.Diagnostics.Debug.WriteLine(
+                $"渐进式渲染完成，总计 {totalLines} 行，耗时 {totalTime}ms");
+            TryNavigatePendingAnchor();
+            ProgressiveRenderingCompleted?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void AttachAnchorProvider(IMarkdownEngine2 engine)
+        {
+            DetachAnchorProvider();
+            if (engine is not IDocumentAnchorProvider provider)
+                return;
+
+            _anchorProvider = provider;
+            provider.AnchorNavigationRequested = NavigateToDocumentAnchor;
+        }
+
+        private void DetachAnchorProvider()
+        {
+            if (_anchorProvider is not null &&
+                _anchorProvider.AnchorNavigationRequested == NavigateToDocumentAnchor)
             {
-                System.Diagnostics.Debug.WriteLine("渐进式渲染被取消");
+                _anchorProvider.AnchorNavigationRequested = null;
             }
-            catch (Exception ex)
+            _anchorProvider = null;
+        }
+
+        private void NavigateToDocumentAnchor(string anchor)
+        {
+            if (!Dispatcher.UIThread.CheckAccess())
             {
-                System.Diagnostics.Debug.WriteLine($"渐进式渲染异常: {ex.Message}");
+                Dispatcher.UIThread.Post(() => NavigateToDocumentAnchor(anchor));
+                return;
             }
-            finally
+
+            if (_anchorProvider?.TryGetDocumentAnchor(anchor, out var target) != true ||
+                FindTopLevelTarget(_document, target) is not { } topLevelTarget)
             {
-                _isProgressiveRendering = false;
+                _pendingAnchor = _isProgressiveRendering ? anchor : null;
+                return;
+            }
+
+            _pendingAnchor = null;
+            if (_wrapper.ScrollToElement(topLevelTarget))
+            {
+                // The top-level offset realizes virtualized content first; a
+                // second pass then places a nested target such as a footnote item.
+                Dispatcher.UIThread.Post(
+                    () => target.Control.BringIntoView(),
+                    DispatcherPriority.Loaded);
+            }
+            else
+            {
+                target.Control.BringIntoView();
             }
         }
 
+        private void TryNavigatePendingAnchor()
+        {
+            if (_pendingAnchor is { } anchor)
+                NavigateToDocumentAnchor(anchor);
+        }
+
+        private static DocumentElement? FindTopLevelTarget(DocumentElement? document, DocumentElement target)
+        {
+            if (document is null)
+                return null;
+            if (ReferenceEquals(document, target))
+                return document;
+
+            if (document is DocumentRootElement root)
+            {
+                foreach (var child in root.Children)
+                {
+                    if (ReferenceEquals(child, target) || ContainsDocumentElement(child, target))
+                        return child;
+                }
+                return null;
+            }
+
+            return ContainsDocumentElement(document, target) ? document : null;
+
+            static bool ContainsDocumentElement(DocumentElement parent, DocumentElement expected)
+            {
+                foreach (var child in parent.Children)
+                {
+                    if (ReferenceEquals(child, expected) || ContainsDocumentElement(child, expected))
+                        return true;
+                }
+                return false;
+            }
+        }
 
         /// <summary>
         /// 替换当前文档
         /// </summary>
-        private void ReplaceDocument(DocumentElement newDocument)
+        private void ReplaceDocument(
+            DocumentElement newDocument,
+            Vector? savedOffset = null,
+            bool preserveOffset = false)
         {
-            if (_wrapper.Document?.Control is Control oldContentControl)
+            if (_wrapper.ContentControl is Control oldContentControl)
             {
                 oldContentControl.SizeChanged -= OnViewportSizeChanged;
             }
@@ -1304,9 +1290,16 @@ namespace Markdown.Avalonia
             _document = newDocument;
             _wrapper.Document = _document;
 
-            if (_wrapper.Document?.Control is Control newContentControl)
+            if (_wrapper.ContentControl is Control newContentControl)
             {
                 newContentControl.SizeChanged += OnViewportSizeChanged;
+            }
+
+            if (preserveOffset && savedOffset is Vector offset)
+            {
+                Dispatcher.UIThread.Post(
+                    () => _viewer.Offset = offset,
+                    DispatcherPriority.Loaded);
             }
         }
 
@@ -1339,14 +1332,14 @@ namespace Markdown.Avalonia
 
                 var ofst = _viewer.Offset;
 
-                if (_wrapper.Document?.Control is Control oldContentControl)
+                if (_wrapper.ContentControl is Control oldContentControl)
                 {
                     oldContentControl.SizeChanged -= OnViewportSizeChanged;
                 }
 
                 _wrapper.Document = errorDocument;
 
-                if (_wrapper.Document?.Control is Control newContentControl)
+                if (_wrapper.ContentControl is Control newContentControl)
                 {
                     newContentControl.SizeChanged += OnViewportSizeChanged;
                 }
@@ -1372,6 +1365,8 @@ namespace Markdown.Avalonia
                 if (value is null)
                     throw new ArgumentNullException(nameof(Engine));
 
+                DetachAnchorProvider();
+
                 if (value is IMarkdownEngine engine1)
                     _engine = engine1.Upgrade();
                 else if (value is IMarkdownEngine2 engine)
@@ -1385,6 +1380,8 @@ namespace Markdown.Avalonia
 
                 if (AssetPathRoot is not null)
                     _engine.AssetPathRoot = AssetPathRoot;
+
+                AttachAnchorProvider(_engine);
             }
             get => _engine;
         }
@@ -1676,13 +1673,27 @@ namespace Markdown.Avalonia
         class HeaderRect
         {
             public Rect BaseBound { get; }
-            public HeaderElement Header { get; }
+            public int Level { get; }
+            public string Text { get; }
 
-            public HeaderRect(Rect bound, HeaderElement header)
+            public HeaderRect(Rect bound, int level, string text)
             {
                 BaseBound = bound;
-                Header = header;
+                Level = level;
+                Text = text;
             }
+        }
+
+        public ScrollBarVisibility HorizontalScrollBarVisibility
+        {
+            set => SetValue(HorizontalScrollBarVisibilityProperty, value);
+            get => GetValue(HorizontalScrollBarVisibilityProperty);
+        }
+
+        public ScrollBarVisibility VerticalScrollBarVisibility
+        {
+            set => SetValue(VerticalScrollBarVisibilityProperty, value);
+            get => GetValue(VerticalScrollBarVisibilityProperty);
         }
 
         class Wrapper : Control, ISelectionRenderHelper, ILogicalScrollable
@@ -1903,6 +1914,11 @@ namespace Markdown.Avalonia
             public bool BringIntoView(Control target, Rect targetRect)
             {
                 return _virtualizingPanel?.BringIntoView(target, targetRect) ?? false;
+            }
+
+            public bool ScrollToElement(DocumentElement target)
+            {
+                return _virtualizingPanel?.ScrollToElement(target) ?? false;
             }
 
             public Control? GetControlInDirection(NavigationDirection direction, Control? from)

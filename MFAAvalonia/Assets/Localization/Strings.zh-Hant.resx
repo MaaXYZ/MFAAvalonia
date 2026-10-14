@@ -123,6 +123,9 @@
     <data name="BackgroundTransitionsTitle" xml:space="preserve">
         <value>背景過渡效果</value>
     </data>
+    <data name="Back" xml:space="preserve">
+        <value>返回</value>
+    </data>
     <data name="BaseTheme" xml:space="preserve">
         <value>基本主題</value>
     </data>
@@ -242,6 +245,9 @@
     </data>
     <data name="CopiedToClipboard" xml:space="preserve">
         <value>已複製到剪貼簿</value>
+    </data>
+    <data name="CopySuccess" xml:space="preserve">
+        <value>複製成功</value>
     </data>
     <data name="Copy" xml:space="preserve">
         <value>複製</value>
@@ -984,6 +990,9 @@
     <data name="TabWin32" xml:space="preserve">
         <value>桌面應用</value>
     </data>
+    <data name="TabMacOS" xml:space="preserve">
+        <value>macOS</value>
+    </data>
     <data name="TabPlayCover" xml:space="preserve">
         <value>PlayCover</value>
     </data>
@@ -1236,9 +1245,12 @@
     <data name="UpcomingChanges" xml:space="preserve">
         <value>即將發生的變更</value>
     </data>
-    <data name="TaskFailed" xml:space="preserve">
-        <value>任務運行失敗！</value>
-    </data>
+  <data name="TaskFailed" xml:space="preserve">
+    <value>任務運行失敗！</value>
+  </data>
+  <data name="TaskFailedWithName" xml:space="preserve">
+    <value>任務失敗：{0}</value>
+  </data>
     <data name="ExternalNotificationCustomNotificationContentSuccess" xml:space="preserve">
         <value>自訂成功通知內容</value>
     </data>
@@ -1927,6 +1939,9 @@
     <data name="SpecialTask_Webhook" xml:space="preserve">
         <value>Webhook</value>
     </data>
+    <data name="SpecialTask_SwitchInstance" xml:space="preserve">
+        <value>切換實例</value>
+    </data>
     <data name="SpecialTask_CountdownDesc" xml:space="preserve">
         <value>在指定的秒數後繼續執行下一個任務，支援 `1~86400` 秒（24小時），可用於任務之間的延遲等待。</value>
     </data>
@@ -1948,8 +1963,14 @@
     <data name="SpecialTask_WebhookDesc" xml:space="preserve">
         <value>向指定 URL 發送 HTTP 請求，支援自訂請求體，適用於與外部服務或自動化平台整合。</value>
     </data>
+    <data name="SpecialTask_SwitchInstanceDesc" xml:space="preserve">
+        <value>停止目前實例任務，切換到目標實例（可為自己）並重新連線模擬器後啟動目標任務，用於多帳號輪換或單實例循環執行。</value>
+    </data>
     <data name="SpecialTask_CountdownSeconds" xml:space="preserve">
         <value>倒計時（秒）</value>
+    </data>
+    <data name="SpecialTask_SwitchInstanceTarget" xml:space="preserve">
+        <value>目標實例</value>
     </data>
     <data name="SpecialTask_WaitUntilTime" xml:space="preserve">
         <value>等待到（時:分）</value>
@@ -2010,6 +2031,12 @@
     </data>
     <data name="InstancePresetTaskCountFormat" xml:space="preserve">
         <value>{0} 個任務</value>
+    </data>
+    <data name="ExpandDescription" xml:space="preserve">
+        <value>展開描述</value>
+    </data>
+    <data name="CollapseDescription" xml:space="preserve">
+        <value>收起描述</value>
     </data>
     <data name="InstanceCannotCloseLast" xml:space="preserve">
         <value>無法關閉最後一個實例</value>
@@ -2095,6 +2122,115 @@
   <data name="InstanceDropdownJustNow" xml:space="preserve">
     <value>剛剛</value>
   </data>
+  <data name="GlobalBatchStartup" xml:space="preserve">
+    <value>應用程式啟動時批次啟動</value>
+  </data>
+  <data name="GlobalBatchStartupDescription" xml:space="preserve">
+    <value>啟用後，應用程式啟動和啟動類計時器會依照下方各執行個體設定批次執行。</value>
+  </data>
+  <data name="InstanceStartupSettings" xml:space="preserve">
+    <value>各執行個體啟動設定</value>
+  </data>
+  <data name="RefreshInstanceList" xml:space="preserve">
+    <value>重新整理執行個體清單</value>
+  </data>
+  <data name="IncludeInBatchStartup" xml:space="preserve"><value>包含在批次啟動中</value></data>
+  <data name="ExtraLaunchItems" xml:space="preserve"><value>額外啟動項目</value></data>
+  <data name="ExtraLaunchItem" xml:space="preserve"><value>額外啟動項目</value></data>
+  <data name="AddExtraLaunchItem" xml:space="preserve"><value>新增啟動項目</value></data>
+  <data name="RemoveExtraLaunchItem" xml:space="preserve"><value>刪除啟動項目</value></data>
+  <data name="LaunchItemName" xml:space="preserve"><value>啟動項目名稱</value></data>
+  <data name="VirtualGamepadType" xml:space="preserve"><value>虛擬手把類型</value></data>
+  <data name="CopyInstanceId" xml:space="preserve"><value>複製實例 ID</value></data>
+  <data name="HelpImproveSoftware" xml:space="preserve"><value>協助改進軟體</value></data>
+  <data name="HelpImproveSoftwareDescription" xml:space="preserve"><value>匿名傳送崩潰資訊、任務執行結果，以及失敗任務的相關日誌和錯誤截圖，協助資源作者定位問題。</value></data>
+  <data name="ExportInstanceConfig" xml:space="preserve"><value>匯出實例設定</value></data>
+  <data name="ImportInstanceConfig" xml:space="preserve"><value>匯入實例設定</value></data>
+  <data name="ExportToClipboard" xml:space="preserve"><value>複製到剪貼簿</value></data>
+  <data name="ExportToFile" xml:space="preserve"><value>匯出到檔案</value></data>
+  <data name="ImportFromClipboard" xml:space="preserve"><value>從剪貼簿匯入</value></data>
+  <data name="ImportFromFile" xml:space="preserve"><value>從檔案匯入</value></data>
+  <data name="ExportInstanceConfigSuccess" xml:space="preserve"><value>實例設定已匯出。</value></data>
+  <data name="ExportInstanceConfigFailed" xml:space="preserve"><value>實例設定匯出失敗。</value></data>
+  <data name="ImportInstanceConfigSuccess" xml:space="preserve"><value>實例設定已匯入，共載入 {0} 個任務。</value></data>
+  <data name="ImportInstanceConfigInvalid" xml:space="preserve"><value>無法識別該實例設定。</value></data>
+  <data name="ImportInstanceConfigProjectMismatch" xml:space="preserve"><value>該設定屬於其他專案，無法匯入。</value></data>
+  <data name="ImportInstanceConfigUnsupportedVersion" xml:space="preserve"><value>暫不支援該設定版本。</value></data>
+  <data name="DroppedResourceNameMismatch" xml:space="preserve">
+    <value>資源名稱不相符：壓縮檔為「{0}」，目前資源為「{1}」。</value>
+  </data>
+  <data name="DroppedResourcePackageInvalid" xml:space="preserve">
+    <value>此壓縮檔不是有效的資源更新套件。</value>
+  </data>
+  <data name="DroppedResourceUpdateConfirm" xml:space="preserve">
+    <value>偵測到「{0}」資源更新套件。
+目前版本：{1}
+套件版本：{2}
+
+是否使用此壓縮檔更新？</value>
+  </data>
+  <data name="DroppedResourceVersionTooLow" xml:space="preserve">
+    <value>壓縮檔版本 {0} 低於目前版本 {1}。</value>
+  </data>
+  <data name="StopTaskBeforeUpdateResource" xml:space="preserve">
+    <value>更新資源前請先停止任務</value>
+  </data>
+  <data name="DroppedResourceRidMismatch" xml:space="preserve">
+    <value>資源 ID 不相符：壓縮檔為「{0}」，目前資源為「{1}」。</value>
+  </data>
+  <!-- Android mobile interface -->
+  <data name="AccentColor" xml:space="preserve"><value>強調色</value></data>
+  <data name="Appearance" xml:space="preserve"><value>外觀</value></data>
+  <data name="ConfigurationActive" xml:space="preserve"><value>已切換至此設定</value></data>
+  <data name="ConfigurationAdded" xml:space="preserve"><value>設定已新增</value></data>
+  <data name="ConfigurationDeleted" xml:space="preserve"><value>設定已刪除</value></data>
+  <data name="ConfigurationRenamed" xml:space="preserve"><value>設定已重新命名</value></data>
+  <data name="Configurations" xml:space="preserve"><value>設定</value></data>
+  <data name="CurrentConfiguration" xml:space="preserve"><value>目前設定</value></data>
+  <data name="Dark" xml:space="preserve"><value>深色</value></data>
+  <data name="DisplayLanguage" xml:space="preserve"><value>顯示語言</value></data>
+  <data name="ForceScheduledStartDescription" xml:space="preserve"><value>停止目前任務，並在停止完成後啟動排程任務</value></data>
+  <data name="Idle" xml:space="preserve"><value>閒置</value></data>
+  <data name="Language" xml:space="preserve"><value>語言</value></data>
+  <data name="Light" xml:space="preserve"><value>淺色</value></data>
+  <data name="RuntimeReady" xml:space="preserve"><value>正在初始化控制器</value></data>
+  <data name="Schedule" xml:space="preserve"><value>排程</value></data>
+  <data name="ScheduleDescription" xml:space="preserve"><value>設定任務的定時啟動排程</value></data>
+  <data name="SingleActiveConfiguration" xml:space="preserve"><value>同一時間只能執行一個設定</value></data>
+  <data name="StartStop" xml:space="preserve"><value>任務控制</value></data>
+  <data name="StartTasks" xml:space="preserve"><value>開始任務</value></data>
+  <data name="StopBeforeDelete" xml:space="preserve"><value>請先停止此設定的任務，再刪除</value></data>
+  <data name="StopBeforeSwitch" xml:space="preserve"><value>請先停止目前任務，再切換設定</value></data>
+  <data name="StopTasks" xml:space="preserve"><value>停止任務</value></data>
+  <data name="TargetPackage" xml:space="preserve"><value>目標應用程式套件名稱</value></data>
+  <data name="TaskQueue" xml:space="preserve"><value>任務清單</value></data>
+  <data name="TaskQueueDescription" xml:space="preserve"><value>選擇任務並調整執行順序</value></data>
+  <data name="Tasks" xml:space="preserve"><value>任務</value></data>
+  <data name="ThemeMode" xml:space="preserve"><value>主題模式</value></data>
+  <data name="UserLogs" xml:space="preserve"><value>使用者日誌</value></data>
+  <data name="VirtualAlreadyRunning" xml:space="preserve"><value>虛擬螢幕已在執行</value></data>
+  <data name="VirtualAppLaunched" xml:space="preserve"><value>已在虛擬螢幕啟動應用程式</value></data>
+  <data name="VirtualCreateFailed" xml:space="preserve"><value>建立虛擬螢幕失敗</value></data>
+  <data name="VirtualDisplay" xml:space="preserve"><value>虛擬螢幕</value></data>
+  <data name="VirtualLaunchFailed" xml:space="preserve"><value>啟動應用程式失敗</value></data>
+  <data name="VirtualNoActivityOptions" xml:space="preserve"><value>無法建立應用程式啟動參數</value></data>
+  <data name="VirtualNoDisplayManager" xml:space="preserve"><value>無法取得 Android 顯示管理服務</value></data>
+  <data name="VirtualOperationFailed" xml:space="preserve"><value>虛擬螢幕操作失敗</value></data>
+  <data name="VirtualPackageNotFound" xml:space="preserve"><value>找不到目標應用程式</value></data>
+  <data name="VirtualPackageRequired" xml:space="preserve"><value>請輸入目標應用程式套件名稱</value></data>
+  <data name="VirtualRequiresAndroid8" xml:space="preserve"><value>虛擬螢幕需要 Android 8.0 或更新版本</value></data>
+  <data name="VirtualStarted" xml:space="preserve"><value>虛擬螢幕已啟動</value></data>
+  <data name="VirtualStopped" xml:space="preserve"><value>虛擬螢幕尚未啟動</value></data>
+  <data name="VirtualStoppedDone" xml:space="preserve"><value>虛擬螢幕已停止</value></data>
+  <data name="VirtualUnsupported" xml:space="preserve"><value>控制器未連線，無法取得畫面</value></data>
+  <data name="Blue" xml:space="preserve"><value>藍色</value></data>
+  <data name="Green" xml:space="preserve"><value>綠色</value></data>
+  <data name="Red" xml:space="preserve"><value>紅色</value></data>
+  <data name="Orange" xml:space="preserve"><value>橙色</value></data>
+  <data name="Purple" xml:space="preserve"><value>紫色</value></data>
+  <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>背景模式 · 虛擬螢幕</value></data>
+  <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>前景模式 · 目前螢幕</value></data>
+  <data name="CurrentScreen" xml:space="preserve"><value>目前螢幕</value></data>
 </root>
 
 

@@ -38,8 +38,28 @@ sealed class Program
             return;
         }
 
+        if (AppRuntime.IsHelpRequested(args))
+        {
+            Console.Write(AppRuntime.GetHelpText(Environment.ProcessPath));
+            return;
+        }
+
         try
         {
+            var executablePath = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "MFAAvalonia.exe");
+            var instanceKey = AppRuntime.CreateInstanceKey(executablePath);
+            AppRuntime.Initialize(args, instanceKey);
+            TelemetryService.InitializeBootstrapFromInterface(AppContext.BaseDirectory);
+
+            if (!AppRuntime.IsNewInstance && AppRuntime.TryForwardLaunchCommand())
+            {
+                AppRuntime.ReleaseMutex();
+                return;
+            }
+
+            if (!AppRuntime.IsNewInstance)
+                _ = AppRuntime.TryRecoverUnresponsiveInstance();
+
             CheckSkiaAvailability();
 
             if (IsRunningInTemp())
@@ -49,8 +69,15 @@ sealed class Program
 
             LoggerHelper.InitializeLogger();
             Directory.SetCurrentDirectory(AppContext.BaseDirectory);
+            PendingUpdateDeletionHelper.ProcessPendingDirectories();
+#if DEBUG
+            // Debug must load freshly built managed assemblies from the output root.
+            // Falling back to libs can silently run stale Markdown/UI binaries.
+            PrivatePathHelper.SetupNativeLibraryResolver(enableManagedLibraryResolver: false);
+#else
             PrivatePathHelper.CleanupDuplicateLibraries(AppContext.BaseDirectory, AppContext.GetData("SubdirectoriesToProbe") as string);
             PrivatePathHelper.SetupNativeLibraryResolver();
+#endif
 
             List<string> resultDirectories = new();
 
@@ -93,15 +120,6 @@ sealed class Program
                 }
                 NativeBindingContext.AppendNativeLibrarySearchPaths(resultDirectories);
             }
-
-            var mutexName = "MFAAvalonia_"
-                + RootViewModel.Version
-                + "_"
-                + Directory.GetCurrentDirectory().Replace("\\", "_")
-                    .Replace("/", "_")
-                    .Replace(":", string.Empty);
-
-            AppRuntime.Initialize(args, mutexName);
 
             try
             {

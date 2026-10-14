@@ -19,7 +19,7 @@ namespace Markdown.Avalonia.Parsers.Builtin
         private const string _markerUL_Square = @"[=]";
 
         // Ordered List
-        private const string _markerOL_Number = @"\d+[.]";
+        private const string _markerOL_Number = @"\d+[.)]";
         private const string _markerOL_LetterLower = @"[a-c][.]";
         private const string _markerOL_LetterUpper = @"[A-C][.]";
         private const string _markerOL_RomanLower = @"[cdilmvx]+[,]";
@@ -74,6 +74,7 @@ namespace Markdown.Avalonia.Parsers.Builtin
             string text,
             Match match,
             string alllistMarkersPattern,
+            ParseStatus status,
             IMarkdownEngine2 engine,
             out int parseTextBegin, out int parseTextEnd
             )
@@ -81,8 +82,11 @@ namespace Markdown.Avalonia.Parsers.Builtin
             parseTextBegin = match.Index;
 
             // Check text marker style.
+            var sourceMarker = match.Groups["marker"].Value;
             (TextMarkerStyle textMarker, string markerPattern, int indentAppending)
-                = GetTextMarkerStyle(match.Groups["marker"].Value);
+                = GetTextMarkerStyle(sourceMarker);
+            textMarker = NormalizeStandardMarker(textMarker, sourceMarker, status.ListDepth);
+            var orderedStart = GetOrderedStart(sourceMarker);
 
             // count indent from first marker with indent
             int countIndent = match.Groups["indent"].Value.Length;
@@ -97,6 +101,10 @@ namespace Markdown.Avalonia.Parsers.Builtin
 
             var allListLinePtn = new Regex(
                 String.Format(_listLine, countIndent + indentAppending - 1, alllistMarkersPattern),
+                RegexOptions.IgnorePatternWhitespace);
+
+            var nestedListMarkerPtn = new Regex(
+                @"\G(?:" + alllistMarkersPattern + @")[ ]+",
                 RegexOptions.IgnorePatternWhitespace);
 
             int caret = parseTextBegin;
@@ -134,8 +142,7 @@ namespace Markdown.Avalonia.Parsers.Builtin
                         if (listBuilder.Length > 0)
                         {
                             TrimEnd(listBuilder);
-                            var elements = engine.ParseGamutElement(listBuilder.ToString(), new ParseStatus(false));
-                            listItems.Add(new ListItemElement(elements));
+                            listItems.Add(CreateListItem(listBuilder, status, engine));
                             listBuilder.Length = 0;
                         }
 
@@ -166,6 +173,18 @@ namespace Markdown.Avalonia.Parsers.Builtin
                         caret = st;
                         if (caret < text.Length)
                         {
+                            // Normalize one level of indentation for nested list
+                            // markers before parsing the current item's contents.
+                            // This keeps four-space GFM child items as siblings,
+                            // while preserving indentation for deeper lists and
+                            // indented code blocks.
+                            var markerStart = st;
+                            while (markerStart < text.Length && text[markerStart] == ' ')
+                                ++markerStart;
+
+                            if (markerStart > st && nestedListMarkerPtn.IsMatch(text, markerStart))
+                                st += Math.Min(markerStart - st, indentAppending);
+
                             MoveLineEnd(text, ref caret);
                             listBuilder.Append(text, st, caret - st);
 
@@ -182,12 +201,64 @@ namespace Markdown.Avalonia.Parsers.Builtin
             if (listBuilder.Length > 0)
             {
                 TrimEnd(listBuilder);
-                var elements = engine.ParseGamutElement(listBuilder.ToString(), new ParseStatus(false));
-                listItems.Add(new ListItemElement(elements)); ;
+                listItems.Add(CreateListItem(listBuilder, status, engine));
             }
 
             parseTextEnd = caret;
-            return new ListBlockElement(textMarker.Change(), listItems);
+            return new ListBlockElement(textMarker.Change(), listItems, orderedStart);
+        }
+
+        private static ListItemElement CreateListItem(
+            StringBuilder content,
+            ParseStatus status,
+            IMarkdownEngine2 engine)
+        {
+            var text = content.ToString();
+            bool? taskChecked = null;
+            var taskMarker = Regex.Match(text, @"^\[(?<state>[ xX])\][ \t]+");
+            if (taskMarker.Success)
+            {
+                taskChecked = !string.Equals(taskMarker.Groups["state"].Value, " ", StringComparison.Ordinal);
+                text = text.Substring(taskMarker.Length);
+            }
+
+            var elements = engine.ParseGamutElement(text, new ParseStatus(false, status.ListDepth + 1));
+            return new ListItemElement(elements, taskChecked);
+        }
+
+        private static TextMarkerStyle NormalizeStandardMarker(
+            TextMarkerStyle marker,
+            string sourceMarker,
+            int listDepth)
+        {
+            if (Regex.IsMatch(sourceMarker, @"^[*+-]$"))
+            {
+                return listDepth switch
+                {
+                    0 => TextMarkerStyle.Disc,
+                    1 => TextMarkerStyle.Circle,
+                    _ => TextMarkerStyle.Square
+                };
+            }
+
+            if (Regex.IsMatch(sourceMarker, @"^\d+[.)]$"))
+            {
+                return listDepth switch
+                {
+                    0 => TextMarkerStyle.Decimal,
+                    1 => TextMarkerStyle.LowerRoman,
+                    2 => TextMarkerStyle.LowerLatin,
+                    _ => TextMarkerStyle.Decimal
+                };
+            }
+
+            return marker;
+        }
+
+        private static int GetOrderedStart(string sourceMarker)
+        {
+            var digits = new string(sourceMarker.TakeWhile(char.IsDigit).ToArray());
+            return int.TryParse(digits, out var value) && value > 0 ? value : 1;
         }
 
         private static void TrimEnd(StringBuilder text)
@@ -270,7 +341,7 @@ namespace Markdown.Avalonia.Parsers.Builtin
             }
             else if (Regex.IsMatch(markerText, _markerOL_Number))
             {
-                return (TextMarkerStyle.Decimal, _markerOL_Number, 3);
+                return (TextMarkerStyle.Decimal, _markerOL_Number, markerText.Length + 1);
             }
             else if (Regex.IsMatch(markerText, _markerOL_LetterLower))
             {

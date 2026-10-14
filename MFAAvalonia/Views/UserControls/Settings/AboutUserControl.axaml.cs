@@ -21,7 +21,7 @@ public partial class AboutUserControl : UserControl
     public AboutUserControl()
     {
         InitializeComponent();
-
+        TutorialCard.IsVisible = !OperatingSystem.IsAndroid();
     }
     private async void Button_OnClick(object? sender, RoutedEventArgs e)
     {

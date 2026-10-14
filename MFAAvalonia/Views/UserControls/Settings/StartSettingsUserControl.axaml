@@ -7,6 +7,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:fluent="clr-namespace:FluentIcons.Avalonia.Fluent.Markup;assembly=FluentIcons.Avalonia.Fluent"
+    xmlns:fluentControl="clr-namespace:FluentIcons.Avalonia.Fluent;assembly=FluentIcons.Avalonia.Fluent"
     xmlns:helper="clr-namespace:MFAAvalonia.Helper"
     xmlns:markup="https://codewf.com"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -142,6 +143,244 @@
                     Opacity="0.72"
                     TextWrapping="Wrap"
                     Text="{markup:I18n {x:Static helper:LangKeys.WaitSoftwareDescription}}" />
+
+                <Border
+                    BorderBrush="{DynamicResource SukiLightBorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    Margin="0,10,0,0"
+                    Padding="0,18,0,0">
+                    <StackPanel Spacing="12">
+                        <DockPanel>
+                            <ToggleSwitch
+                                Classes="Switch"
+                                DockPanel.Dock="Right"
+                                IsChecked="{Binding GlobalStartEnabled}"
+                                VerticalAlignment="Top" />
+                            <StackPanel HorizontalAlignment="Left" Spacing="3" VerticalAlignment="Center">
+                                <TextBlock
+                                    FontSize="16"
+                                    FontWeight="SemiBold"
+                                    Text="{markup:I18n {x:Static helper:LangKeys.GlobalBatchStartup}}" />
+                                <TextBlock
+                                    MaxWidth="520"
+                                    Opacity="0.72"
+                                    Text="{markup:I18n {x:Static helper:LangKeys.GlobalBatchStartupDescription}}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DockPanel>
+
+                        <StackPanel IsVisible="{Binding GlobalStartEnabled}" Spacing="10">
+                            <DockPanel>
+                                <Button
+                                    Command="{Binding RefreshGlobalStartInstancesCommand}"
+                                    DockPanel.Dock="Right"
+                                    Padding="8"
+                                    ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.RefreshInstanceList}}">
+                                    <fluent:FluentIcon Icon="ArrowClockwise" IconSize="Size16" />
+                                </Button>
+                                <TextBlock
+                                    FontSize="15"
+                                    FontWeight="SemiBold"
+                                    Text="{markup:I18n {x:Static helper:LangKeys.InstanceStartupSettings}}"
+                                    VerticalAlignment="Center" />
+                            </DockPanel>
+
+                            <ItemsControl ItemsSource="{Binding GlobalStartInstanceEntries}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="settings:GlobalStartInstanceEntry">
+                                        <Border
+                                            BorderBrush="{DynamicResource SukiLightBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Margin="0,3">
+                                            <StackPanel>
+                                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="12,8">
+                                                    <TextBlock
+                                                        FontWeight="SemiBold"
+                                                        Foreground="{DynamicResource SukiText}"
+                                                        Text="{Binding InstanceName}"
+                                                        VerticalAlignment="Center" />
+                                                    <ToggleSwitch
+                                                        Grid.Column="1"
+                                                        IsChecked="{Binding IsIncluded}"
+                                                        Margin="12,0"
+                                                        ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.IncludeInBatchStartup}}"
+                                                        VerticalAlignment="Center" />
+                                                    <Button
+                                                        Grid.Column="2"
+                                                        Background="Transparent"
+                                                        BorderBrush="Transparent"
+                                                        Command="{Binding ToggleExpandedCommand}"
+                                                        Foreground="{DynamicResource SukiText}"
+                                                        Padding="6">
+                                                        <Grid Height="20" Width="20">
+                                                            <fluentControl:FluentIcon
+                                                                Foreground="{DynamicResource SukiText}"
+                                                                Icon="ChevronRight"
+                                                                IconSize="Size16"
+                                                                IsVisible="{Binding !IsExpanded}" />
+                                                            <fluentControl:FluentIcon
+                                                                Foreground="{DynamicResource SukiText}"
+                                                                Icon="ChevronDown"
+                                                                IconSize="Size16"
+                                                                IsVisible="{Binding IsExpanded}" />
+                                                        </Grid>
+                                                    </Button>
+                                                </Grid>
+
+                                                <StackPanel
+                                                    IsVisible="{Binding IsExpanded}"
+                                                    Margin="12,2,12,12"
+                                                    Spacing="8">
+                                                <DockPanel>
+                                                    <ComboBox
+                                                        DisplayMemberBinding="{Binding Name}"
+                                                        DockPanel.Dock="Right"
+                                                        ItemsSource="{Binding BeforeTaskList}"
+                                                        SelectedValue="{Binding BeforeTask}"
+                                                        SelectedValueBinding="{Binding ResourceKey}"
+                                                        Width="215" />
+                                                    <TextBlock
+                                                        Text="{markup:I18n {x:Static helper:LangKeys.AutoStartOption}}"
+                                                        VerticalAlignment="Center" />
+                                                </DockPanel>
+                                                <DockPanel>
+                                                    <TextBox
+                                                        DockPanel.Dock="Right"
+                                                        Text="{Binding SoftwarePath}"
+                                                        Width="215">
+                                                        <TextBox.InnerRightContent>
+                                                            <Button
+                                                                BorderBrush="Transparent"
+                                                                BorderThickness="0"
+                                                                Command="{Binding BrowsePathCommand}"
+                                                                Height="20"
+                                                                Padding="0"
+                                                                Width="30">
+                                                                <fluent:FluentIcon Icon="FolderArrowLeft" IconSize="Size16" />
+                                                            </Button>
+                                                        </TextBox.InnerRightContent>
+                                                    </TextBox>
+                                                    <TextBlock
+                                                        Text="{markup:I18n {x:Static helper:LangKeys.SoftwarePath}}"
+                                                        VerticalAlignment="Center" />
+                                                </DockPanel>
+                                                <DockPanel>
+                                                    <TextBox
+                                                        DockPanel.Dock="Right"
+                                                        Text="{Binding EmulatorConfig}"
+                                                        Width="215" />
+                                                    <TextBlock
+                                                        Text="{markup:I18n {x:Static helper:LangKeys.StartupParameter}}"
+                                                        VerticalAlignment="Center" />
+                                                </DockPanel>
+                                                <DockPanel>
+                                                    <NumericUpDown
+                                                        DockPanel.Dock="Right"
+                                                        Minimum="0"
+                                                        Value="{Binding WaitSoftwareTime}"
+                                                        Width="215" />
+                                                    <TextBlock
+                                                        Text="{markup:I18n {x:Static helper:LangKeys.WaitSoftware}}"
+                                                        VerticalAlignment="Center" />
+                                                </DockPanel>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <DockPanel Margin="0,8,0,0">
+                                <Button
+                                    Command="{Binding AddExtraLaunchEntryCommand}"
+                                    DockPanel.Dock="Right">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <fluent:FluentIcon Icon="Add" IconSize="Size16" />
+                                        <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.AddExtraLaunchItem}}" />
+                                    </StackPanel>
+                                </Button>
+                                <TextBlock
+                                    FontSize="15"
+                                    FontWeight="SemiBold"
+                                    Text="{markup:I18n {x:Static helper:LangKeys.ExtraLaunchItems}}"
+                                    VerticalAlignment="Center" />
+                            </DockPanel>
+
+                            <ItemsControl ItemsSource="{Binding ExtraLaunchEntries}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="settings:ExtraLaunchEntry">
+                                        <Border
+                                            BorderBrush="{DynamicResource SukiLightBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Margin="0,3">
+                                            <StackPanel>
+                                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="12,8">
+                                                    <TextBlock
+                                                        FontWeight="SemiBold"
+                                                        Text="{Binding Name}"
+                                                        VerticalAlignment="Center" />
+                                                    <ToggleSwitch
+                                                        Grid.Column="1"
+                                                        IsChecked="{Binding IsIncluded}"
+                                                        Margin="12,0"
+                                                        ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.IncludeInBatchStartup}}"
+                                                        VerticalAlignment="Center" />
+                                                    <Button
+                                                        Grid.Column="2"
+                                                        Background="Transparent"
+                                                        BorderBrush="Transparent"
+                                                        Command="{Binding ToggleExpandedCommand}"
+                                                        Padding="6">
+                                                        <Grid Height="20" Width="20">
+                                                            <fluentControl:FluentIcon Icon="ChevronRight" IconSize="Size16" IsVisible="{Binding !IsExpanded}" />
+                                                            <fluentControl:FluentIcon Icon="ChevronDown" IconSize="Size16" IsVisible="{Binding IsExpanded}" />
+                                                        </Grid>
+                                                    </Button>
+                                                </Grid>
+
+                                                <StackPanel IsVisible="{Binding IsExpanded}" Margin="12,2,12,12" Spacing="8">
+                                                    <DockPanel>
+                                                        <TextBox DockPanel.Dock="Right" Text="{Binding Name}" Width="215" />
+                                                        <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.LaunchItemName}}" VerticalAlignment="Center" />
+                                                    </DockPanel>
+                                                    <DockPanel>
+                                                        <TextBox DockPanel.Dock="Right" Text="{Binding SoftwarePath}" Width="215">
+                                                            <TextBox.InnerRightContent>
+                                                                <Button BorderBrush="Transparent" BorderThickness="0" Command="{Binding BrowsePathCommand}" Height="20" Padding="0" Width="30">
+                                                                    <fluent:FluentIcon Icon="FolderArrowLeft" IconSize="Size16" />
+                                                                </Button>
+                                                            </TextBox.InnerRightContent>
+                                                        </TextBox>
+                                                        <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.SoftwarePath}}" VerticalAlignment="Center" />
+                                                    </DockPanel>
+                                                    <DockPanel>
+                                                        <TextBox DockPanel.Dock="Right" Text="{Binding Arguments}" Width="215" />
+                                                        <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.StartupParameter}}" VerticalAlignment="Center" />
+                                                    </DockPanel>
+                                                    <DockPanel>
+                                                        <NumericUpDown DockPanel.Dock="Right" Minimum="0" Value="{Binding WaitTime}" Width="215" />
+                                                        <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.WaitSoftware}}" VerticalAlignment="Center" />
+                                                    </DockPanel>
+                                                    <Button
+                                                        Command="{Binding RemoveCommand}"
+                                                        HorizontalAlignment="Right">
+                                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                                            <fluent:FluentIcon Icon="Delete" IconSize="Size16" />
+                                                            <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.RemoveExtraLaunchItem}}" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </suki:GlassCard>
         <suki:GlassCard Padding="25">

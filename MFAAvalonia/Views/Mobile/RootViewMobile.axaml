@@ -13,6 +13,7 @@
     xmlns:suki="https://github.com/kikipoulet/SukiUI"
     xmlns:windows="clr-namespace:MFAAvalonia.ViewModels.Windows"
     xmlns:mobile="clr-namespace:MFAAvalonia.Views.Mobile"
+    xmlns:fluentIcon="clr-namespace:FluentIcons.Avalonia.Fluent;assembly=FluentIcons.Avalonia.Fluent"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     d:DesignHeight="600"
     d:DesignWidth="360"
@@ -21,12 +22,64 @@
         <windows:RootViewModel />
     </Design.DataContext>
 
+    <UserControl.Styles>
+        <Style Selector="Button.MobileNav">
+            <Setter Property="MinHeight" Value="58" />
+            <Setter Property="Padding" Value="4,5" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource SukiLowText}" />
+        </Style>
+        <Style Selector="Button.MobileNav.selected">
+            <Setter Property="Foreground" Value="{DynamicResource SukiPrimaryColor}" />
+        </Style>
+    </UserControl.Styles>
+
     <suki:SukiMainHost>
         <suki:SukiMainHost.Hosts>
             <suki:SukiToastHost Manager="{x:Static helper:Instances.ToastManager}" />
             <suki:SukiDialogHost Manager="{x:Static helper:Instances.DialogManager}" />
         </suki:SukiMainHost.Hosts>
-        <mobile:RootViewContent />
+        <Grid RowDefinitions="*,Auto">
+            <Grid>
+                <mobile:MobileHomeView x:Name="HomePage" />
+                <mobile:MobileTaskQueueView x:Name="TaskPage" IsVisible="False" />
+                <mobile:MobileScheduleView x:Name="SchedulePage" IsVisible="False" />
+                <mobile:MobileSettingsView x:Name="SettingsPage" IsVisible="False" />
+            </Grid>
+            <Border Grid.Row="1"
+                    Background="{DynamicResource SukiCardBackground}"
+                    BorderBrush="{DynamicResource SukiControlBorderBrush}"
+                    BorderThickness="0,1,0,0">
+                <Grid ColumnDefinitions="*,*,*,*">
+                    <Button x:Name="HomeNav" Grid.Column="0" Classes="MobileNav selected" Click="NavigateHome">
+                        <StackPanel HorizontalAlignment="Center" Spacing="2">
+                            <fluentIcon:FluentIcon Icon="Home" IconSize="Size20" />
+                            <TextBlock x:Name="HomeNavText" Text="Home" FontSize="11" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="TaskNav" Grid.Column="1" Classes="MobileNav" Click="NavigateTasks">
+                        <StackPanel HorizontalAlignment="Center" Spacing="2">
+                            <fluentIcon:FluentIcon Icon="Play" IconSize="Size20" />
+                            <TextBlock x:Name="TaskNavText" Text="Tasks" FontSize="11" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ScheduleNav" Grid.Column="2" Classes="MobileNav" Click="NavigateSchedule">
+                        <StackPanel HorizontalAlignment="Center" Spacing="2">
+                            <fluentIcon:FluentIcon Icon="Calendar" IconSize="Size20" />
+                            <TextBlock x:Name="ScheduleNavText" Text="Schedule" FontSize="11" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="SettingsNav" Grid.Column="3" Classes="MobileNav" Click="NavigateSettings">
+                        <StackPanel HorizontalAlignment="Center" Spacing="2">
+                            <fluentIcon:FluentIcon Icon="Settings" IconSize="Size20" />
+                            <TextBlock x:Name="SettingsNavText" Text="Settings" FontSize="11" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Border>
+        </Grid>
     </suki:SukiMainHost>
 
 </UserControl>

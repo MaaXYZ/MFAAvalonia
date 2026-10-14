@@ -183,7 +183,14 @@ public class TrayIconManager
             }
         }
 
-        _trayIcon.Dispose();
+        try
+        {
+            _trayIcon.Dispose();
+        }
+        catch
+        {
+            // Native tray cleanup must not abort the application shutdown path.
+        }
         _trayIcon = null;
     }
 
@@ -215,12 +222,11 @@ public class TrayIconManager
         Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel.StopTask();
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在此调用完成之前将会继续执行当前方法。请考虑将 "await" 运算符应用于调用结果。
 
-    private static void App_exit(object sender, EventArgs e)
+    private static async void App_exit(object sender, EventArgs e)
     {
-        if (Instances.RootView.ConfirmExit(() => Instances.RootView.BeforeClosed()).Result != true)
+        if (!await Instances.RootView.ConfirmExit())
             return;
-        Instances.RootView.BeforeClosed();
-        Instances.ShutdownApplication();
+        Instances.RootView.ShutdownAfterConfirmedExit();
     }
 
     private static void App_hide(object sender, EventArgs e) =>

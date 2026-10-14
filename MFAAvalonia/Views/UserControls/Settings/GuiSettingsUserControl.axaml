@@ -401,7 +401,6 @@
                 </StackPanel>
             </DockPanel>
         </suki:GlassCard>
-
     </StackPanel>
 
 </UserControl>

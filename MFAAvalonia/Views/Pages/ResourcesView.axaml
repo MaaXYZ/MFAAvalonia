@@ -23,6 +23,6 @@
           RowDefinitions="Auto,*"
           Margin="0">
 
-      
+
     </Grid>
 </UserControl>

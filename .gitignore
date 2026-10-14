@@ -6,3 +6,25 @@ riderModule.iml
 .dotnet-cli/
 .dotnet/
 .idea/
+artifacts/
+.android-package/
+.tmp-upstream/
+.tmp-sdk/
+/MFAAvalonia.Android/Native/build-*/
+# Local IDE and user settings
+*.sln.DotSettings.user
+
+# Local diagnostics and generated output
+.tmp_*
+build_output.txt
+**/logs/
+*.csproj.SdkResolver.*.proj.Backup.tmp
+
+# Local development scratch data
+/plans/
+/test_interface/
+
+# Local-only verification project
+/MFAAvalonia.Tests/
+/MFAAvalonia/AssemblyInfo.cs
+workflows/android/__pycache__/mfa_android_agent.cpython-312.pyc

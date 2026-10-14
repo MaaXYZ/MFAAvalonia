@@ -34,23 +34,74 @@ namespace ColorDocument.Avalonia.DocumentElements
 
         public Border CreateBlock()
         {
+            const double codeLineHeight = 20d;
+            const double verticalPadding = 8d;
+            var normalizedCode = _code
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n')
+                .TrimEnd('\n');
+            var lineCount = CountLines(normalizedCode);
+
+            if (lineCount > 2000 || normalizedCode.Length > 1_000_000)
+                return CreateLargeBlock(normalizedCode);
+
             var ctxt = new TextBlock()
             {
-                Text = _code,
-                TextWrapping = TextWrapping.NoWrap
+                Text = normalizedCode,
+                TextWrapping = TextWrapping.NoWrap,
+                LineHeight = codeLineHeight,
+                MinHeight = lineCount * codeLineHeight
             };
             ctxt.Classes.Add(ClassNames.CodeBlockClass);
 
-            var scrl = new ScrollViewer();
+            var scrl = new ScrollViewer
+            {
+                Content = ctxt,
+                Padding = new Thickness(10, verticalPadding),
+                MinHeight = lineCount * codeLineHeight + verticalPadding * 2,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled
+            };
             scrl.Classes.Add(ClassNames.CodeBlockClass);
-            scrl.Content = ctxt;
-            scrl.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
 
-            var result = new Border();
+            var result = new Border
+            {
+                Child = scrl
+            };
             result.Classes.Add(ClassNames.CodeBlockClass);
-            result.Child = scrl;
 
             return result;
+        }
+
+        private static Border CreateLargeBlock(string code)
+        {
+            var text = new TextBox
+            {
+                Text = code,
+                AcceptsReturn = true,
+                IsReadOnly = true,
+                TextWrapping = TextWrapping.NoWrap,
+                MaxHeight = 600,
+                Padding = new Thickness(10, 8)
+            };
+            text.SetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
+            text.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
+            text.Classes.Add(ClassNames.CodeBlockClass);
+
+            var result = new Border { Child = text };
+            result.Classes.Add(ClassNames.CodeBlockClass);
+            return result;
+        }
+
+        private static int CountLines(string text)
+        {
+            var count = 1;
+            foreach (var character in text)
+            {
+                if (character == '\n')
+                    count++;
+            }
+            return count;
         }
 
         public override void ConstructSelectedText(StringBuilder stringBuilder)

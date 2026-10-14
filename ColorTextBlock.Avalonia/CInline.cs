@@ -82,6 +82,21 @@ namespace ColorTextBlock.Avalonia
             AvaloniaProperty.Register<CInline, bool>(nameof(IsUnderline), inherits: true);
 
         /// <summary>
+        /// The visual style used when the text element is underlined.
+        /// </summary>
+        public static readonly StyledProperty<CTextUnderlineStyle> UnderlineStyleProperty =
+            AvaloniaProperty.Register<CInline, CTextUnderlineStyle>(
+                nameof(UnderlineStyle),
+                defaultValue: CTextUnderlineStyle.Solid,
+                inherits: true);
+
+        /// <summary>
+        /// Optional text displayed when the pointer rests over this inline.
+        /// </summary>
+        public static readonly StyledProperty<string?> ToolTipTextProperty =
+            AvaloniaProperty.Register<CInline, string?>(nameof(ToolTipText), inherits: true);
+
+        /// <summary>
         /// Indicates whether the text element is strikethrough.
         /// If the value of this property is true, the text element is strikethrough.
         /// </summary>
@@ -171,6 +186,18 @@ namespace ColorTextBlock.Avalonia
             set { SetValue(IsUnderlineProperty, value); }
         }
 
+        public CTextUnderlineStyle UnderlineStyle
+        {
+            get { return GetValue(UnderlineStyleProperty); }
+            set { SetValue(UnderlineStyleProperty, value); }
+        }
+
+        public string? ToolTipText
+        {
+            get { return GetValue(ToolTipTextProperty); }
+            set { SetValue(ToolTipTextProperty, value); }
+        }
+
         /// <summary>
         /// Indicates whether the text element is strikethrough.
         /// If the value of this property is true, the text element is strikethrough.
@@ -200,6 +227,7 @@ namespace ColorTextBlock.Avalonia
                 case nameof(Background):
                 case nameof(Foreground):
                 case nameof(IsUnderline):
+                case nameof(UnderlineStyle):
                 case nameof(IsStrikethrough):
                     RequestRender();
                     break;

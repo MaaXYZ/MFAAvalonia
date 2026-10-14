@@ -154,6 +154,14 @@ public partial class MaaInterface
     /// <summary>
     /// Option 配置项定义
     /// </summary>
+    public class MaaInterfaceOptionHotkey
+    {
+        [JsonProperty("name")] public string? Name { get; set; }
+        [JsonProperty("label")] public string? Label { get; set; }
+        [JsonProperty("description")] public string? Description { get; set; }
+        [JsonProperty("default")] public string? Default { get; set; }
+    }
+
     public partial class MaaInterfaceOption : ObservableObject
     {
         /// <summary>配置项唯一名称标识符</summary>
@@ -202,6 +210,9 @@ public partial class MaaInterface
         [JsonProperty("inputs")]
         public List<MaaInterfaceOptionInput>? Inputs { get; set; }
 
+        [JsonProperty("hotkeys")]
+        public List<MaaInterfaceOptionHotkey>? Hotkeys { get; set; }
+
         /// <summary>input 类型的管道覆盖配置（支持 {名称} 变量替换）</summary>
         [JsonProperty("pipeline_override")]
         public Dictionary<string, Dictionary<string, JToken>>? PipelineOverride { get; set; }
@@ -248,6 +259,9 @@ public partial class MaaInterface
         [JsonIgnore]
         public bool IsCheckbox => OptionType == "checkbox";
 
+        [JsonIgnore]
+        public bool IsHotkey => OptionType == "hotkey";
+
         /// <summary>解析后的图标路径（用于 UI 绑定）</summary>
         [ObservableProperty] [JsonIgnore] private string? _resolvedIcon;
 
@@ -290,7 +304,19 @@ public partial class MaaInterface
         /// <returns>处理后的 JSON 字符串</returns>
         public string GenerateProcessedPipeline(Dictionary<string, string> inputValues)
         {
-            if (PipelineOverride == null || !IsInput) return "{}";
+            if (PipelineOverride == null || (!IsInput && !IsHotkey)) return "{}";
+
+            if (IsHotkey)
+            {
+                var converted = new Dictionary<string, string>();
+                foreach (var hotkey in Hotkeys ?? [])
+                {
+                    if (string.IsNullOrEmpty(hotkey.Name)) continue;
+                    var gesture = inputValues.GetValueOrDefault(hotkey.Name) ?? hotkey.Default ?? string.Empty;
+                    AddHotkeyValues(converted, hotkey.Name, gesture);
+                }
+                inputValues = converted;
+            }
 
             // 深拷贝原始数据
             var cloned = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, JToken>>>(
@@ -324,6 +350,18 @@ public partial class MaaInterface
         private Dictionary<string, Type> GetTypeMap()
         {
             var typeMap = new Dictionary<string, Type>();
+            if (IsHotkey)
+            {
+                foreach (var hotkey in Hotkeys ?? [])
+                {
+                    if (string.IsNullOrEmpty(hotkey.Name)) continue;
+                    typeMap[hotkey.Name] = typeof(long);
+                    typeMap[$"{hotkey.Name}.primary"] = typeof(long);
+                    typeMap[$"{hotkey.Name}.modifier1"] = typeof(long);
+                    typeMap[$"{hotkey.Name}.modifier2"] = typeof(long);
+                }
+                return typeMap;
+            }
             if (Inputs == null) return typeMap;
 
             foreach (var input in Inputs)
@@ -346,6 +384,13 @@ public partial class MaaInterface
         private Dictionary<string, string> GetDefaultValues()
         {
             var defaults = new Dictionary<string, string>();
+            if (IsHotkey)
+            {
+                foreach (var hotkey in Hotkeys ?? [])
+                    if (!string.IsNullOrEmpty(hotkey.Name) && !string.IsNullOrEmpty(hotkey.Default))
+                        AddHotkeyValues(defaults, hotkey.Name, hotkey.Default);
+                return defaults;
+            }
             if (Inputs == null) return defaults;
 
             foreach (var input in Inputs)
@@ -356,6 +401,35 @@ public partial class MaaInterface
                 }
             }
             return defaults;
+        }
+
+        public static void AddHotkeyValues(Dictionary<string, string> values, string name, string gesture)
+        {
+            var keys = gesture.Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            var primary = keys.LastOrDefault() ?? string.Empty;
+            var modifiers = keys.Take(Math.Max(0, keys.Length - 1)).ToList();
+            values[name] = HotkeyToVirtualKey(primary).ToString();
+            values[$"{name}.primary"] = values[name];
+            values[$"{name}.modifier1"] = modifiers.Count > 0 ? HotkeyToVirtualKey(modifiers[0]).ToString() : "0";
+            values[$"{name}.modifier2"] = modifiers.Count > 1 ? HotkeyToVirtualKey(modifiers[1]).ToString() : "0";
+        }
+
+        private static int HotkeyToVirtualKey(string key)
+        {
+            if (key.Length == 1)
+            {
+                var ch = char.ToUpperInvariant(key[0]);
+                if (char.IsLetterOrDigit(ch)) return ch;
+            }
+            if (key.StartsWith('F') && int.TryParse(key[1..], out var f) && f is >= 1 and <= 24) return 0x6F + f;
+            return key.ToUpperInvariant() switch
+            {
+                "CTRL" or "CONTROL" => 0x11, "SHIFT" => 0x10, "ALT" => 0x12,
+                "ENTER" => 0x0D, "ESC" or "ESCAPE" => 0x1B, "SPACE" => 0x20,
+                "TAB" => 0x09, "BACKSPACE" => 0x08, "DELETE" => 0x2E,
+                "UP" => 0x26, "DOWN" => 0x28, "LEFT" => 0x25, "RIGHT" => 0x27,
+                _ => 0
+            };
         }
 
         /// <summary>
@@ -481,12 +555,7 @@ public partial class MaaInterface
             if (input == null) return (true, null);
 
             if (string.IsNullOrEmpty(input.Verify))
-            {
-                // 默认验证：不为空
-                if (string.IsNullOrWhiteSpace(value))
-                    return (false, input.PatternMsg ?? $"{LanguageHelper.GetLocalizedDisplayName(input.Label, input.Name ?? string.Empty)}");
                 return (true, null);
-            }
 
             try
             {
@@ -530,6 +599,7 @@ public partial class MaaInterface
              if (!string.IsNullOrEmpty(other.Icon)) Icon = other.Icon;
              if (other.Cases != null) Cases = other.Cases;
              if (other.Inputs != null) Inputs = other.Inputs;
+             if (other.Hotkeys != null) Hotkeys = other.Hotkeys;
              if (other.PipelineOverride != null) PipelineOverride = other.PipelineOverride;
              if (other.DefaultCases != null && other.DefaultCases.Count > 0) DefaultCases = other.DefaultCases;
              if (other.Controller != null) Controller = other.Controller;
@@ -775,6 +845,9 @@ public partial class MaaInterface
         [JsonProperty("path")]
         public List<string>? Path { get; set; }
 
+        [JsonProperty("hash")]
+        public string? Hash { get; set; }
+
         /// <summary>
         /// 可选。指定该资源包支持的控制器类型列表。
         /// 数组元素应与 controller 配置中的 name 字段对应。
@@ -920,6 +993,53 @@ public partial class MaaInterface
         public object? ScreenCap { get; set; }
     }
 
+    public class MaaResourceControllerMacOS
+    {
+        [JsonProperty("title_regex")]
+        public string? TitleRegex { get; set; }
+        [JsonProperty("input")]
+        public object? Input { get; set; }
+        [JsonProperty("screencap")]
+        public object? ScreenCap { get; set; }
+    }
+
+    public class MaaInterfacePreTask
+    {
+        [JsonProperty("name")] public string? Name { get; set; }
+        [JsonProperty("label")] public string? Label { get; set; }
+        [JsonProperty("description")] public string? Description { get; set; }
+        [JsonProperty("icon")] public string? Icon { get; set; }
+        [JsonProperty("exec")] public string? Exec { get; set; }
+        [JsonProperty("args")] public List<string>? Args { get; set; }
+        [JsonProperty("option")]
+        [JsonConverter(typeof(GenericSingleOrListConverter<string>))]
+        public List<string>? Option { get; set; }
+        [JsonProperty("controller")]
+        [JsonConverter(typeof(GenericSingleOrListConverter<string>))]
+        public List<string>? Controller { get; set; }
+        [JsonProperty("resource")]
+        [JsonConverter(typeof(GenericSingleOrListConverter<string>))]
+        public List<string>? Resource { get; set; }
+    }
+
+    public class MaaInterfaceSetting
+    {
+        [JsonProperty("name")] public string? Name { get; set; }
+        [JsonProperty("label")] public string? Label { get; set; }
+        [JsonProperty("description")] public string? Description { get; set; }
+        [JsonProperty("icon")] public string? Icon { get; set; }
+        [JsonProperty("option")]
+        [JsonConverter(typeof(GenericSingleOrListConverter<string>))]
+        public List<string>? Option { get; set; }
+        [JsonProperty("default_expand")] public bool? DefaultExpand { get; set; }
+    }
+
+    public class MaaResourceControllerWlRoots
+    {
+        [JsonProperty("use_win32_vk_code")]
+        public bool UseWin32VkCode { get; set; }
+    }
+
     /// <summary>
     /// Gamepad 控制器的具体配置（仅 Windows）。
     /// 用于创建虚拟游戏手柄进行游戏控制。需要安装 ViGEm Bus Driver。
@@ -1027,6 +1147,10 @@ public partial class MaaInterface
         public MaaResourceControllerPlayCover? PlayCover { get; set; }
         [JsonProperty("gamepad")]
         public MaaResourceControllerGamepad? Gamepad { get; set; }
+        [JsonProperty("macos")]
+        public MaaResourceControllerMacOS? MacOS { get; set; }
+        [JsonProperty("wlroots")]
+        public MaaResourceControllerWlRoots? WlRoots { get; set; }
 
         /// <summary>显示名称（用于 UI 绑定）</summary>
         [ObservableProperty] [JsonIgnore] private string _displayName = string.Empty;
@@ -1173,6 +1297,8 @@ public partial class MaaInterface
 
         [ObservableProperty] [JsonIgnore] private string _taskCountText = string.Empty;
 
+        [ObservableProperty] [JsonIgnore] private bool _canExpandDescription;
+
         public void InitializeDisplayName()
         {
             UpdateDisplayName();
@@ -1191,12 +1317,14 @@ public partial class MaaInterface
             {
                 DisplayDescription = LanguageHelper.GetLocalizedString(Description.ResolveContentAsync().Result);
                 HasDescription = !string.IsNullOrWhiteSpace(DisplayDescription);
+                CanExpandDescription = IsDescriptionLikelyOverflowing(DisplayDescription);
             }
             catch (Exception ex)
             {
                 LoggerHelper.Warning($"Failed to resolve preset description for '{Name}': {ex.Message}");
                 DisplayDescription = string.Empty;
                 HasDescription = false;
+                CanExpandDescription = false;
             }
             if (!string.IsNullOrWhiteSpace(Icon))
             {
@@ -1214,6 +1342,16 @@ public partial class MaaInterface
         public void Dispose()
         {
             LanguageHelper.LanguageChanged -= OnLanguageChanged;
+        }
+
+        private static bool IsDescriptionLikelyOverflowing(string description)
+        {
+            var normalized = description.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+            if (normalized.Count(character => character == '\n') >= 2)
+                return true;
+
+            var visualUnits = normalized.Sum(character => character <= sbyte.MaxValue ? 1 : 2);
+            return visualUnits > 84;
         }
     }
 
@@ -1297,6 +1435,10 @@ public partial class MaaInterface
     [JsonConverter(typeof(GenericSingleOrListConverter<string>))]
     public List<string>? Import { get; set; }
 
+    [JsonProperty("pretask")]
+    [JsonConverter(typeof(GenericSingleOrListConverter<MaaInterfacePreTask>))]
+    public List<MaaInterfacePreTask>? PreTask { get; set; }
+
     /// <summary>
     /// 多语言支持配置，键为语言代码，值为对应的翻译文件路径（相对于 interface.json 同目录）
     /// 示例: { "zh_cn": "interface_zh.json", "en_us": "interface_en.json" }
@@ -1319,6 +1461,33 @@ public partial class MaaInterface
     [JsonProperty("version")]
     public string? Version { get; set; }
 
+    [JsonProperty("telemetry")]
+    public MaaInterfaceTelemetry? Telemetry { get; set; }
+
+    public class MaaInterfaceTelemetry
+    {
+        [JsonProperty("sentry")]
+        public MaaInterfaceSentryTelemetry? Sentry { get; set; }
+    }
+
+    public class MaaInterfaceSentryTelemetry
+    {
+        [JsonProperty("dsn")]
+        public string? Dsn { get; set; }
+
+        [JsonProperty("tracing")]
+        public bool? Tracing { get; set; }
+
+        [JsonProperty("traces_sample_rate")]
+        public double? TracesSampleRate { get; set; }
+
+        [JsonProperty("failure_attachments_sample_rate")]
+        public double? FailureAttachmentsSampleRate { get; set; }
+
+        [JsonProperty("environment")]
+        public string? Environment { get; set; }
+    }
+
     [JsonProperty("__mfa_max_version")]
     public string? MFAMaxVersion { get; set; }
 
@@ -1326,7 +1495,20 @@ public partial class MaaInterface
     public string? MFAMinVersion { get; set; }
 
     [JsonProperty("welcome")]
-    public string? Welcome { get; set; }
+    [JsonConverter(typeof(MaaWelcomeConverter))]
+    public List<MaaInterfaceWelcome>? Welcome { get; set; }
+
+    public class MaaInterfaceWelcome
+    {
+        [JsonProperty("label")]
+        public string? Label { get; set; }
+
+        [JsonProperty("content")]
+        public string? Content { get; set; }
+
+        [JsonIgnore]
+        public bool IsLegacyString { get; set; }
+    }
 
     [JsonProperty("message")]
     public string? Message { get; set; }
@@ -1376,6 +1558,9 @@ public partial class MaaInterface
     [JsonProperty("global_option")]
     [JsonConverter(typeof(GenericSingleOrListConverter<string>))]
     public List<string>? GlobalOption { get; set; }
+
+    [JsonProperty("setting")]
+    public List<MaaInterfaceSetting>? Setting { get; set; }
 
     /// <summary>运行时使用的全局选项配置（与 MaaInterfaceTask.Option 类似）</summary>
     [JsonIgnore]
@@ -1541,9 +1726,18 @@ public partial class MaaInterface
         if (!string.IsNullOrEmpty(other.Name)) Name = other.Name;
         if (!string.IsNullOrEmpty(other.Label)) Label = other.Label;
         if (!string.IsNullOrEmpty(other.Version)) Version = other.Version;
+        if (other.Telemetry != null) Telemetry = other.Telemetry;
         if (!string.IsNullOrEmpty(other.MFAMaxVersion)) MFAMaxVersion = other.MFAMaxVersion;
         if (!string.IsNullOrEmpty(other.MFAMinVersion)) MFAMinVersion = other.MFAMinVersion;
-        if (!string.IsNullOrEmpty(other.Welcome)) Welcome = other.Welcome;
+        if (other.Welcome != null)
+        {
+            Welcome = other.Welcome.Select(item => new MaaInterfaceWelcome
+            {
+                Label = item.Label,
+                Content = item.Content,
+                IsLegacyString = item.IsLegacyString,
+            }).ToList();
+        }
         if (!string.IsNullOrEmpty(other.Message)) Message = other.Message;
         if (!string.IsNullOrEmpty(other.Github)) Github = other.Github;
         if (!string.IsNullOrEmpty(other.Url)) Url = other.Url;
@@ -1574,7 +1768,9 @@ public partial class MaaInterface
         Group = MergeLists(Group, other.Group, g => g.Name);
         Task = MergeTasks(Task, other.Task);
         Preset = MergeLists(Preset, other.Preset, p => p.Name);
-        if (other.GlobalOption is { Count: > 0 }) GlobalOption = other.GlobalOption;
+        PreTask = AppendLists(PreTask, other.PreTask);
+        Setting = AppendLists(Setting, other.Setting);
+        GlobalOption = AppendDistinct(GlobalOption, other.GlobalOption);
     }
 
     private static Dictionary<TK, TV>? MergeDictionaries<TK, TV>(Dictionary<TK, TV>? first, Dictionary<TK, TV>? second) where TK : notnull
@@ -1659,6 +1855,18 @@ public partial class MaaInterface
             }
         }
         return result;
+    }
+
+    private static List<T>? AppendLists<T>(List<T>? first, List<T>? second)
+    {
+        if (first == null && second == null) return null;
+        return [.. first ?? [], .. second ?? []];
+    }
+
+    private static List<string>? AppendDistinct(List<string>? first, List<string>? second)
+    {
+        if (first == null && second == null) return null;
+        return (first ?? []).Concat(second ?? []).Distinct().ToList();
     }
 
     public override string? ToString()

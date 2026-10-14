@@ -27,11 +27,12 @@ namespace Markdown.Avalonia.Html.Core.Parsers.MarkdigExtensions
         public bool TryReplace(HtmlNode node, ReplaceManager manager, out IEnumerable<Control> generated)
         {
             var table = new Table();
+            var tableBackground = DocUtils.GetBackgroundColor(node);
 
             var theadRows = node.SelectNodes("./thead/tr");
             if (theadRows is not null)
             {
-                var group = CreateRowGroup(theadRows, manager);
+                var group = CreateRowGroup(theadRows, manager, tableBackground);
 
                 SetupClass(group, Tags.TagTableHeader.GetClass());
 
@@ -49,7 +50,7 @@ namespace Markdown.Avalonia.Html.Core.Parsers.MarkdigExtensions
             }
             if (tbodyRows.Count > 0)
             {
-                var group = CreateRowGroup(tbodyRows, manager);
+                var group = CreateRowGroup(tbodyRows, manager, tableBackground);
 
                 table.RowGroups.AddRange(group);
 
@@ -67,7 +68,7 @@ namespace Markdown.Avalonia.Html.Core.Parsers.MarkdigExtensions
             var tfootRows = node.SelectNodes("./tfoot/tr");
             if (tfootRows is not null)
             {
-                var group = CreateRowGroup(tfootRows, manager);
+                var group = CreateRowGroup(tfootRows, manager, tableBackground);
 
                 SetupClass(group, Tags.TagTableFooter.GetClass());
 
@@ -177,17 +178,22 @@ namespace Markdown.Avalonia.Html.Core.Parsers.MarkdigExtensions
 
         private static List<List<TableCell>> CreateRowGroup(
             IEnumerable<HtmlNode> rows,
-            ReplaceManager manager)
+            ReplaceManager manager,
+            global::Avalonia.Media.Brush? tableBackground)
         {
             var group = new List<List<TableCell>>();
 
             foreach (var rowTag in rows)
             {
                 var row = new List<TableCell>();
+                var rowBackground = DocUtils.GetBackgroundColor(rowTag) ?? tableBackground;
 
                 foreach (var cellTag in rowTag.ChildNodes.CollectTag("td", "th"))
                 {
                     var cell = new TableCell(manager.ParseChildrenAndGroup(cellTag));
+                    var cellBackground = DocUtils.GetBackgroundColor(cellTag) ?? rowBackground;
+                    if (cellBackground is not null)
+                        cell.Content.Background = cellBackground;
 
                     int colspan = TryParse(cellTag.Attributes["colspan"]?.Value);
                     int rowspan = TryParse(cellTag.Attributes["rowspan"]?.Value);

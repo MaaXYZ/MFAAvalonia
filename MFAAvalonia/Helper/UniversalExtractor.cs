@@ -59,6 +59,7 @@ public class UniversalExtractor
             {
                 if (!entry.IsDirectory)
                 {
+                    _ = GetSafeOutputPath(destinationDirectory, entry.Key);
                     entry.WriteToDirectory(destinationDirectory, new ExtractionOptions
                     {
                         ExtractFullPath = true,
@@ -79,6 +80,7 @@ public class UniversalExtractor
         {
             if (!reader.Entry.IsDirectory)
             {
+                _ = GetSafeOutputPath(destinationDirectory, reader.Entry.Key);
                 reader.WriteEntryToDirectory(destinationDirectory, new ExtractionOptions
                 {
                     ExtractFullPath = true,
@@ -97,6 +99,7 @@ public class UniversalExtractor
             {
                 if (!entry.IsDirectory)
                 {
+                    _ = GetSafeOutputPath(destinationDirectory, entry.Key);
                     entry.WriteToDirectory(destinationDirectory, new ExtractionOptions
                     {
                         ExtractFullPath = true,
@@ -116,6 +119,7 @@ public class UniversalExtractor
             {
                 if (!entry.IsDirectory)
                 {
+                    _ = GetSafeOutputPath(destinationDirectory, entry.Key);
                     entry.WriteToDirectory(destinationDirectory, new ExtractionOptions
                     {
                         ExtractFullPath = true,
@@ -175,6 +179,7 @@ public class UniversalExtractor
             {
                 if (!entry.IsDirectory)
                 {
+                    _ = GetSafeOutputPath(destinationDirectory, entry.Key);
                     entry.WriteToDirectory(destinationDirectory, new ExtractionOptions
                     {
                         ExtractFullPath = true,
@@ -204,6 +209,7 @@ public class UniversalExtractor
             {
                 if (!entry.IsDirectory)
                 {
+                    _ = GetSafeOutputPath(destinationDirectory, entry.Key);
                     entry.WriteToDirectory(destinationDirectory, new ExtractionOptions
                     {
                         ExtractFullPath = true,
@@ -234,6 +240,7 @@ public class UniversalExtractor
             {
                 if (!entry.IsDirectory)
                 {
+                    _ = GetSafeOutputPath(destinationDirectory, entry.Key);
                     entry.WriteToDirectory(destinationDirectory, new ExtractionOptions
                     {
                         ExtractFullPath = true,
@@ -263,6 +270,7 @@ public class UniversalExtractor
             {
                 if (!entry.IsDirectory)
                 {
+                    _ = GetSafeOutputPath(destinationDirectory, entry.Key);
                     entry.WriteToDirectory(destinationDirectory, new ExtractionOptions
                     {
                         ExtractFullPath = true,
@@ -312,7 +320,7 @@ public class UniversalExtractor
                     {
                         // 构建目标文件路径
                         string entryName = reader.Entry.Key;
-                        string outputPath = Path.Combine(destinationDirectory, entryName);
+                        string outputPath = GetSafeOutputPath(destinationDirectory, entryName);
                         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
                         // 复制条目流到目标文件
@@ -370,7 +378,7 @@ public class UniversalExtractor
                     {
                         // 构建目标文件路径
                         string entryName = reader.Entry.Key;
-                        string outputPath = Path.Combine(destinationDirectory, entryName);
+                        string outputPath = GetSafeOutputPath(destinationDirectory, entryName);
                         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
                         // 异步复制条目流到目标文件
@@ -397,6 +405,21 @@ public class UniversalExtractor
             LoggerHelper.Error($"ReaderFactory 异步解压失败: {ex.Message}");
             return false;
         }
+    }
+
+    private static string GetSafeOutputPath(string destinationDirectory, string entryName)
+    {
+        var destinationRoot = Path.GetFullPath(destinationDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                              + Path.DirectorySeparatorChar;
+        var outputPath = Path.GetFullPath(Path.Combine(destinationRoot, entryName));
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        if (!outputPath.StartsWith(destinationRoot, pathComparison))
+            throw new InvalidDataException($"压缩包条目超出目标目录: {entryName}");
+
+        return outputPath;
     }
 
     // 设置进度条（与你现有代码保持一致）

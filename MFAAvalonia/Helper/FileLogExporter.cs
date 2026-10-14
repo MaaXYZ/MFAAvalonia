@@ -14,6 +14,8 @@ namespace MFAAvalonia.Helper;
 public static class FileLogExporter
 {
     public const int MAX_LINES = 42000;
+    private const long MaxArchivePayloadBytes = 23_750_000;
+    private const long ZipEntryOverheadBytes = 128;
     private static readonly SemaphoreSlim ExportSemaphore = new(1, 1);
     // 定义需要处理的图片文件扩展名
     private static readonly string[] ImageExtensions =
@@ -139,24 +141,19 @@ public static class FileLogExporter
                         return ExportLogResult.Failed;
                     }
 
-                    await using (var stream = await saveFile.OpenWriteAsync())
-                    {
-                        await Task.Run(() =>
-                        {
-                            using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-                            foreach (var file in Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories))
-                            {
-                                var entryName = Path.GetRelativePath(tempDir, file).Replace('\\', '/');
-                                archive.CreateEntryFromFile(file, entryName);
-                            }
-                        });
-                    }
+                    // Android's storage picker usually returns a content URI. It can write the
+                    // selected document, but cannot create sibling files for split volumes.
+                    var allowSplitArchives = saveFile.Path.IsFile;
+                    var archiveFiles = await Task.Run(() => CreateArchiveVolumes(tempDir, allowSplitArchives));
+                    await PublishArchiveVolumesAsync(saveFile, archiveFiles);
 
                     if (skippedCount > 0)
                     {
                         LoggerHelper.Warning($"日志导出完成，但有 {skippedCount} 个文件未导出（可能正在占用）。");
                     }
-                    LoggerHelper.Info($"日志和图片已成功压缩到：\n{saveFile.Name}");
+                    LoggerHelper.Info(archiveFiles.Count == 1
+                        ? $"日志和图片已成功压缩到：\n{saveFile.Name}"
+                        : $"日志和图片已成功压缩为 {archiveFiles.Count} 个分卷：\n{GetVolumeFileName(saveFile.Name, 1, archiveFiles.Count)}");
                     ToastHelper.Success(LangKeys.ExportLog.ToLocalization(), LangKeys.ExportLogSuccess.ToLocalization());
                     return ExportLogResult.Success;
                 }
@@ -309,7 +306,11 @@ public static class FileLogExporter
 
         var allFiles = Directory.GetFiles(debugDir, "*", SearchOption.AllDirectories);
         var namedMaaLogs = allFiles.Where(file =>
-            Path.GetFileName(file).StartsWith("maa.log", StringComparison.OrdinalIgnoreCase));
+        {
+            var fileName = Path.GetFileName(file);
+            return fileName.StartsWith("maa.log", StringComparison.OrdinalIgnoreCase)
+                   || fileName.StartsWith("maafw.log", StringComparison.OrdinalIgnoreCase);
+        });
 
         if (namedMaaLogs.Any())
             return namedMaaLogs;
@@ -457,6 +458,158 @@ public static class FileLogExporter
         using var destination = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None);
         source.CopyTo(destination);
     }
+
+    private static List<string> CreateArchiveVolumes(string sourceDirectory, bool allowSplitArchives)
+    {
+        var files = Directory.GetFiles(sourceDirectory, "*", SearchOption.AllDirectories)
+            .OrderBy(file => Path.GetRelativePath(sourceDirectory, file), StringComparer.Ordinal)
+            .ToArray();
+        var archiveDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(archiveDirectory);
+
+        try
+        {
+            var groups = allowSplitArchives
+                ? GroupFilesIntoVolumes(sourceDirectory, files)
+                : [files.ToList()];
+            if (groups.Count == 1)
+            {
+                var singleArchive = Path.Combine(archiveDirectory, "archive.zip");
+                CreateArchive(singleArchive, sourceDirectory, groups[0]);
+                return [singleArchive];
+            }
+
+            var width = groups.Count >= 100 ? 3 : 2;
+            var volumes = new List<string>(groups.Count);
+
+            for (var index = 0; index < groups.Count; index++)
+            {
+                var volumePath = Path.Combine(
+                    archiveDirectory,
+                    $"archive-part{(index + 1).ToString($"D{width}")}.zip");
+                CreateArchive(volumePath, sourceDirectory, groups[index]);
+                volumes.Add(volumePath);
+            }
+
+            return volumes;
+        }
+        catch
+        {
+            try { Directory.Delete(archiveDirectory, true); }
+            catch { /* ignore cleanup errors */ }
+            throw;
+        }
+    }
+
+    private static List<List<string>> GroupFilesIntoVolumes(string sourceDirectory, IEnumerable<string> files)
+    {
+        var groups = new List<List<string>>();
+        var currentGroup = new List<string>();
+        long currentSize = 22;
+
+        foreach (var file in files)
+        {
+            var entryName = Path.GetRelativePath(sourceDirectory, file).Replace('\\', '/');
+            // Images are already compressed. Using their source size is both a reliable
+            // volume estimate and avoids a full throw-away Deflate pass for every file.
+            var estimatedSize = new FileInfo(file).Length
+                                + ZipEntryOverheadBytes
+                                + System.Text.Encoding.UTF8.GetByteCount(entryName) * 2L;
+
+            if (currentGroup.Count > 0 && currentSize + estimatedSize > MaxArchivePayloadBytes)
+            {
+                groups.Add(currentGroup);
+                currentGroup = [];
+                currentSize = 22;
+            }
+
+            currentGroup.Add(file);
+            currentSize += estimatedSize;
+        }
+
+        if (currentGroup.Count > 0)
+            groups.Add(currentGroup);
+
+        return groups;
+    }
+
+    private static void CreateArchive(string archivePath, string sourceDirectory, IEnumerable<string> files)
+    {
+        using var stream = new FileStream(archivePath, FileMode.Create, FileAccess.Write, FileShare.None);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
+        foreach (var file in files)
+        {
+            var entryName = Path.GetRelativePath(sourceDirectory, file).Replace('\\', '/');
+            archive.CreateEntryFromFile(
+                file,
+                entryName,
+                IsImageFile(file) ? CompressionLevel.NoCompression : CompressionLevel.Fastest);
+        }
+    }
+
+    private static async Task PublishArchiveVolumesAsync(IStorageFile saveFile, IReadOnlyList<string> archiveFiles)
+    {
+        var archiveDirectory = Path.GetDirectoryName(archiveFiles[0]);
+        try
+        {
+            if (archiveFiles.Count == 1)
+            {
+                await using var source = new FileStream(archiveFiles[0], FileMode.Open, FileAccess.Read, FileShare.Read);
+                await using var destination = await saveFile.OpenWriteAsync();
+                await source.CopyToAsync(destination);
+                await destination.FlushAsync();
+                return;
+            }
+
+            if (!saveFile.Path.IsFile)
+                throw new IOException("The selected storage provider does not support writing split archives.");
+
+            var selectedPath = saveFile.Path.LocalPath;
+            var outputDirectory = Path.GetDirectoryName(selectedPath)
+                ?? throw new IOException("Unable to determine the export directory.");
+            var createdFiles = new List<string>();
+
+            try
+            {
+                for (var index = 0; index < archiveFiles.Count; index++)
+                {
+                    var outputPath = Path.Combine(
+                        outputDirectory,
+                        GetVolumeFileName(saveFile.Name, index + 1, archiveFiles.Count));
+                    File.Copy(archiveFiles[index], outputPath, overwrite: true);
+                    createdFiles.Add(outputPath);
+                }
+
+                if (File.Exists(selectedPath))
+                    File.Delete(selectedPath);
+            }
+            catch
+            {
+                foreach (var createdFile in createdFiles)
+                {
+                    try { File.Delete(createdFile); }
+                    catch { /* ignore cleanup errors */ }
+                }
+                throw;
+            }
+        }
+        finally
+        {
+            if (!string.IsNullOrWhiteSpace(archiveDirectory))
+            {
+                try { Directory.Delete(archiveDirectory, true); }
+                catch { /* ignore cleanup errors */ }
+            }
+        }
+    }
+
+    private static string GetVolumeFileName(string selectedFileName, int volumeNumber, int volumeCount)
+    {
+        var baseName = Path.GetFileNameWithoutExtension(selectedFileName);
+        var width = volumeCount >= 100 ? 3 : 2;
+        return $"{baseName}-part{volumeNumber.ToString($"D{width}")}.zip";
+    }
+
 }
 
 public sealed class ExportLogPackageOptions

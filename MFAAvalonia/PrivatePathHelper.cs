@@ -27,7 +27,7 @@ public static class PrivatePathHelper
     /// 设置原生库解析器
     /// 使用 AssemblyLoadContext.ResolvingUnmanagedDll 事件，不会与第三方库的 SetDllImportResolver 冲突
     /// </summary>
-    public static void SetupNativeLibraryResolver()
+    public static void SetupNativeLibraryResolver(bool enableManagedLibraryResolver = true)
     {
         try
         {
@@ -36,7 +36,7 @@ public static class PrivatePathHelper
 
             lock (_resolverLock)
             {
-                if (!_managedResolverRegistered)
+                if (enableManagedLibraryResolver && !_managedResolverRegistered)
                 {
                     AssemblyLoadContext.Default.Resolving += (_, assemblyName) =>
                     {

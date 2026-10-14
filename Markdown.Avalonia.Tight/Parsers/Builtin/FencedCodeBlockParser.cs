@@ -1,4 +1,5 @@
 ﻿using Avalonia.Controls.Primitives;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using System.Collections.Generic;
@@ -51,7 +52,7 @@ namespace Markdown.Avalonia.Parsers.Builtin
 
             string code = text.Substring(firstMatch.Index + firstMatch.Length, codeEndIndex - (firstMatch.Index + firstMatch.Length));
             var border = Create(code);
-            return new[] { new UnBlockElement(border) };
+            return new[] { new UnBlockElement(border, "FencedCode:" + code) };
         }
 
         /// <summary>
@@ -116,23 +117,62 @@ namespace Markdown.Avalonia.Parsers.Builtin
 
         public static Border Create(string code)
         {
+            const double codeLineHeight = 20d;
+            const double verticalPadding = 8d;
+            var lineCount = CountLines(code);
+
+            if (lineCount > 2000 || code.Length > 1_000_000)
+            {
+                var largeText = new TextBox
+                {
+                    Text = code,
+                    AcceptsReturn = true,
+                    IsReadOnly = true,
+                    TextWrapping = TextWrapping.NoWrap,
+                    MaxHeight = 600,
+                    Padding = new Thickness(10, verticalPadding)
+                };
+                largeText.SetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
+                largeText.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
+                largeText.Classes.Add(Markdown.CodeBlockClass);
+
+                var largeBorder = new Border { Child = largeText };
+                largeBorder.Classes.Add(Markdown.CodeBlockClass);
+                return largeBorder;
+            }
             var ctxt = new TextBlock()
             {
                 Text = code,
-                TextWrapping = TextWrapping.NoWrap
+                TextWrapping = TextWrapping.NoWrap,
+                LineHeight = codeLineHeight,
+                MinHeight = lineCount * codeLineHeight
             };
             ctxt.Classes.Add(Markdown.CodeBlockClass);
 
             var scrl = new ScrollViewer();
             scrl.Classes.Add(Markdown.CodeBlockClass);
             scrl.Content = ctxt;
+            scrl.Padding = new Thickness(10, verticalPadding);
+            scrl.MinHeight = lineCount * codeLineHeight + verticalPadding * 2;
             scrl.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+            scrl.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
 
             var border = new Border();
             border.Classes.Add(Markdown.CodeBlockClass);
             border.Child = scrl;
 
             return border;
+        }
+
+        private static int CountLines(string text)
+        {
+            var count = 1;
+            foreach (var character in text)
+            {
+                if (character == '\n')
+                    count++;
+            }
+            return count;
         }
     }
 }

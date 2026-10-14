@@ -1,0 +1,41 @@
+<UserControl x:Class="MFAAvalonia.Views.Mobile.MobileAnnouncementView"
+             x:DataType="windows:AnnouncementViewModel"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:full="https://github.com/whistyun/Markdown.Avalonia"
+             xmlns:extensions="clr-namespace:MFAAvalonia.Extensions"
+             xmlns:windows="clr-namespace:MFAAvalonia.ViewModels.Windows"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <Grid MinWidth="300" MinHeight="360" ColumnDefinitions="132,*">
+        <ListBox Grid.Column="0"
+                 ItemsSource="{Binding AnnouncementItems}"
+                 SelectedItem="{Binding SelectedAnnouncement}"
+                 Margin="0,0,8,0"
+                 SelectionMode="Single">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="windows:AnnouncementItem">
+                    <TextBlock Text="{Binding Title}" TextWrapping="Wrap" Margin="4" />
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <Border Grid.Column="1"
+                BorderBrush="{DynamicResource SukiControlBorderBrush}"
+                BorderThickness="1"
+                Padding="8">
+            <full:MarkdownScrollViewer x:Name="Viewer"
+                                       Markdown="{Binding AnnouncementContent, Mode=OneWay}"
+                                       EnableVirtualization="True">
+                <full:MarkdownScrollViewer.Engine>
+                    <extensions:MarkdownExtension />
+                </full:MarkdownScrollViewer.Engine>
+                <full:MarkdownScrollViewer.Plugins>
+                    <StaticResource ResourceKey="MdXamlPlugin" />
+                </full:MarkdownScrollViewer.Plugins>
+                <full:MarkdownScrollViewer.Styles>
+                    <StyleInclude Source="avares://MFAAvalonia.Core/Assets/Style/MdXamlStyles.axaml" />
+                </full:MarkdownScrollViewer.Styles>
+            </full:MarkdownScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

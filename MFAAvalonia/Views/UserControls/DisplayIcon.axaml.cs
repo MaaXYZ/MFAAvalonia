@@ -130,7 +130,7 @@ public class DisplayIcon : TemplatedControl
             IsVisible = false;
             IsImage = false;
             IsText = false;
-            ImageSource = null;
+            ClearImage();
             TextContent = null;
             return;
         }
@@ -265,6 +265,13 @@ public class DisplayIcon : TemplatedControl
         TextContent = text;
         IsText = true;
         IsImage = false;
+        ClearImage();
+    }
+
+    private void ClearImage()
+    {
+        var oldImage = ImageSource as Bitmap;
         ImageSource = null;
+        oldImage?.Dispose();
     }
 }

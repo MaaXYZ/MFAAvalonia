@@ -107,6 +107,33 @@ public static class TaskManager
     }
 
     public async static Task RunTaskAsync(
+        Func<Task>? action,
+        Action? handleError = null,
+        string name = nameof(Action),
+        string prompt = ">>> ",
+        bool catchException = true,
+        bool shouldLog = true)
+    {
+        LoggerHelper.Info($"{FormatTaskPrefix(prompt, name)}开始（异步）。");
+        try
+        {
+            if (action != null)
+                await action();
+        }
+        catch (Exception ex) when (catchException && ex is not OperationCanceledException)
+        {
+            var baseEx = ex.GetBaseException();
+            handleError?.Invoke();
+            if (shouldLog)
+                LoggerHelper.Error($"{FormatTaskPrefix(prompt, name)}执行失败：{baseEx.Message}", baseEx);
+        }
+        finally
+        {
+            LoggerHelper.Info($"{FormatTaskPrefix(prompt, name)}完成（异步）。");
+        }
+    }
+
+    public async static Task RunTaskAsync(
         Action? action,
         CancellationToken token,
         Action<Exception>? handleError = null,
@@ -154,11 +181,16 @@ public static class TaskManager
             LoggerHelper.Info($"{FormatTaskPrefix(prompt, name)}开始（异步）。");
         try
         {
-            return await Task.Run(() =>
+            var result = await Task.Run(() =>
             {
                 token.ThrowIfCancellationRequested();
                 return function();
             }, token);
+
+            if (result is Task nestedTask)
+                await nestedTask;
+
+            return result;
         }
         catch (Exception ex) when (catchException && !(ex is OperationCanceledException))
         {

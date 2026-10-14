@@ -73,6 +73,14 @@ public static class MFAExtensions
                 return await File.ReadAllTextAsync(filePath).ConfigureAwait(false);
             }
 
+            // Windows accepts Resource/descs/... when the directory on disk is resource/descs/....
+            // Android and Linux do not. Resource projects created on Windows commonly rely on
+            // that behavior, so resolve each relative segment case-insensitively as a fallback.
+            // Exact paths always win above; the fallback is restricted to the project root.
+            var compatibleFilePath = ResolveProjectFileIgnoringCase(content, projectDir);
+            if (compatibleFilePath != null)
+                return await File.ReadAllTextAsync(compatibleFilePath).ConfigureAwait(false);
+
             // 4. 直接返回文本（可能是 Markdown）
             return content;
         }
@@ -81,6 +89,57 @@ public static class MFAExtensions
             LoggerHelper.Error($"解析 Markdown 内容失败: {input}, 错误: {ex.Message}");
             return string.Empty;
         }
+    }
+
+    private static string? ResolveProjectFileIgnoringCase(string content, string projectDir)
+    {
+        if (!TextFileExtensions.Any(extension =>
+                content.EndsWith(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        var candidate = MaaInterface.ReplacePlaceholder(content, projectDir, false);
+        if (string.IsNullOrWhiteSpace(candidate))
+            return null;
+
+        var root = Path.GetFullPath(projectDir)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var fullCandidate = Path.GetFullPath(candidate);
+        var relativePath = Path.GetRelativePath(root, fullCandidate);
+        if (Path.IsPathRooted(relativePath)
+            || relativePath.Equals("..", StringComparison.Ordinal)
+            || relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            || relativePath.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var current = root;
+        foreach (var segment in relativePath.Split(
+                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!Directory.Exists(current))
+                return null;
+
+            var exact = Path.Combine(current, segment);
+            if (File.Exists(exact) || Directory.Exists(exact))
+            {
+                current = exact;
+                continue;
+            }
+
+            current = Directory.EnumerateFileSystemEntries(current)
+                .FirstOrDefault(entry => string.Equals(
+                    Path.GetFileName(entry),
+                    segment,
+                    StringComparison.OrdinalIgnoreCase));
+            if (current == null)
+                return null;
+        }
+
+        return File.Exists(current) ? current : null;
     }
 
 
@@ -487,19 +546,17 @@ public static class MFAExtensions
     // }
     public static Bitmap DrawRectangle(this Bitmap sourceBitmap, MaaRectBuffer rect, IBrush color, double thickness = 1.5)
     {
+        return sourceBitmap.DrawRectangle(new Rect(rect.X, rect.Y, rect.Width, rect.Height), color, thickness);
+    }
+
+    public static Bitmap DrawRectangle(this Bitmap sourceBitmap, Rect rect, IBrush color, double thickness = 1.5)
+    {
         if (sourceBitmap == null)
             throw new ArgumentNullException(nameof(sourceBitmap));
 
-        // 提前获取需要的值，避免在异步操作中访问可能已释放的对象
         var bitmapSize = sourceBitmap.Size;
         var pixelSize = sourceBitmap.PixelSize;
         var dpi = sourceBitmap.Dpi;
-
-        // 提前获取矩形的值，因为 MaaRectBuffer 可能会被释放
-        var rectX = rect.X;
-        var rectY = rect.Y;
-        var rectWidth = rect.Width;
-        var rectHeight = rect.Height;
 
         var renderBitmap = new RenderTargetBitmap(pixelSize, dpi);
 
@@ -519,7 +576,7 @@ public static class MFAExtensions
             };
 
             // 3. 绘制矩形边框
-            context.DrawRectangle(pen, new Rect(rectX, rectY, rectWidth, rectHeight));
+            context.DrawRectangle(pen, rect);
         }
         catch (Exception ex)
         {

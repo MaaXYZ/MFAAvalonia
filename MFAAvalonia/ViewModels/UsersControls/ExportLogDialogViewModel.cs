@@ -49,6 +49,9 @@ public sealed partial class ExportLogDialogViewModel : ViewModelBase
     public string CustomLogLabel => "custom.log";
     public string OnErrorFolderLabel => "on_error";
     public string VisionFolderLabel => "vision";
+    public string StartExportLabel => IsExporting
+        ? LangKeys.ExportLogInProgress.ToLocalization()
+        : LangKeys.ExportLogDialogStart.ToLocalization();
 
     public bool CanStartExport =>
         !IsExporting && (IncludeMaaLog || IncludeGuiLog || IncludeCustomLog || IncludeOnErrorImages || IncludeVisionImages || IncludeOtherImages);
@@ -69,6 +72,8 @@ public sealed partial class ExportLogDialogViewModel : ViewModelBase
         _selectedVisionImageTimeRange = ImageTimeRangeOptions[0];
         _selectedOtherImageTimeRange = ImageTimeRangeOptions[0];
     }
+
+    partial void OnIsExportingChanged(bool value) => OnPropertyChanged(nameof(StartExportLabel));
 
     [RelayCommand(CanExecute = nameof(CanStartExport))]
     private async Task StartExport()

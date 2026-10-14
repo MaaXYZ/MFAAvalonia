@@ -769,17 +769,26 @@ namespace Markdown.Avalonia.Html.Core.Parsers
 
         public void ExtraModifySubscript(CSpan span, HtmlNode node, ReplaceManager manager)
         {
-            // TODO: 实现下标逻辑
+            span.TextVerticalAlignment = TextVerticalAlignment.Bottom;
+            span.FontSize = 10;
         }
 
         public void ExtraModifySuperscript(CSpan span, HtmlNode node, ReplaceManager manager)
         {
-            // TODO: 实现上标逻辑
+            span.TextVerticalAlignment = TextVerticalAlignment.Top;
+            span.FontSize = 10;
         }
 
         public void ExtraModifyAcronym(CSpan span, HtmlNode node, ReplaceManager manager)
         {
-            // TODO: 实现首字母缩写逻辑
+            span.IsUnderline = true;
+            span.UnderlineStyle = CTextUnderlineStyle.Dotted;
+
+            var title = HtmlEntity.DeEntitize(node.GetAttributeValue("title", String.Empty));
+            if (!String.IsNullOrWhiteSpace(title))
+            {
+                span.ToolTipText = title;
+            }
         }
 
         public void ExtraModifyCenter(Border center, HtmlNode node, ReplaceManager manager)

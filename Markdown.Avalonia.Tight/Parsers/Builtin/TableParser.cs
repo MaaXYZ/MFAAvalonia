@@ -51,8 +51,7 @@ namespace Markdown.Avalonia.Parsers.Builtin
         private TableBlockElement TableEvalutor(Match match, IMarkdownEngine2 engine)
         {
             Dictionary<int, TextAlignment> styleMt =
-                ExtractCoverBar(match.Groups["col"].Value.Trim())
-                    .Split('|')
+                SplitRowCells(match.Groups["col"].Value.Trim())
                     .Select((styleText, idx) =>
                     {
                         var text = styleText.Trim();
@@ -92,7 +91,7 @@ namespace Markdown.Avalonia.Parsers.Builtin
         {
             int colOffset = 0;
             List<TableCellElement> cells = new();
-            foreach (var celltxt in ExtractCoverBar(txt.Trim()).Split('|'))
+            foreach (var celltxt in SplitRowCells(txt.Trim()))
             {
                 var cell = CreateCell(celltxt, engine);
 
@@ -205,18 +204,69 @@ namespace Markdown.Avalonia.Parsers.Builtin
             };
         }
 
-        private static string ExtractCoverBar(string txt)
+        internal static IReadOnlyList<string> SplitRowCells(string text)
         {
-            if (txt[0] == '|')
-                txt = txt.Substring(1);
+            text = text.Trim();
+            if (text.Length == 0)
+                return [string.Empty];
 
-            if (string.IsNullOrEmpty(txt))
-                return txt;
+            var cells = new List<string>();
+            var cell = new StringBuilder();
+            var pendingBackslashes = 0;
 
-            if (txt[txt.Length - 1] == '|')
-                txt = txt.Substring(0, txt.Length - 1);
+            foreach (var c in text)
+            {
+                if (c == '\\')
+                {
+                    pendingBackslashes++;
+                    continue;
+                }
 
-            return txt;
+                if (c == '|')
+                {
+                    cell.Append('\\', pendingBackslashes / 2);
+                    if (pendingBackslashes % 2 == 1)
+                    {
+                        // An odd backslash escapes the pipe and is consumed by
+                        // the table tokenizer. The inline parser receives the
+                        // literal pipe as cell content.
+                        cell.Append('|');
+                    }
+                    else
+                    {
+                        cells.Add(cell.ToString());
+                        cell.Clear();
+                    }
+
+                    pendingBackslashes = 0;
+                    continue;
+                }
+
+                cell.Append('\\', pendingBackslashes);
+                pendingBackslashes = 0;
+                cell.Append(c);
+            }
+
+            cell.Append('\\', pendingBackslashes);
+            cells.Add(cell.ToString());
+
+            if (text[0] == '|' && cells.Count > 0 && cells[0].Length == 0)
+                cells.RemoveAt(0);
+            if (IsUnescapedTrailingPipe(text) && cells.Count > 0 && cells[^1].Length == 0)
+                cells.RemoveAt(cells.Count - 1);
+
+            return cells;
+
+            static bool IsUnescapedTrailingPipe(string source)
+            {
+                if (source[^1] != '|')
+                    return false;
+
+                var backslashes = 0;
+                for (var index = source.Length - 2; index >= 0 && source[index] == '\\'; index--)
+                    backslashes++;
+                return backslashes % 2 == 0;
+            }
         }
 
         private static string ContinueToNum(string charSource, ref int idx)

@@ -31,6 +31,9 @@ namespace MFAAvalonia.Helper;
 
 public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfigurationAction)
 {
+    private static readonly Thickness OptionRowMargin = new(10, 3, 10, 3);
+    private static readonly Thickness NestedOptionMargin = new(14, 2, 4, 4);
+    private static readonly Thickness NestedOptionPadding = new(8, 4, 6, 4);
     
     public void GeneratePanelContent(StackPanel panel, DragItemViewModel dragItem)
     {
@@ -147,6 +150,8 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
             Margin = new Thickness(0, 2, 0, 2),
             Increment = 1,
             Minimum = -1,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Classes = { "TaskOptionLikeCombo" },
         };
         
         BindIdleEnabled(numericUpDown);
@@ -173,7 +178,11 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
 
         Control control;
 
-        if (interfaceOption.IsInput)
+        if (interfaceOption.IsHotkey)
+        {
+            control = CreateHotkeyControl(option, interfaceOption);
+        }
+        else if (interfaceOption.IsInput)
         {
             control = CreateInputControl(option, interfaceOption);
         }
@@ -394,22 +403,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         UpdateSubOptions();
 
         // Enhanced Sub-option visualization
-        var subOptionsBorder = new Border
-        {
-            BorderThickness = new Thickness(2, 0, 0, 0),
-            Background = Brushes.Transparent,
-            Margin = new Thickness(24, 0, 0, 4),
-            Padding = new Thickness(8, 0, 0, 0),
-            Child = subOptionsContainer
-        };
-        subOptionsBorder.Bind(Border.BorderBrushProperty, new DynamicResourceExtension("SukiPrimaryColor"));
-        subOptionsBorder.Bind(Visual.IsVisibleProperty, new Binding("Children.Count")
-        {
-            Source = subOptionsContainer,
-            Converter = new FuncValueConverter<int, bool>(count => count > 0)
-        });
-
-        container.Children.Add(subOptionsBorder);
+        container.Children.Add(CreateNestedOptionsBorder(subOptionsContainer));
         return container;
     }
 
@@ -463,6 +457,28 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         return container;
     }
 
+    private Control CreateHotkeyControl(MaaInterface.MaaInterfaceSelectOption option, MaaInterface.MaaInterfaceOption interfaceOption)
+    {
+        var inputDefinition = new MaaInterface.MaaInterfaceOption
+        {
+            Name = interfaceOption.Name,
+            Type = "input",
+            Label = interfaceOption.Label,
+            Description = interfaceOption.Description,
+            Icon = interfaceOption.Icon,
+            Document = interfaceOption.Document,
+            Inputs = interfaceOption.Hotkeys?.Select(h => new MaaInterface.MaaInterfaceOptionInput
+            {
+                Name = h.Name,
+                Label = h.Label,
+                Description = h.Description,
+                Default = h.Default,
+                PipelineType = "string"
+            }).ToList()
+        };
+        return CreateInputControl(option, inputDefinition);
+    }
+
     private Control CreateStringInputControl(
         MaaInterface.MaaInterfaceOptionInput input, 
         string currentValue, 
@@ -483,7 +499,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         else
         {
             // Single input without header needs its own margin
-            grid.Margin = new Thickness(10, 6, 10, 6);
+            grid.Margin = OptionRowMargin;
         }
 
         // TextBox
@@ -516,7 +532,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         if (!needsHeader)
         {
             var icon = CreateIcon(interfaceOption);
-            icon.Margin = new Thickness(10, 0, 6, 0); // specific margin for single input layout
+            icon.Margin = new Thickness(0, 0, 6, 0);
             labelPanel.Children.Insert(0, icon);
         }
 
@@ -578,7 +594,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         };
 
         var labelPanel = CreateLabelPanel(input.DisplayName, input.Name, input.Description);
-        labelPanel.Margin = new Thickness(10, 0, 5, 0);
+        labelPanel.Margin = new Thickness(0, 0, 5, 0);
 
         Grid.SetColumn(labelPanel, 0);
         Grid.SetColumn(toggleSwitch, 2);
@@ -606,7 +622,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 new ColumnDefinition { Width = GridLength.Auto }
             },
-            Margin = new Thickness(10, 6, 10, 6)
+            Margin = OptionRowMargin
         };
         
         interfaceOption.InitializeIcon();
@@ -665,7 +681,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         // Label with Icon
         var labelPanel = CreateLabelPanel(option.DisplayName, option.Name, interfaceOption.Description, interfaceOption.Document);
         var icon = CreateIcon(interfaceOption);
-        icon.Margin = new Thickness(10, 0, 6, 0); 
+        icon.Margin = new Thickness(0, 0, 6, 0);
         labelPanel.Children.Insert(0, icon);
 
         Grid.SetColumn(labelPanel, 0);
@@ -676,23 +692,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         wrapper.Children.Add(grid);
 
         // Enhanced Sub-option visualization
-        var subOptionsBorder = new Border
-        {
-            BorderThickness = new Thickness(2, 0, 0, 0),
-            Background = Brushes.Transparent,
-            // Improved margin/padding for better elegance
-            Margin = new Thickness(24, 0, 0, 4), 
-            Padding = new Thickness(8, 0, 0, 0),
-            Child = subOptionsContainer
-        };
-        subOptionsBorder.Bind(Border.BorderBrushProperty, new DynamicResourceExtension("SukiPrimaryColor"));
-        subOptionsBorder.Bind(Visual.IsVisibleProperty,new Binding("Children.Count")
-        {
-            Source = subOptionsContainer,
-            Converter = new FuncValueConverter<int, bool>(count => count > 0)
-        });
-        
-        wrapper.Children.Add(subOptionsBorder);
+        wrapper.Children.Add(CreateNestedOptionsBorder(subOptionsContainer));
 
         return wrapper;
     }
@@ -766,7 +766,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         // Header
         var labelPanel = CreateLabelPanel(option.DisplayName, option.Name, interfaceOption.Description, interfaceOption.Document);
         var icon = CreateIcon(interfaceOption);
-        icon.Margin = new Thickness(10, 0, 6, 0); // Margin adjusted
+        icon.Margin = new Thickness(0, 0, 6, 0);
         labelPanel.Children.Insert(0, icon);
 
         Grid.SetColumn(labelPanel, 0);
@@ -780,22 +780,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         wrapper.Children.Add(grid);
         
         // Sub-options border
-        var subOptionsBorder = new Border
-        {
-            BorderThickness = new Thickness(2, 0, 0, 0),
-            // Improved margin/padding
-            Margin = new Thickness(24, 0, 0, 4),
-            Padding = new Thickness(8, 0, 0, 0),
-            Child = subOptionsContainer
-        };
-        subOptionsBorder.Bind(Border.BorderBrushProperty, new DynamicResourceExtension("SukiPrimaryColor"));
-        subOptionsBorder.Bind(Visual.IsVisibleProperty, new Binding("Children.Count")
-        {
-            Source = subOptionsContainer,
-            Converter = new FuncValueConverter<int, bool>(count => count > 0)
-        });
-
-        wrapper.Children.Add(subOptionsBorder);
+        wrapper.Children.Add(CreateNestedOptionsBorder(subOptionsContainer));
 
         return wrapper;
     }
@@ -871,8 +856,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
 
             // Label
             var labelPanel = CreateLabelPanel(field, null, interfaceOption.Description, interfaceOption.Document, isResourceBinding: true);
-            labelPanel.Margin = new Thickness(10, 0, 0, 0);
-
             Grid.SetColumn(labelPanel, 0);
             Grid.SetColumn(autoCompleteBox, 1);
             
@@ -889,7 +872,9 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
          if (MaaProcessor.Interface?.Option?.TryGetValue(subOption.Name ?? string.Empty, out var subInterfaceOption) != true) return;
          
          Control control;
-         if (subInterfaceOption.IsInput)
+         if (subInterfaceOption.IsHotkey)
+            control = CreateHotkeyControl(subOption, subInterfaceOption);
+         else if (subInterfaceOption.IsInput)
             control = CreateInputControl(subOption, subInterfaceOption);
          else if (subInterfaceOption.IsCheckbox)
             control = CreateCheckboxControl(subOption, subInterfaceOption, source);
@@ -913,16 +898,31 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
                 new ColumnDefinition { Width = new GridLength(5, GridUnitType.Star) },
                 new ColumnDefinition { Width = new GridLength(6, GridUnitType.Star) }
             },
-            Margin = new Thickness(10, 3, 10, 3)
+            Margin = OptionRowMargin
         };
         return grid;
     }
 
-    private Grid CreateSpecialTaskGrid(bool isFirstRow = false)
+    private Grid CreateSpecialTaskGrid(bool isFirstRow = false) => CreateBaseGrid();
+
+    private Border CreateNestedOptionsBorder(StackPanel content)
     {
-        var grid = CreateBaseGrid();
-        grid.Margin = isFirstRow ? new Thickness(10, 6, 10, 6) : new Thickness(10, 3, 10, 3);
-        return grid;
+        var border = new Border
+        {
+            BorderThickness = new Thickness(2, 0, 0, 0),
+            CornerRadius = new CornerRadius(0, 4, 4, 0),
+            Margin = NestedOptionMargin,
+            Padding = NestedOptionPadding,
+            Child = content
+        };
+        border.Bind(Border.BorderBrushProperty, new DynamicResourceExtension("SukiPrimaryColor"));
+        border.Bind(Border.BackgroundProperty, new DynamicResourceExtension("SukiPrimaryColor5"));
+        border.Bind(Visual.IsVisibleProperty, new Binding("Children.Count")
+        {
+            Source = content,
+            Converter = new FuncValueConverter<int, bool>(count => count > 0)
+        });
+        return border;
     }
 
     private StackPanel CreateLabelPanel(string displayName, string? name, string? description, List<string>? document = null, bool isResourceBinding = false, bool useI18n = false)
@@ -1127,7 +1127,13 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         var selectOption = new MaaInterface.MaaInterfaceSelectOption { Name = optionName, Index = 0 };
         if (MaaProcessor.Interface?.Option?.TryGetValue(optionName, out var interfaceOption) == true)
         {
-            if (interfaceOption.IsInput && interfaceOption.Inputs != null)
+            if (interfaceOption.IsHotkey && interfaceOption.Hotkeys != null)
+            {
+                selectOption.Data = interfaceOption.Hotkeys
+                    .Where(h => !string.IsNullOrEmpty(h.Name))
+                    .ToDictionary(h => h.Name!, h => (string?)(h.Default ?? string.Empty));
+            }
+            else if (interfaceOption.IsInput && interfaceOption.Inputs != null)
             {
                 selectOption.Data = new Dictionary<string, string?>();
                 foreach(var input in interfaceOption.Inputs)
@@ -1321,6 +1327,9 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
             case "WebhookAction":
                 AddWebhookOptions(panel, dragItem);
                 break;
+            case "SwitchInstanceAction":
+                AddSwitchInstanceOptions(panel, dragItem);
+                break;
         }
     }
 
@@ -1333,7 +1342,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         var grid = CreateSpecialTaskGrid(isFirstRow: true);
 
         var label = CreateLabelPanel(LangKeys.SpecialTask_CountdownSeconds, null, null, useI18n: true);
-        label.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(label, 0);
         grid.Children.Add(label);
 
@@ -1363,6 +1371,52 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
     }
 
     /// <summary>
+    /// 切换实例 - 目标实例下拉选择（含自己，用于单实例循环）
+    /// </summary>
+    private void AddSwitchInstanceOptions(StackPanel panel, DragItemViewModel dragItem)
+    {
+        var param = GetActionParam(dragItem);
+        var grid = CreateSpecialTaskGrid(isFirstRow: true);
+
+        var label = CreateLabelPanel(LangKeys.SpecialTask_SwitchInstanceTarget, null, null, useI18n: true);
+        Grid.SetColumn(label, 0);
+        grid.Children.Add(label);
+
+        var instances = MaaProcessorManager.Instance.GetAllInstanceIdsAndNames();
+        var names = instances.Select(i => i.Name).ToList();
+
+        var comboBox = new ComboBox
+        {
+            MinWidth = 120,
+            Margin = new Thickness(0, 2, 0, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Classes = { "TaskOptionLikeCombo" },
+            ItemsSource = names,
+        };
+        BindIdleEnabled(comboBox);
+
+        var current = (string?)param["target_instance"];
+        var currentIndex = string.IsNullOrWhiteSpace(current)
+            ? -1
+            : instances.FindIndex(i => i.Name == current || i.Id == current);
+        if (currentIndex >= 0)
+            comboBox.SelectedIndex = currentIndex;
+
+        comboBox.SelectionChanged += (_, _) =>
+        {
+            if (comboBox.SelectedIndex < 0 || comboBox.SelectedIndex >= names.Count) return;
+            param["target_instance"] = names[comboBox.SelectedIndex];
+            UpdateActionParam(dragItem, param);
+        };
+
+        Grid.SetColumn(comboBox, 1);
+        AddResponsiveBehavior(grid, label, comboBox);
+        grid.Children.Add(comboBox);
+        panel.Children.Add(grid);
+    }
+
+    /// <summary>
     /// 定时等待 - 等待到指定时间 (hour:minute)，使用 TimePicker 控件
     /// </summary>
     private void AddTimedWaitOptions(StackPanel panel, DragItemViewModel dragItem)
@@ -1371,7 +1425,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         var grid = CreateSpecialTaskGrid(isFirstRow: true);
 
         var label = CreateLabelPanel(LangKeys.SpecialTask_WaitUntilTime, null, null, useI18n: true);
-        label.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(label, 0);
         grid.Children.Add(label);
 
@@ -1414,7 +1467,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         // 标题
         var grid1 = CreateSpecialTaskGrid(isFirstRow: true);
         var label1 = CreateLabelPanel(LangKeys.SpecialTask_NotificationTitle, null, null, useI18n: true);
-        label1.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(label1, 0);
         grid1.Children.Add(label1);
 
@@ -1439,7 +1491,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         // 内容
         var grid2 = CreateSpecialTaskGrid();
         var label2 = CreateLabelPanel(LangKeys.SpecialTask_NotificationContent, null, null, useI18n: true);
-        label2.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(label2, 0);
         grid2.Children.Add(label2);
 
@@ -1475,7 +1526,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         // 程序路径
         var grid1 = CreateSpecialTaskGrid(isFirstRow: true);
         var label1 = CreateLabelPanel(LangKeys.SpecialTask_ProgramPath, null, null, useI18n: true);
-        label1.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(label1, 0);
         grid1.Children.Add(label1);
 
@@ -1552,7 +1602,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         // 附加参数
         var grid2 = CreateSpecialTaskGrid();
         var label2 = CreateLabelPanel(LangKeys.SpecialTask_Arguments, null, null, useI18n: true);
-        label2.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(label2, 0);
         grid2.Children.Add(label2);
 
@@ -1583,10 +1632,10 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 new ColumnDefinition { Width = GridLength.Auto },
             },
-            Margin = new Thickness(10, 3, 10, 3),
+            Margin = OptionRowMargin,
         };
         var label3 = CreateLabelPanel(LangKeys.SpecialTask_WaitForExit, null, null, useI18n: true);
-        label3.Margin = new Thickness(10, 0, 5, 0);
+        label3.Margin = new Thickness(0, 0, 5, 0);
         Grid.SetColumn(label3, 0);
         grid3.Children.Add(label3);
 
@@ -1686,22 +1735,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
 
         UpdateSubOptions(killSelfProcess);
 
-        var subOptionsBorder = new Border
-        {
-            BorderThickness = new Thickness(2, 0, 0, 0),
-            Background = Brushes.Transparent,
-            Margin = new Thickness(24, 0, 0, 4),
-            Padding = new Thickness(8, 0, 0, 0),
-            Child = subOptionsContainer
-        };
-        subOptionsBorder.Bind(Border.BorderBrushProperty, new DynamicResourceExtension("SukiPrimaryColor"));
-        subOptionsBorder.Bind(Visual.IsVisibleProperty, new Binding("Children.Count")
-        {
-            Source = subOptionsContainer,
-            Converter = new FuncValueConverter<int, bool>(count => count > 0)
-        });
-
-        wrapper.Children.Add(subOptionsBorder);
+        wrapper.Children.Add(CreateNestedOptionsBorder(subOptionsContainer));
         panel.Children.Add(wrapper);
     }
 
@@ -1714,7 +1748,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         var grid = CreateSpecialTaskGrid(isFirstRow: true);
 
         var label = CreateLabelPanel(LangKeys.SpecialTask_OperationType, null, null, useI18n: true);
-        label.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(label, 0);
         grid.Children.Add(label);
 
@@ -1761,7 +1794,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         // URL
         var grid1 = CreateSpecialTaskGrid(isFirstRow: true);
         var label1 = CreateLabelPanel("URL", null, null);
-        label1.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(label1, 0);
         grid1.Children.Add(label1);
 
@@ -1787,7 +1819,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         // Method
         var grid2 = CreateSpecialTaskGrid();
         var label2 = CreateLabelPanel(LangKeys.SpecialTask_RequestMethod, null, null, useI18n: true);
-        label2.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(label2, 0);
         grid2.Children.Add(label2);
 
@@ -1817,7 +1848,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         // Body
         var grid3 = CreateSpecialTaskGrid();
         var label3 = CreateLabelPanel(LangKeys.SpecialTask_RequestBody, null, null, useI18n: true);
-        label3.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(label3, 0);
         grid3.Children.Add(label3);
 
@@ -1845,7 +1875,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         // Content-Type
         var grid4 = CreateSpecialTaskGrid();
         var label4 = CreateLabelPanel("Content-Type", null, null);
-        label4.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(label4, 0);
         grid4.Children.Add(label4);
 

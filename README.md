@@ -1,147 +1,178 @@
 <!-- markdownlint-disable MD033 MD041 -->
-<div align="center"><img alt="LOGO" src="./docs/images/mfa-logo_512x512.png" width="256" height="256" />
+<div align="center">
+  <img alt="MFAAvalonia" src="./docs/images/mfa-logo_512x512.png" width="192" height="192" />
 
-# MFAAvalonia 
+# MFAAvalonia
 
-**🚀 新一代跨平台自动化框架图形界面**
-
-_基于 [Avalonia UI](https://github.com/AvaloniaUI/Avalonia)
-构建的 [MaaFramework](https://github.com/MaaXYZ/MaaFramework) 通用 GUI 解决方案_
+MaaFramework 的跨平台通用桌面界面
 
 [![License](https://img.shields.io/github/license/MaaXYZ/MFAAvalonia?style=flat-square&color=4a90d9)](./LICENSE)
-[![.NET](https://img.shields.io/badge/.NET-%E2%89%A5%2010-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
+[![.NET](https://img.shields.io/badge/.NET-10-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blueviolet?style=flat-square)](https://github.com/MaaXYZ/MFAAvalonia)
 [![Commit Activity](https://img.shields.io/github/commit-activity/m/MaaXYZ/MFAAvalonia?style=flat-square&color=00d4aa)](https://github.com/MaaXYZ/MFAAvalonia/commits)
 [![Stars](https://img.shields.io/github/stars/MaaXYZ/MFAAvalonia?style=flat-square&color=ffca28)](https://github.com/MaaXYZ/MFAAvalonia/stargazers)
 [![Mirror酱](https://img.shields.io/badge/Mirror%E9%85%B1-%239af3f6?style=flat-square&logo=countingworkspro&logoColor=4f46e5)](https://mirrorchyan.com/zh/projects?rid=MFAAvalonia&source=mfaagh-badge)
 
----
-
 [English](./README_en.md) | **简体中文**
 
 </div>
 
-## ✨ 特性亮点
+## 项目简介
 
-<table>
-<tr>
-<td width="50%">
+MFAAvalonia 是基于 [Avalonia UI](https://github.com/AvaloniaUI/Avalonia) 和 [SukiUI](https://github.com/kikipoulet/SukiUI) 构建的 [MaaFramework](https://github.com/MaaXYZ/MaaFramework) 通用 GUI。资源开发者通过 Project Interface V2 描述任务、选项、控制器和界面文本，用户即可在桌面端配置并运行自动化任务。
 
-### 🎨 现代化界面
+MFAAvalonia 本身不包含具体业务资源。通常应将它集成到基于 MaaFramework 的资源项目中使用。
 
-- 基于 **SukiUI** 打造的精美界面
-- 支持 **亮色/暗色** 主题自动切换
-- 流畅的动画效果与交互体验</td>
+## 主要功能
 
-<td width="50%">
+### 任务与资源
 
-### 🌍 真正的跨平台
+- 支持 Project Interface V2 的任务、选项、预设、国际化、`import` 与 `pretask` 等能力。
+- 支持输入框、选择器、开关等任务选项，以及可折叠的 Markdown 预设说明。
+- 每条任务显示运行中、成功、失败、已取消或未执行状态，并在执行期间及完成后显示耗时。
+- 支持资源公告与 Markdown 内容展示。
 
-- **Windows** / **Linux** / **macOS** 全平台支持
-- 原生性能，无需额外运行时
-- 统一的用户体验
+### 实例与自动化
 
-</td>
-</tr>
-<tr>
-<td width="50%">
+- 使用标签页管理多个独立实例，可搜索、重命名、复制实例 ID，并导入或导出实例配置。
+- 支持定时执行、应用启动时批量执行、全局热键和命令行自动启动。
+- 同一路径下已运行的 MFAAvalonia 可接收新的命令行请求，无需重复启动一个进程。
 
-### ⚡ 开箱即用
+### 控制器与平台
 
-- 与 MaaFramework 项目模板深度集成
-- 简单配置即可快速部署
-- 支持 Mirror酱 一键更新
+- 提供 Windows x64/arm64、Linux x64/arm64 和 macOS x64/arm64 发布目标。
+- 支持 MaaFramework 的 ADB、Win32 和 PlayCover 控制器；实际可用控制器取决于系统、资源配置和打包内容。
+- 支持亮色、暗色主题以及可由资源定义的多语言文本。
 
-</td>
-<td width="50%">
+### 更新、通知与诊断
 
-### 🔧 高度可定制
+- 可通过 GitHub 或 Mirror酱检查并安装程序和资源更新。
+- 支持将符合条件的本地资源压缩包拖入窗口，经确认后更新；任务运行期间不会执行拖放更新。
+- 支持钉钉、飞书、Telegram、Discord、SMTP、WxPusher、QMsg、OneBot、Server酱和自定义 Webhook 等外部通知方式。
+- 支持可配置的任务面板布局，详见[自定义布局](./docs/zh/自定义布局.md)。
+- 资源可在 PI 中配置 Sentry 遥测；只有资源提供遥测配置且用户未关闭“帮助改进软件”时才会发送诊断信息。
 
-- 灵活的任务配置系统
-- 支持多语言国际化
-- 丰富的扩展接口
-
-</td>
-</tr>
-</table>
-
-## 📸 界面预览
+## 界面预览
 
 <p align="center">
-  <img alt="preview" src="./docs/images/preview.png" width="100%" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" />
+  <img alt="MFAAvalonia 界面预览" src="./docs/images/preview.png" width="100%" />
 </p>
 
-## 📋 系统要求
+## 运行要求
 
-|   组件    | 要求                                           |
-|:-------:|:---------------------------------------------|
-| **运行时** | .NET 10.0 或更高版本                              |
-| **资源**  | 基于 MaaFramework 的资源项目                        |
-| **系统**  | Windows 10+、Linux (X11/Wayland)、macOS 10.15+ |
+| 项目 | 要求 |
+|:---|:---|
+| 运行时 | [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)。官方发布包默认为非自包含构建 |
+| 系统 | 与所下载包匹配的 Windows、Linux 或 macOS 系统及 CPU 架构 |
+| 资源 | 包含有效 `interface.json` 和 MaaFramework 资源文件的资源项目 |
 
-## 🚀 快速开始
+不同资源可能有额外的模拟器、ADB、应用程序或系统权限要求，请以对应资源项目的说明为准。
 
-### 方式一：自动安装（推荐）
+## 快速开始
 
-MaaFramework 项目模板已内置 MFAAvalonia，创建项目时自动配置完成。
+### 使用项目模板（推荐）
 
-### 方式二：手动安装
- 
-<details>
-<summary><b>📦 点击展开安装步骤</b></summary>
+[MaaPracticeBoilerplate](https://github.com/MaaXYZ/MaaPracticeBoilerplate) 已提供 MFAAvalonia 集成流程。开发资源项目前，请先阅读项目模板的[开发说明](https://github.com/MaaXYZ/MaaPracticeBoilerplate/blob/main/docs/zh_cn/develop/how_to_develop.md)和 [Project Interface V2 协议](https://github.com/MaaXYZ/MaaFramework/blob/main/docs/zh_cn/3.3-ProjectInterfaceV2%E5%8D%8F%E8%AE%AE.md)。
 
-1. **下载发行版**
+MFAAvalonia 面向资源发布后的配置与运行。开发和排查 Pipeline 时，请使用 MaaFramework 提供的调试工具。
 
-   从 [Releases](https://github.com/MaaXYZ/MFAAvalonia/releases) 下载最新版本并解压
+### 手动集成
 
-2. **复制资源文件**
-   ```
-   maafw/assets/resource/* → MFAAvalonia/resource/
-   maafw/assets/interface.json → MFAAvalonia/
-   ```
+1. 从 [Releases](https://github.com/MaaXYZ/MFAAvalonia/releases) 下载与目标系统及架构匹配的版本并解压。
+2. 按 Project Interface V2 的目录约定放置 `interface.json`、资源文件和所需组件。
+3. 安装 .NET 10 Runtime，然后启动对应平台的 MFAAvalonia 可执行文件。
 
-3. **配置 interface.json**
+手动打包时，MaaFramework 原生库、资源目录和 `interface.json` 必须彼此匹配。一般情况下应优先使用项目模板生成发布产物。
 
-   根据下方配置说明修改 `interface.json` 文件</details>
+如需提供首次启动的预设配置，可在发布包的 `config` 目录放置 `config.template.json`。仅当目录中不存在其它配置 JSON（包括 `config/instances` 下的实例配置）时，该文件才会转换为 `config.json`；更新已有安装时不会覆盖或新增用户配置。
 
-## ⚙️ 配置说明
+模板还可使用 `PresetSettings` 字典为不同 preset 指定独立配置：
 
-### 基础配置结构
+```json
+{
+  "UI.LiveView.EnableLiveView": false,
+  "PresetSettings": {
+    "preset_a": {
+      "UI.LiveView.EnableLiveView": true
+    },
+    "preset_b": {
+      "UI.LiveView.EnableLiveView": false
+    }
+  }
+}
+```
+
+`PresetSettings` 仅用于首次初始化 preset，转换完成后不会作为普通配置项写入 `config.json`。
+
+## 启动参数
+
+MFAAvalonia 支持通过命令行选择实例并执行任务。实例可以使用名称或实例 ID 指定；实例 ID 可在实例标签页的右键菜单中复制。
+
+```text
+MFAAvalonia.exe [参数]
+```
+
+| 参数 | 作用 |
+|:---|:---|
+| `-h`, `--help` | 显示命令行帮助并退出 |
+| `-c <实例>`, `-i <实例>`, `--instance <实例>` | 按实例名称或实例 ID 激活目标实例；名称匹配不区分大小写，实例 ID 优先匹配 |
+| `--autostart` | 自动执行目标实例中当前配置并勾选的任务；未指定实例时使用当前激活的实例 |
+| `-q`, `--quit-after-run` | 本次命令行自动启动的任务完成后退出 MFAAvalonia；仅与 `--autostart` 配合时有效 |
+| `-f`, `--forceStart` | 目标实例已运行时，先停止当前任务再重新启动；仅与 `--autostart` 和实例参数同时使用时有效 |
+
+### 常用示例
+
+```powershell
+# 查看帮助
+.\MFAAvalonia.exe --help
+
+# 切换到指定实例
+.\MFAAvalonia.exe --instance "日常任务"
+.\MFAAvalonia.exe -i 1a2b3c4d
+
+# 自动执行指定实例
+.\MFAAvalonia.exe --autostart -i "日常任务"
+
+# 执行完成后退出
+.\MFAAvalonia.exe --autostart -i 1a2b3c4d -q
+
+# 若实例正在运行，则停止后重新执行
+.\MFAAvalonia.exe --autostart -i "日常任务" --forceStart
+.\MFAAvalonia.exe --autostart -c 1a2b3c4d -f
+```
+
+### 参数组合规则
+
+- 仅指定实例参数时，只切换到对应实例，不自动执行任务。
+- `--autostart` 指向正在运行的实例时，默认跳过本次启动，不重复添加任务。
+- 同时使用 `--autostart`、实例参数和 `-f` 时，会等待现有任务停止后重新启动。
+- `-q` 只跟踪本次命令启动的任务；与 `-f` 配合时，停止旧任务不会被视为本次执行完成。
+
+## 资源开发文档
+
+- [Project Interface V2 协议](https://github.com/MaaXYZ/MaaFramework/blob/main/docs/zh_cn/3.3-ProjectInterfaceV2%E5%8D%8F%E8%AE%AE.md)
+- [MaaPracticeBoilerplate](https://github.com/MaaXYZ/MaaPracticeBoilerplate)
+- [Android 资源项目接入](./docs/zh/Android资源项目构建.md)
+- [自定义布局](./docs/zh/自定义布局.md)
+- [外部通知配置](./docs/zh/外部通知.md)
+
+旧版 `Advanced` 配置已废弃。现有资源应迁移到 Project Interface V2，不应继续依赖旧字段。
+
+### MFAAvalonia 扩展字段
+
+MFAAvalonia 在 Project Interface V2 的 `task` 项中额外支持以下字段：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|:---|:---|:---|:---|
+| `repeatable` | `boolean` | `false` | 是否在任务设置中显示重复次数控件 |
+| `repeat_count` | `integer` | `1` | 初始重复次数；`-1` 表示持续执行，直到用户停止任务。仅在 `repeatable` 为 `true` 时生效 |
 
 ```jsonc
 {
-  // 项目基本信息
-  "name": "项目名称",
-  "version": "1.0.0",
-  "url": "https://github.com/{用户名}/{仓库名}",
-  "custom_title": "自定义窗口标题",
-  
-  // Mirror酱更新配置
-  "mirrorchyan_rid": "项目ID",
-  "mirrorchyan_multiplatform": false,
-  
-  // 资源配置
-  "resource": [
-    {
-      "name": "官服",
-      "path": "{PROJECT_DIR}/resource/base"
-    },
-    {
-      "name": "Bilibili服",
-      "path": [
-        "{PROJECT_DIR}/resource/base",
-        "{PROJECT_DIR}/resource/bilibili"
-      ]
-    }
-  ],
-  
-  // 任务配置
   "task": [
     {
-      "name": "任务名称",
-      "entry": "任务入口",
-      "default_check": true,
-      "description": "任务说明文档",
+      "name": "重复任务",
+      "entry": "TaskEntry",
       "repeatable": true,
       "repeat_count": 1
     }
@@ -149,201 +180,46 @@ MaaFramework 项目模板已内置 MFAAvalonia，创建项目时自动配置完�
 }
 ```
 
-### 控制器配置详解
-
-`controller` 为对象数组，用于声明控制器预设与类型配置：
-
-| 字段 | 类型 | 说明 |
-|:--|:--|:--|
-| `name` | string | 唯一名称标识符，用作控制器 ID |
-| `label` | string | 显示名称，支持国际化（以 `$` 开头）。未设置时显示 `name` |
-| `description` | string | 详细描述，支持文件路径、URL 或直接文本，内容支持 Markdown，支持国际化 |
-| `icon` | string | 图标路径（相对项目根目录），支持国际化 |
-| `type` | `'Adb' \| 'Win32' \| 'PlayCover'` | 控制器类型 |
-| `display_short_side` | number | 默认缩放分辨率短边长度，默认 720。与 `display_long_side` / `display_raw` 互斥 |
-| `display_long_side` | number | 默认缩放分辨率长边长度。与 `display_short_side` / `display_raw` 互斥 |
-| `display_raw` | boolean | 是否使用原始分辨率截图。与缩放分辨率设置互斥 |
-| `adb` | object | Adb 控制器配置（V2 中 input/screencap 由框架自动检测） |
-| `win32` | object | Win32 控制器配置 |
-| `playcover` | object | PlayCover 控制器配置（仅 macOS） |
-
-`win32` 字段：
-
-| 字段 | 类型 | 说明 |
-|:--|:--|:--|
-| `class_regex` | string | 可选。窗口类名正则 |
-| `window_regex` | string | 可选。窗口标题正则 |
-| `mouse` | string | 可选。鼠标控制方式 |
-| `keyboard` | string | 可选。键盘控制方式 |
-| `screencap` | string | 可选。截图方式 |
-
-`playcover` 字段：
-
-| 字段 | 类型 | 说明 |
-|:--|:--|:--|
-| `uuid` | string | 可选。目标应用 Bundle Identifier，默认 `maa.playcover` |
-
-### 任务配置详解
-
-#### 外部通知
-- [外部通知填写指南](./docs/zh/外部通知.md)
-
-#### 自定义布局
-- [自定义布局说明](./docs/zh/自定义布局.md)
-
-| 字段              |   类型    |   默认值   | 说明            |
-|:----------------|:-------:|:-------:|:--------------|
-| `name`          | string  |    -    | 任务显示名称        |
-| `entry`         | string  |    -    | 任务入口接口        |
-| `default_check` | boolean | `false` | 是否默认选中        |
-| `description`   | string  | `null`  | 任务说明文档（支持富文本） |
-| `repeatable`    | boolean | `false` | 是否可重复执行       |
-| `repeat_count`  | number  |   `1`   | 默认重复次数        |
-
-### 📝 富文本格式
-
-任务文档 (`doc`) 支持以下格式：
-
-- **Markdown** - 支持大部分标准语法
-- **HTML** - 支持部分标签
-- **自定义标记** - 扩展样式支持
-
-| 标记                      | 效果         | 示例                        |
-|:------------------------|:-----------|:--------------------------|
-| `[color:颜色]...[/color]` | 文字颜色       | `[color:red]红色文字[/color]` |
-| `[b]...[/b]`            | **粗体**     | `[b]粗体文字[/b]`             |
-| `[i]...[/i]`            | *斜体*       | `[i]斜体文字[/i]`             |
-| `[u]...[/u]`            | <u>下划线</u> | `[u]下划线文字[/u]`            |
-| `[s]...[/s]`            | ~~删除线~~    | `[s]删除线文字[/s]`            |
-
-### 🎯 Focus 协议
-
-`focus` 用于在任务执行过程中输出关键提示、Toast 或日志。支持 **旧协议** 与 **新协议**，写在任务节点中：
-
-- **旧协议**：字段 `start / succeeded / failed / toast / aborted`
-- **新协议**：以 **消息类型** 为键，值为字符串或字符串数组
-
-消息类型使用 MaaFramework 的节点事件常量，例如：
-- 识别阶段：`Node.Recognition.Starting` / `Node.Recognition.Succeeded` / `Node.Recognition.Failed`
-- 动作阶段：`Node.Action.Starting` / `Node.Action.Succeeded` / `Node.Action.Failed`
-
-新协议会按消息类型匹配并渲染到日志。
-
-**旧协议示例：**
-```jsonc
-{
-  "focus": {
-    "start": ["[color:cyan]开始执行[/color]"],
-    "succeeded": ["[color:green]任务完成[/color]"],
-    "failed": ["[color:red]任务失败[/color]"],
-    "toast": ["提示标题", "提示内容"],
-    "aborted": true
-  }
-}
-```
-
-**旧协议字段说明：**
-- `toast`：数组长度 >= 1 时弹出 Toast；第 1 项为标题，第 2 项为内容（可省略）
-- `aborted`：为 `true` 时在 `Starting` 阶段触发中止回调（用于中断任务）
-
-**新协议示例：**
-```jsonc
-{
-  "focus": {
-    "Node.Action.Starting": "开始：{name}",
-    "Node.Action.Succeeded": "完成: {name}",
-    "Node.Action.Failed": "失败ID：{action_id}"
-  }
-}
-```
-
-**占位符与变量：**
-- `{key}` 会从 `details` 中替换对应字段
-- 旧协议中的日志/Toast 支持计数变量，如 `{count}`、`{++count}`、`{count++}`、`{count+1}`
-
-## 🧪 高级功能
-
-### Advanced 字段（废弃）
-
-> [!TIP]
-> `Advanced` 字段已基本被[InterfaceV2](https://github.com/MaaXYZ/MaaFramework/blob/main/docs/zh_cn/3.3-ProjectInterfaceV2%E5%8D%8F%E8%AE%AE.md) 的 input 类型替代，不建议使用
->
-
-## 🛠️ 开发指南
-
-### 多语言支持
-
-在 `interface.json` 同级目录创建 `lang` 文件夹，添加语言文件：
-
-```
-lang/
-├── zh-cn.json  # 简体中文
-├── zh-tw.json  # 繁体中文
-└── en-us.json  # English
-```
-
-同时需要在 `interface.json` 中新增多语言字段（路径相对于 `interface.json`）：
-
-```jsonc
-{
-  "languages": {
-    "zh-cn": "lang/zh-cn.json",
-    "zh-tw": "lang/zh-tw.json",
-    "en-us": "lang/en-us.json"
-  }
-}
-```
-
-任务名称和文档可使用 key 引用，MFAAvalonia 会根据语言设置自动加载对应翻译。
+用户在界面中修改的重复次数会随实例配置保存。
 
 ### 公告系统
 
-将 `.md` 文件放入 `resource/announcement/` 目录即可作为公告显示。资源更新时会自动下载 Changelog 作为公告。
-
-### 启动参数
-
-```bash
-# 使用指定配置文件启动
-MFAAvalonia -c 配置名称
-```
+将 `.md` 文件放入 `resource/announcement/` 目录即可作为资源公告显示。程序或资源更新的 Release Notes 会单独下载，并显示在更新提示中。
 
 ### 自定义图标
 
-将 `logo.ico` 放置在程序根目录的 `Assets` 文件夹里即可替换窗口图标。
+将 `logo.ico` 放置在程序根目录的 `Assets` 文件夹中，即可替换 MFAAvalonia 的窗口和托盘图标。
 
-## 📄 开源许可
+## 从源码构建
 
-本项目基于 **[GPL-3.0 License](./LICENSE)** 开源。
+安装 [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) 后执行：
 
-## 🙏 致谢
+```powershell
+dotnet restore
+dotnet build MFAAvalonia.sln -c Debug
+dotnet publish MFAAvalonia.Desktop/MFAAvalonia.Desktop.csproj -c Release -r win-x64
+```
 
-### 开源项目
+将 `win-x64` 替换为项目支持的其他 RID，即可构建对应平台。运行仍需要有效的资源目录和 `interface.json`。
 
-| 项目 | 描述 |
-|:---|:---|
-| [**SukiUI**](https://github.com/kikipoulet/SukiUI) | Avalonia 桌面 UI 库 |
-| [**MaaFramework**](https://github.com/MaaAssistantArknights/MaaFramework) | 图像识别自动化框架 |
-| [**MaaFramework.Binding.CSharp**](https://github.com/MaaXYZ/MaaFramework.Binding.CSharp) | MaaFramework 的 C# 封装 |
-| [**Mirror酱**](https://github.com/MirrorChyan/docs) | 资源更新服务 |
-| [**Serilog**](https://github.com/serilog/serilog) | 结构化日志库 |
-| [**Newtonsoft.Json**](https://github.com/JamesNK/Newtonsoft.Json) | 高性能 JSON 序列化库 |
-| [**AvaloniaExtensions.Axaml**](https://github.com/dotnet9/AvaloniaExtensions) | Avalonia 语法糖扩展 |
-| [**CalcBindingAva**](https://github.com/netwww1/CalcBindingAva) | XAML 计算绑定扩展 |
+## 开源许可
 
-### 贡献者
+本项目基于 [GPL-3.0 License](./LICENSE) 开源。
 
-感谢所有为 MFAAvalonia 做出贡献的开发者们！
+## 致谢
+
+MFAAvalonia 使用了 [MaaFramework](https://github.com/MaaXYZ/MaaFramework)、[MaaFramework.Binding.CSharp](https://github.com/MaaXYZ/MaaFramework.Binding.CSharp)、[Avalonia](https://github.com/AvaloniaUI/Avalonia)、[SukiUI](https://github.com/kikipoulet/SukiUI)、[Serilog](https://github.com/serilog/serilog)、[Newtonsoft.Json](https://github.com/JamesNK/Newtonsoft.Json)、[Mirror酱](https://github.com/MirrorChyan/docs) 等开源项目与服务。
+
+感谢所有为 MFAAvalonia 做出贡献的开发者。
 
 <a href="https://github.com/MaaXYZ/MFAAvalonia/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=MaaXYZ/MFAAvalonia&max=1000" alt="Contributors"/>
+  <img src="https://contrib.rocks/image?repo=MaaXYZ/MFAAvalonia&max=1000" alt="Contributors" />
 </a>
 
 <div align="center">
+
 **如果这个项目对你有帮助，请给我们一个 ⭐ Star！**
 
-[![Star History Chart](https://api.star-history.com/svg?repos=MaaXYZ/MFAAvalonia&type=Date)](https://star-history.com/#MaaXYZ/MFAAvalonia&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=MaaXYZ/MFAAvalonia&type=Date)](https://star-history.dera.page/#MaaXYZ/MFAAvalonia&Date)
 
 </div>
-
-
-

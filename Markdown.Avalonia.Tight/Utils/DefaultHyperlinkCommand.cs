@@ -9,6 +9,8 @@ namespace Markdown.Avalonia.Utils
 {
     public class DefaultHyperlinkCommand : ICommand
     {
+        public static Action<string>? PlatformOpenUrl { get; set; }
+
         public event EventHandler? CanExecuteChanged;
 
         private bool _isExecutable = true;
@@ -39,7 +41,13 @@ namespace Markdown.Avalonia.Utils
         public static void GoTo(string url)
         {
             // https://github.com/dotnet/runtime/issues/17938
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            if (OperatingSystem.IsAndroid())
+            {
+                if (PlatformOpenUrl == null)
+                    throw new PlatformNotSupportedException("Android Markdown URL launcher is not initialized.");
+                PlatformOpenUrl(url);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 Process.Start(new ProcessStartInfo(url)
                 {
                     UseShellExecute = true,

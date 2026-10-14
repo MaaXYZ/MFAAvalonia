@@ -79,6 +79,9 @@
   <data name="BackgroundTransitionsTitle" xml:space="preserve">
     <value>背景トランジション</value>
   </data>
+  <data name="Back" xml:space="preserve">
+    <value>戻る</value>
+  </data>
   <data name="BaseTheme" xml:space="preserve">
     <value>基本テーマ</value>
   </data>
@@ -162,6 +165,9 @@
   </data>
   <data name="CopiedToClipboard" xml:space="preserve">
     <value>クリップボードにコピーしました</value>
+  </data>
+  <data name="CopySuccess" xml:space="preserve">
+    <value>コピーしました</value>
   </data>
   <data name="Copy" xml:space="preserve">
     <value>コピー</value>
@@ -406,6 +412,9 @@
   <data name="SpecialTask_Webhook" xml:space="preserve">
     <value>Webhook</value>
   </data>
+  <data name="SpecialTask_SwitchInstance" xml:space="preserve">
+    <value>インスタンス切替</value>
+  </data>
   <data name="SpecialTask_CountdownDesc" xml:space="preserve">
     <value>一定時間カウントダウンしてから次の処理を実行します。</value>
   </data>
@@ -427,8 +436,14 @@
   <data name="SpecialTask_WebhookDesc" xml:space="preserve">
     <value>指定した URL に Webhook リクエストを送信します。</value>
   </data>
+  <data name="SpecialTask_SwitchInstanceDesc" xml:space="preserve">
+    <value>現在のインスタンスのタスクを停止し、対象インスタンス（自分自身も可）に切り替えてエミュレーターを再接続し、対象のタスクを開始します。複数アカウントのローテーションや単一インスタンスのループ実行に使用します。</value>
+  </data>
   <data name="SpecialTask_CountdownSeconds" xml:space="preserve">
     <value>カウントダウン秒数</value>
+  </data>
+  <data name="SpecialTask_SwitchInstanceTarget" xml:space="preserve">
+    <value>対象インスタンス</value>
   </data>
   <data name="SpecialTask_WaitUntilTime" xml:space="preserve">
     <value>待機終了時刻</value>
@@ -781,6 +796,9 @@
   <data name="TaskFailed" xml:space="preserve">
     <value>タスクの実行に失敗しました！</value>
   </data>
+  <data name="TaskFailedWithName" xml:space="preserve">
+    <value>タスクに失敗しました：{0}</value>
+  </data>
   <data name="StartupErrorTitle" xml:space="preserve">
     <value>起動に失敗しました</value>
   </data>
@@ -822,6 +840,12 @@
   </data>
   <data name="InstancePresetTaskCountFormat" xml:space="preserve">
     <value>{0}/{1} タスク</value>
+  </data>
+  <data name="ExpandDescription" xml:space="preserve">
+    <value>説明を展開</value>
+  </data>
+  <data name="CollapseDescription" xml:space="preserve">
+    <value>説明を折りたたむ</value>
   </data>
   <data name="InstanceCannotCloseLast" xml:space="preserve">
     <value>最後のインスタンスは閉じられません</value>
@@ -1329,6 +1353,9 @@
     </data>
   <data name="TabWin32" xml:space="preserve">
         <value>Win32</value>
+    </data>
+  <data name="TabMacOS" xml:space="preserve">
+        <value>macOS</value>
     </data>
   <data name="TabPlayCover" xml:space="preserve">
         <value>プレイカバー</value>
@@ -2102,4 +2129,113 @@
   <data name="RemoveTimer" xml:space="preserve">
         <value>Remove Timer</value>
     </data>
+  <data name="GlobalBatchStartup" xml:space="preserve">
+    <value>起動時に一括実行</value>
+  </data>
+  <data name="GlobalBatchStartupDescription" xml:space="preserve">
+    <value>有効にすると、アプリ起動時と開始タイマー実行時に、以下の設定で全インスタンスを実行します。</value>
+  </data>
+  <data name="InstanceStartupSettings" xml:space="preserve">
+    <value>インスタンス起動設定</value>
+  </data>
+  <data name="RefreshInstanceList" xml:space="preserve">
+    <value>インスタンス一覧を更新</value>
+  </data>
+  <data name="IncludeInBatchStartup" xml:space="preserve"><value>一括起動に含める</value></data>
+  <data name="ExtraLaunchItems" xml:space="preserve"><value>追加起動項目</value></data>
+  <data name="ExtraLaunchItem" xml:space="preserve"><value>追加起動項目</value></data>
+  <data name="AddExtraLaunchItem" xml:space="preserve"><value>起動項目を追加</value></data>
+  <data name="RemoveExtraLaunchItem" xml:space="preserve"><value>起動項目を削除</value></data>
+  <data name="LaunchItemName" xml:space="preserve"><value>起動項目名</value></data>
+  <data name="VirtualGamepadType" xml:space="preserve"><value>仮想ゲームパッドの種類</value></data>
+  <data name="CopyInstanceId" xml:space="preserve"><value>インスタンス ID をコピー</value></data>
+  <data name="HelpImproveSoftware" xml:space="preserve"><value>ソフトウェアの改善に協力する</value></data>
+  <data name="HelpImproveSoftwareDescription" xml:space="preserve"><value>匿名のクラッシュ情報、タスク実行結果、失敗したタスクの関連ログとエラースクリーンショットを送信し、問題調査に役立てます。</value></data>
+  <data name="ExportInstanceConfig" xml:space="preserve"><value>インスタンス設定をエクスポート</value></data>
+  <data name="ImportInstanceConfig" xml:space="preserve"><value>インスタンス設定をインポート</value></data>
+  <data name="ExportToClipboard" xml:space="preserve"><value>クリップボードにコピー</value></data>
+  <data name="ExportToFile" xml:space="preserve"><value>ファイルにエクスポート</value></data>
+  <data name="ImportFromClipboard" xml:space="preserve"><value>クリップボードからインポート</value></data>
+  <data name="ImportFromFile" xml:space="preserve"><value>ファイルからインポート</value></data>
+  <data name="ExportInstanceConfigSuccess" xml:space="preserve"><value>インスタンス設定をエクスポートしました。</value></data>
+  <data name="ExportInstanceConfigFailed" xml:space="preserve"><value>インスタンス設定のエクスポートに失敗しました。</value></data>
+  <data name="ImportInstanceConfigSuccess" xml:space="preserve"><value>インスタンス設定をインポートしました（{0} タスク）。</value></data>
+  <data name="ImportInstanceConfigInvalid" xml:space="preserve"><value>インスタンス設定を認識できませんでした。</value></data>
+  <data name="ImportInstanceConfigProjectMismatch" xml:space="preserve"><value>この設定は別のプロジェクト用です。</value></data>
+  <data name="ImportInstanceConfigUnsupportedVersion" xml:space="preserve"><value>この設定バージョンはサポートされていません。</value></data>
+  <data name="DroppedResourceNameMismatch" xml:space="preserve">
+    <value>リソース名が一致しません。パッケージ:「{0}」、現在のリソース:「{1}」。</value>
+  </data>
+  <data name="DroppedResourcePackageInvalid" xml:space="preserve">
+    <value>このアーカイブは有効なリソース更新パッケージではありません。</value>
+  </data>
+  <data name="DroppedResourceUpdateConfirm" xml:space="preserve">
+    <value>「{0}」のリソース更新パッケージを検出しました。
+現在のバージョン: {1}
+パッケージのバージョン: {2}
+
+このアーカイブを使用して更新しますか？</value>
+  </data>
+  <data name="DroppedResourceVersionTooLow" xml:space="preserve">
+    <value>パッケージのバージョン {0} は現在のバージョン {1} より古いです。</value>
+  </data>
+  <data name="StopTaskBeforeUpdateResource" xml:space="preserve">
+    <value>リソースを更新する前に実行中のタスクを停止してください。</value>
+  </data>
+  <data name="DroppedResourceRidMismatch" xml:space="preserve">
+    <value>リソース ID が一致しません。パッケージ:「{0}」、現在のリソース:「{1}」。</value>
+  </data>
+  <!-- Android mobile interface -->
+  <data name="AccentColor" xml:space="preserve"><value>アクセントカラー</value></data>
+  <data name="Appearance" xml:space="preserve"><value>外観</value></data>
+  <data name="ConfigurationActive" xml:space="preserve"><value>この設定に切り替えました</value></data>
+  <data name="ConfigurationAdded" xml:space="preserve"><value>設定を追加しました</value></data>
+  <data name="ConfigurationDeleted" xml:space="preserve"><value>設定を削除しました</value></data>
+  <data name="ConfigurationRenamed" xml:space="preserve"><value>設定名を変更しました</value></data>
+  <data name="Configurations" xml:space="preserve"><value>設定</value></data>
+  <data name="CurrentConfiguration" xml:space="preserve"><value>現在の設定</value></data>
+  <data name="Dark" xml:space="preserve"><value>ダーク</value></data>
+  <data name="DisplayLanguage" xml:space="preserve"><value>表示言語</value></data>
+  <data name="ForceScheduledStartDescription" xml:space="preserve"><value>現在のタスクを停止し、停止完了後にスケジュールタスクを開始します</value></data>
+  <data name="Idle" xml:space="preserve"><value>待機中</value></data>
+  <data name="Language" xml:space="preserve"><value>言語</value></data>
+  <data name="Light" xml:space="preserve"><value>ライト</value></data>
+  <data name="RuntimeReady" xml:space="preserve"><value>コントローラーを初期化しています</value></data>
+  <data name="Schedule" xml:space="preserve"><value>スケジュール</value></data>
+  <data name="ScheduleDescription" xml:space="preserve"><value>タスクを自動開始する時刻を設定します</value></data>
+  <data name="SingleActiveConfiguration" xml:space="preserve"><value>同時に実行できる設定は1つだけです</value></data>
+  <data name="StartStop" xml:space="preserve"><value>タスク操作</value></data>
+  <data name="StartTasks" xml:space="preserve"><value>タスクを開始</value></data>
+  <data name="StopBeforeDelete" xml:space="preserve"><value>削除する前に、この設定のタスクを停止してください</value></data>
+  <data name="StopBeforeSwitch" xml:space="preserve"><value>設定を切り替える前に、現在のタスクを停止してください</value></data>
+  <data name="StopTasks" xml:space="preserve"><value>タスクを停止</value></data>
+  <data name="TargetPackage" xml:space="preserve"><value>対象アプリのパッケージ名</value></data>
+  <data name="TaskQueue" xml:space="preserve"><value>タスク一覧</value></data>
+  <data name="TaskQueueDescription" xml:space="preserve"><value>タスクを選択して実行順序を調整します</value></data>
+  <data name="Tasks" xml:space="preserve"><value>タスク</value></data>
+  <data name="ThemeMode" xml:space="preserve"><value>テーマモード</value></data>
+  <data name="UserLogs" xml:space="preserve"><value>ユーザーログ</value></data>
+  <data name="VirtualAlreadyRunning" xml:space="preserve"><value>仮想ディスプレイはすでに実行中です</value></data>
+  <data name="VirtualAppLaunched" xml:space="preserve"><value>仮想ディスプレイでアプリを起動しました</value></data>
+  <data name="VirtualCreateFailed" xml:space="preserve"><value>仮想ディスプレイの作成に失敗しました</value></data>
+  <data name="VirtualDisplay" xml:space="preserve"><value>仮想ディスプレイ</value></data>
+  <data name="VirtualLaunchFailed" xml:space="preserve"><value>アプリの起動に失敗しました</value></data>
+  <data name="VirtualNoActivityOptions" xml:space="preserve"><value>アプリの起動オプションを作成できません</value></data>
+  <data name="VirtualNoDisplayManager" xml:space="preserve"><value>Android のディスプレイ管理サービスを取得できません</value></data>
+  <data name="VirtualOperationFailed" xml:space="preserve"><value>仮想ディスプレイの操作に失敗しました</value></data>
+  <data name="VirtualPackageNotFound" xml:space="preserve"><value>対象アプリが見つかりません</value></data>
+  <data name="VirtualPackageRequired" xml:space="preserve"><value>対象アプリのパッケージ名を入力してください</value></data>
+  <data name="VirtualRequiresAndroid8" xml:space="preserve"><value>仮想ディスプレイには Android 8.0 以降が必要です</value></data>
+  <data name="VirtualStarted" xml:space="preserve"><value>仮想ディスプレイを開始しました</value></data>
+  <data name="VirtualStopped" xml:space="preserve"><value>仮想ディスプレイは停止中です</value></data>
+  <data name="VirtualStoppedDone" xml:space="preserve"><value>仮想ディスプレイを停止しました</value></data>
+  <data name="VirtualUnsupported" xml:space="preserve"><value>コントローラーが未接続のため、画面を取得できません</value></data>
+  <data name="Blue" xml:space="preserve"><value>青</value></data>
+  <data name="Green" xml:space="preserve"><value>緑</value></data>
+  <data name="Red" xml:space="preserve"><value>赤</value></data>
+  <data name="Orange" xml:space="preserve"><value>オレンジ</value></data>
+  <data name="Purple" xml:space="preserve"><value>紫</value></data>
+  <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>バックグラウンド · 仮想ディスプレイ</value></data>
+  <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>フォアグラウンド · 現在の画面</value></data>
+  <data name="CurrentScreen" xml:space="preserve"><value>現在の画面</value></data>
 </root>

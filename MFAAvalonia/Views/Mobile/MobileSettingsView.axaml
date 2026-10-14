@@ -1,0 +1,180 @@
+<UserControl x:Class="MFAAvalonia.Views.Mobile.MobileSettingsView"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:fluent="clr-namespace:FluentIcons.Avalonia.Fluent;assembly=FluentIcons.Avalonia.Fluent"
+             xmlns:sukiModels="clr-namespace:SukiUI.Models;assembly=SukiUI"
+             xmlns:other="clr-namespace:MFAAvalonia.ViewModels.Other"
+             xmlns:mobile="clr-namespace:MFAAvalonia.Views.Mobile"
+             xmlns:settings="clr-namespace:MFAAvalonia.Views.UserControls.Settings"
+             xmlns:helper="clr-namespace:MFAAvalonia.Helper"
+             mc:Ignorable="d" d:DesignWidth="390" d:DesignHeight="760">
+    <Grid>
+        <ScrollViewer x:Name="SettingsList" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="18" Spacing="12">
+            <TextBlock x:Name="PageTitle" Text="Settings" FontSize="22" FontWeight="Bold" />
+
+            <Border CornerRadius="8" Padding="16" Background="{DynamicResource SukiCardBackground}"
+                    BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                <StackPanel Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                            <TextBlock x:Name="InstanceModeTitle" Text="Configurations" FontWeight="SemiBold" />
+                            <TextBlock x:Name="InstanceModeValue" Text="One configuration runs at a time" FontSize="12"
+                                       Foreground="{DynamicResource SukiLowText}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Width="40" Height="40" Padding="0" Click="AddInstance">
+                            <fluent:FluentIcon Icon="Add" IconSize="Size20" />
+                        </Button>
+                    </Grid>
+                    <ComboBox x:Name="InstanceSelector" SelectionChanged="OnInstanceChanged">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="other:TimerModel+InstanceEntry">
+                                <TextBlock Text="{Binding Name}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <TextBox x:Name="InstanceNameEditor" Watermark="Configuration name" />
+                        <Button Grid.Column="1" Width="42" Padding="0" Click="RenameInstance">
+                            <fluent:FluentIcon Icon="Save" IconSize="Size20" />
+                        </Button>
+                        <Button Grid.Column="2" Width="42" Padding="0" Click="DeleteInstance">
+                            <fluent:FluentIcon Icon="Delete" IconSize="Size20" />
+                        </Button>
+                    </Grid>
+                    <TextBlock x:Name="InstanceStatus" FontSize="12" Foreground="{DynamicResource SukiLowText}" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <Border CornerRadius="8" Padding="16" Background="{DynamicResource SukiCardBackground}"
+                    BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                <StackPanel Spacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <fluent:FluentIcon Icon="WeatherMoon" IconSize="Size20" />
+                        <TextBlock x:Name="AppearanceTitle" Text="Appearance" FontSize="16" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="*,180" RowDefinitions="Auto,Auto" RowSpacing="10">
+                        <TextBlock x:Name="BaseThemeLabel" Text="Theme mode" VerticalAlignment="Center" />
+                        <ComboBox x:Name="BaseThemeSelector" Grid.Column="1" SelectionChanged="OnBaseThemeChanged">
+                            <ComboBoxItem x:Name="LightThemeItem" Content="Light" />
+                            <ComboBoxItem x:Name="DarkThemeItem" Content="Dark" />
+                        </ComboBox>
+                        <TextBlock x:Name="ColorThemeLabel" Grid.Row="1" Text="Accent color" VerticalAlignment="Center" />
+                        <ComboBox x:Name="ColorThemeSelector" Grid.Row="1" Grid.Column="1"
+                                  SelectionChanged="OnColorThemeChanged">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="mobile:MobileColorThemeOption">
+                                    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="7">
+                                        <Border Width="14" Height="14" CornerRadius="3" Background="{Binding PrimaryBrush}" />
+                                        <Border Grid.Column="1" Width="14" Height="14" CornerRadius="3" Background="{Binding AccentBrush}" />
+                                        <TextBlock Grid.Column="2" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border CornerRadius="8" Padding="16" Background="{DynamicResource SukiCardBackground}"
+                    BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                <StackPanel Spacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <fluent:FluentIcon Icon="LocalLanguage" IconSize="Size20" />
+                        <TextBlock x:Name="LanguageTitle" Text="Language" FontSize="16" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="*,180">
+                        <TextBlock x:Name="LanguageLabel" Text="Display language" VerticalAlignment="Center" />
+                        <ComboBox x:Name="LanguageSelector" Grid.Column="1"
+                                  SelectionChanged="OnLanguageChanged">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="other:SupportedLanguage">
+                                    <TextBlock Text="{Binding Name}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border CornerRadius="8" Padding="16" Background="{DynamicResource SukiCardBackground}"
+                    BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                <Button HorizontalContentAlignment="Stretch" Click="OpenExternalNotifications" Padding="0" Background="Transparent" BorderThickness="0">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <fluent:FluentIcon Icon="Alert" IconSize="Size20" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" x:Name="ExternalNotificationTitle" Text="External notifications" FontWeight="SemiBold" />
+                        <fluent:FluentIcon Grid.Column="2"
+                                           Icon="ChevronRight"
+                                           IconSize="Size16"
+                                           Foreground="{DynamicResource SukiLowText}"
+                                           VerticalAlignment="Center" />
+                    </Grid>
+                </Button>
+            </Border>
+            <Border CornerRadius="8" Padding="16" Background="{DynamicResource SukiCardBackground}"
+                    BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                <Button HorizontalContentAlignment="Stretch" Click="OpenVersionSettings" Padding="0" Background="Transparent" BorderThickness="0">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <fluent:FluentIcon Icon="ArrowSync" IconSize="Size20" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" x:Name="VersionTitle" Text="Version settings" FontWeight="SemiBold" />
+                        <fluent:FluentIcon Grid.Column="2"
+                                           Icon="ChevronRight"
+                                           IconSize="Size16"
+                                           Foreground="{DynamicResource SukiLowText}"
+                                           VerticalAlignment="Center" />
+                    </Grid>
+                </Button>
+            </Border>
+            <Border CornerRadius="8" Padding="16" Background="{DynamicResource SukiCardBackground}"
+                    BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                <Button HorizontalContentAlignment="Stretch" Click="OpenAbout" Padding="0" Background="Transparent" BorderThickness="0">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <fluent:FluentIcon Icon="Info" IconSize="Size20" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" x:Name="AboutTitle" Text="About" FontWeight="SemiBold" />
+                        <fluent:FluentIcon Grid.Column="2"
+                                           Icon="ChevronRight"
+                                           IconSize="Size16"
+                                           Foreground="{DynamicResource SukiLowText}"
+                                           VerticalAlignment="Center" />
+                    </Grid>
+                </Button>
+            </Border>
+        </StackPanel>
+        </ScrollViewer>
+
+        <Grid x:Name="VersionSettingsPage" IsVisible="False" Background="{DynamicResource SukiBackground}">
+            <Grid RowDefinitions="Auto,*">
+                <Button Click="CloseSubPage" HorizontalAlignment="Left" Padding="4" Background="Transparent" BorderThickness="0">
+                    <StackPanel Orientation="Horizontal" Spacing="6"><fluent:FluentIcon Icon="ArrowLeft" IconSize="Size20" /><TextBlock x:Name="VersionBackText" Text="Back" VerticalAlignment="Center" /></StackPanel>
+                </Button>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <settings:VersionUpdateSettingsUserControl Margin="4,8,4,18" />
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+
+        <Grid x:Name="ExternalNotificationPage" IsVisible="False" Background="{DynamicResource SukiBackground}">
+            <Grid RowDefinitions="Auto,*">
+                <Button Click="CloseSubPage" HorizontalAlignment="Left" Padding="4" Background="Transparent" BorderThickness="0">
+                    <StackPanel Orientation="Horizontal" Spacing="6"><fluent:FluentIcon Icon="ArrowLeft" IconSize="Size20" /><TextBlock x:Name="ExternalNotificationBackText" Text="Back" VerticalAlignment="Center" /></StackPanel>
+                </Button>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <settings:ExternalNotificationSettingsUserControl Margin="4,8,4,18" />
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+
+        <Grid x:Name="AboutPage" IsVisible="False" Background="{DynamicResource SukiBackground}">
+            <Grid RowDefinitions="Auto,*">
+                <Button Click="CloseSubPage" HorizontalAlignment="Left" Padding="4" Background="Transparent" BorderThickness="0">
+                    <StackPanel Orientation="Horizontal" Spacing="6"><fluent:FluentIcon Icon="ArrowLeft" IconSize="Size20" /><TextBlock x:Name="AboutBackText" Text="Back" VerticalAlignment="Center" /></StackPanel>
+                </Button>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <settings:AboutUserControl DataContext="{x:Static helper:Instances.SettingsViewModel}" Margin="4,8,4,18" />
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

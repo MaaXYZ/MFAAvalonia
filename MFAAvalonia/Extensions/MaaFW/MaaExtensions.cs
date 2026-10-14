@@ -296,7 +296,7 @@ public static class MaaExtensions
         int w = 0,
         int h = 0,
         bool greenmask = false,
-        string order = "Score")
+        string order = "Score", int index = 0)
     {
         detail = maaContext.RunRecognition(new MaaNode
         {
@@ -305,6 +305,7 @@ public static class MaaExtensions
             Recognition = "TemplateMatch",
             Threshold = threshold,
             OrderBy = order,
+            Index = index,
             Roi = new[]
             {
                 x,
@@ -375,7 +376,7 @@ public static class MaaExtensions
         return detail.IsHit();
     }
 
-    public static bool OCR(this IMaaContext maaContext, string text, IMaaImageBuffer imageBuffer, out RecognitionDetail? detail, int x = 0, int y = 0, int w = 0, int h = 0)
+    public static bool OCR(this IMaaContext maaContext, string text, IMaaImageBuffer imageBuffer, out RecognitionDetail? detail, double threshold = 0.3D, int x = 0, int y = 0, int w = 0, int h = 0)
     {
         detail = maaContext.RunRecognition(new MaaNode
         {
@@ -388,6 +389,7 @@ public static class MaaExtensions
                 w,
                 h
             },
+            Threshold = threshold
         }, imageBuffer);
         LoggerHelper.Info($"OCR: {text} ,Hit: {detail?.IsHit()}");
         return detail?.IsHit() == true;

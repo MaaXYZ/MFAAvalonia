@@ -6,7 +6,7 @@ namespace Markdown.Avalonia.Parsers.Builtin
 {
     internal class CommonListParser : AbstractListParser
     {
-        private const string _commonListMaker = @"(?:[*+-]|\d+[.])";
+        private const string _commonListMaker = @"(?:[*+-]|\d+[.)])";
 
         private static readonly Regex _commonListNested = CreateWholeListPattern(_commonListMaker, _commonListMaker);
 
@@ -21,7 +21,7 @@ namespace Markdown.Avalonia.Parsers.Builtin
             out int parseTextBegin, out int parseTextEnd)
         {
             return new DocumentElement[] {
-                ListEvalutor(text, firstMatch, _commonListMaker, engine, out parseTextBegin, out parseTextEnd)
+                ListEvalutor(text, firstMatch, _commonListMaker, status, engine, out parseTextBegin, out parseTextEnd)
             };
         }
     }

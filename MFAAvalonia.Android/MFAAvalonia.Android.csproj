@@ -2,33 +2,225 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFramework>net10.0-android</TargetFramework>
-        <SupportedOSPlatformVersion>21</SupportedOSPlatformVersion>
+        <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
         <Nullable>enable</Nullable>
         <ApplicationId>com.fox.MFAAvalonia</ApplicationId>
         <ApplicationVersion>1</ApplicationVersion>
         <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+        <!--
+          中文：资源开发者可在这里替换 Android Launcher 图标下方的应用名称和 PNG 图标。它们是构建期元数据，不能在安装后由 interface.json 动态修改；也可通过 /p:AndroidLauncherLabel=应用名称 /p:AndroidLauncherIcon=PNG绝对路径 覆盖。
+          English: Resource developers can replace the application name and PNG icon shown in Android Launcher here. They are build-time metadata and cannot be changed by interface.json after installation; they can also be overridden with /p:AndroidLauncherLabel=AppName /p:AndroidLauncherIcon=AbsolutePngPath.
+        -->
+        <AndroidLauncherLabel Condition="'$(AndroidLauncherLabel)' == ''">MFAAvalonia</AndroidLauncherLabel>
+        <AndroidLauncherIcon Condition="'$(AndroidLauncherIcon)' == ''">$(MSBuildProjectDirectory)\Icon.png</AndroidLauncherIcon>
+        <AndroidManifestPlaceholders>applicationLabel=$(AndroidLauncherLabel);shizukuAuthority=$(ApplicationId).shizuku;fileProviderAuthority=$(ApplicationId).fileprovider;$(AndroidManifestPlaceholders)</AndroidManifestPlaceholders>
         <AndroidPackageFormat>apk</AndroidPackageFormat>
         <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+        <!--
+          中文：规避旧版 .NET for Android marshal method rewriter 生成的 _mm_wrapper 无权访问 AndroidEnvironmentInternal.UnhandledException，详见 dotnet/android#10602。升级到包含上游修复的 Android workload 并完成真机验证前不要移除此项。
+          English: Avoid the old .NET for Android marshal-method rewriter generating _mm_wrapper methods that cannot access AndroidEnvironmentInternal.UnhandledException; see dotnet/android#10602. Keep this disabled until an Android workload containing the upstream fix has been adopted and verified on devices.
+        -->
+        <AndroidEnableMarshalMethods>false</AndroidEnableMarshalMethods>
         <AcceptAndroidSDKLicenses>true</AcceptAndroidSDKLicenses>
-        <JavaSdkDirectory>$(JAVA_HOME)</JavaSdkDirectory>
-        <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
-        <AndroidSupportedAbis>arm64-v8a;x86_64</AndroidSupportedAbis>
+        <JavaSdkDirectory Condition="'$(JavaSdkDirectory)' == '' And '$(JAVA_HOME)' != ''">$(JAVA_HOME)</JavaSdkDirectory>
+        <RuntimeIdentifiers Condition="'$(RuntimeIdentifier)' == ''">android-arm64;android-x64</RuntimeIdentifiers>
         <RunAOTCompilation>false</RunAOTCompilation>
-        <AndroidSdkDirectory>$(UserProfile)\AppData\Local\Android\sdk</AndroidSdkDirectory>
+        <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+        <AndroidUseSharedRuntime>false</AndroidUseSharedRuntime>
+        <AndroidSdkDirectory Condition="'$(AndroidSdkDirectory)' == '' And '$(ANDROID_HOME)' != ''">$(ANDROID_HOME)</AndroidSdkDirectory>
+        <AndroidSdkDirectory Condition="'$(AndroidSdkDirectory)' == '' And $([MSBuild]::IsOSPlatform('Windows'))">$(UserProfile)\AppData\Local\Android\sdk</AndroidSdkDirectory>
+        <!--
+          中文：MFA 官方 Release 默认发布不含 interface 和资源的 Android 空壳，因此这里默认关闭。资源开发者构建专用 APK 时，将 AndroidEmbedResourcePackage 改为 true，并把 AndroidResourcePackageSource 指向包含 interface.json 或 interface.jsonc 的资源包根目录。此功能与 Debug/Release 等 Configuration 无关。
+          English: Official MFA Android releases are empty shells without an interface or resource payload, so embedding is disabled by default. To build a resource-specific APK, set AndroidEmbedResourcePackage to true and point AndroidResourcePackageSource to the resource-package root containing interface.json or interface.jsonc. This feature is independent of the Debug/Release Configuration.
+
+          中文：也可以不改项目文件，直接传入 /p:AndroidEmbedResourcePackage=true /p:AndroidResourcePackageSource="资源包绝对路径"。只有开启内嵌后，AndroidAssetBootstrap 才会在应用启动时从 APK 提取载荷。
+          English: Instead of editing this project, pass /p:AndroidEmbedResourcePackage=true /p:AndroidResourcePackageSource="absolute package path". AndroidAssetBootstrap extracts a payload from the APK at startup only when embedding has been enabled for that build.
+        -->
+        <AndroidEmbedResourcePackage Condition="'$(AndroidEmbedResourcePackage)' == ''">false</AndroidEmbedResourcePackage>
+        <AndroidResourcePackageSource Condition="'$(AndroidResourcePackageSource)' == ''"></AndroidResourcePackageSource>
+        <AndroidResourcePackageWorkDirectory>$(MSBuildProjectDirectory)\..\.android-package</AndroidResourcePackageWorkDirectory>
+        <AndroidResourcePackageBuildId>$([System.Guid]::NewGuid().ToString('N'))</AndroidResourcePackageBuildId>
+        <AndroidResourcePackageStagingDirectory>$(AndroidResourcePackageWorkDirectory)\payload\$(AndroidResourcePackageBuildId)</AndroidResourcePackageStagingDirectory>
+        <AndroidResourcePackageArchive>$(AndroidResourcePackageWorkDirectory)\resource-package-$(AndroidResourcePackageBuildId).zip</AndroidResourcePackageArchive>
+        <AndroidResourcePackageFingerprint>$(AndroidResourcePackageArchive).sha256</AndroidResourcePackageFingerprint>
+        <!--
+          中文：python-for-android 运行时必须在资源项目构建阶段生成 AAR 后显式传入，官方空壳不会内置 Python。
+          English: A python-for-android runtime must be built as an AAR by the resource project and passed explicitly; the official shell never embeds Python.
+        -->
+        <AndroidPythonRuntimeAar Condition="'$(AndroidPythonRuntimeAar)' == ''"></AndroidPythonRuntimeAar>
+        <AndroidPythonServiceClass Condition="'$(AndroidPythonServiceClass)' == ''">com.fox.mfa.python.ServiceMfaagent</AndroidPythonServiceClass>
+        <AndroidPythonAgentEntryPoint Condition="'$(AndroidPythonAgentEntryPoint)' == ''"></AndroidPythonAgentEntryPoint>
+        <!--
+          中文：所有 Android 构建默认内置仓库中固定版本的官方 Shizuku APK；必要时仍可通过 /p:AndroidBundledShizukuApk=绝对路径覆盖。
+          English: Every Android build bundles the pinned official Shizuku APK stored in this repository by default; /p:AndroidBundledShizukuApk=AbsolutePath can still override it when necessary.
+        -->
+        <AndroidBundledShizukuApk Condition="'$(AndroidBundledShizukuApk)' == ''">$(MSBuildProjectDirectory)\ThirdParty\Shizuku\shizuku.apk</AndroidBundledShizukuApk>
+        <AndroidBundledShizukuSha256 Condition="'$(AndroidBundledShizukuSha256)' == ''">6E273AB0E991C4E79BC8B1BBB9B9DD739CCAC1A8712A541A214078886B7B790F</AndroidBundledShizukuSha256>
     </PropertyGroup>
 
     <ItemGroup>
-        <AndroidResource Include="Icon.png">
+        <AndroidResource Include="$(AndroidLauncherIcon)">
             <Link>Resources\drawable\Icon.png</Link>
         </AndroidResource>
+        <AndroidJavaSource Include="Java\com\fox\MFAAvalonia\MfaShizukuUserService.java" />
+        <AndroidJavaSource Include="Java\com\fox\MFAAvalonia\MfaShellServiceStarter.java" />
+        <AndroidJavaSource Include="Java\com\fox\MFAAvalonia\MfaShellServiceProvider.java" />
+        <AndroidJavaSource Include="Java\com\fox\MFAAvalonia\MfaNativeBridge.java" />
+        <AndroidJavaSource Include="Java\com\fox\MFAAvalonia\MfaOverlaySurface.java" />
+    </ItemGroup>
+
+    <Target Name="ValidateAndroidLauncherIcon" BeforeTargets="PrepareForBuild">
+        <Error Condition="!Exists('$(AndroidLauncherIcon)')" Text="Android Launcher icon does not exist: $(AndroidLauncherIcon)" />
+        <Error Condition="'$([System.IO.Path]::GetExtension($(AndroidLauncherIcon)))' != '.png'" Text="Android Launcher icon must be a PNG file: $(AndroidLauncherIcon)" />
+    </Target>
+
+    <ItemGroup Condition="'$(AndroidPythonRuntimeAar)' != ''">
+        <AndroidLibrary Include="$(AndroidPythonRuntimeAar)" Bind="false" />
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>MFA.Android.PythonServiceClass</_Parameter1>
+            <_Parameter2>$(AndroidPythonServiceClass)</_Parameter2>
+        </AssemblyAttribute>
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>MFA.Android.PythonAgentEntryPoint</_Parameter1>
+            <_Parameter2>$(AndroidPythonAgentEntryPoint)</_Parameter2>
+        </AssemblyAttribute>
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Avalonia.Android" Version="11.3.12" />
-        <PackageReference Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.1"/>
+        <AndroidAsset Include="$(AndroidBundledShizukuApk)" Link="MfaDependencies\shizuku.apk" />
     </ItemGroup>
 
+    <Target Name="ValidateAndroidBundledShizukuApk" BeforeTargets="PrepareForBuild">
+        <Error Condition="!Exists('$(AndroidBundledShizukuApk)')" Text="Bundled Shizuku APK does not exist: $(AndroidBundledShizukuApk)" />
+        <Error Condition="'$([System.IO.Path]::GetExtension($(AndroidBundledShizukuApk)))' != '.apk'" Text="AndroidBundledShizukuApk must be an APK file: $(AndroidBundledShizukuApk)" />
+        <GetFileHash Files="$(AndroidBundledShizukuApk)" Algorithm="SHA256">
+            <Output TaskParameter="Items" ItemName="_AndroidBundledShizukuHash" />
+        </GetFileHash>
+        <Error Condition="'@(_AndroidBundledShizukuHash->'%(FileHash)')' != '$(AndroidBundledShizukuSha256)'"
+               Text="Bundled Shizuku APK SHA-256 mismatch. Expected $(AndroidBundledShizukuSha256), got @(_AndroidBundledShizukuHash->'%(FileHash)')." />
+    </Target>
+
+    <Target Name="ValidateAndroidPythonRuntime" BeforeTargets="PrepareForBuild" Condition="'$(AndroidPythonRuntimeAar)' != ''">
+        <Error Condition="!Exists('$(AndroidPythonRuntimeAar)')" Text="python-for-android AAR does not exist: $(AndroidPythonRuntimeAar)" />
+        <Error Condition="'$(AndroidPythonServiceClass)' == ''" Text="AndroidPythonServiceClass must be set when AndroidPythonRuntimeAar is enabled." />
+    </Target>
+
     <ItemGroup>
-        <ProjectReference Include="..\MFAAvalonia\MFAAvalonia.csproj"/>
+        <PackageReference Update="Packaging.Targets" Version="0.1.232" />
+        <!--
+          Avalonia.Android 11.3.12 writes AccessibilityNodeInfoCompat.Checked to the
+          ToggleNodeInfoProvider instance and crashes when Android queries accessibility nodes.
+          The upstream fix is AvaloniaUI/Avalonia#20686, released in 11.3.13.
+        -->
+        <PackageReference Include="Avalonia.Android" Version="11.3.13" />
+        <!-- Keep the Android native runtime ABI aligned with the Maa.Framework binding. -->
+        <PackageReference Include="Maa.Framework.Runtime.android-arm64" Version="5.12.3" GeneratePathProperty="true" />
+        <PackageReference Include="Maa.Framework.Runtime.android-x64" Version="5.12.3" GeneratePathProperty="true" />
+        <PackageReference Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.1" />
+        <PackageReference Include="Xamarin.AndroidX.Annotation" Version="1.10.0" />
+        <AndroidMavenLibrary Include="dev.rikka.shizuku:aidl" Version="13.1.5" Bind="true" />
+        <AndroidMavenLibrary Include="dev.rikka.shizuku:shared" Version="13.1.5" Bind="true" />
+        <AndroidMavenLibrary Include="dev.rikka.shizuku:api" Version="13.1.5" Bind="true" />
+        <AndroidMavenLibrary Include="dev.rikka.shizuku:provider" Version="13.1.5" Bind="true" />
+    </ItemGroup>
+
+    <!--
+      中文：以下资源仅在 AndroidEmbedResourcePackage=true 时进入 APK；默认空壳构建不会生成、内嵌或提取这些文件。
+      English: The following assets enter the APK only when AndroidEmbedResourcePackage=true; the default shell build does not create, embed, or extract them.
+    -->
+    <ItemGroup Condition="'$(AndroidEmbedResourcePackage)' == 'true'">
+        <AndroidAsset Include="$(AndroidResourcePackageArchive)" Link="MfaPackage\package.zip" />
+        <AndroidAsset Include="$(AndroidResourcePackageFingerprint)" Link="MfaPackage\package.sha256" />
+    </ItemGroup>
+
+    <Target Name="ValidateAndroidResourcePackage" BeforeTargets="PrepareAndroidResourcePackage" Condition="'$(AndroidEmbedResourcePackage)' == 'true'">
+        <Error Condition="'$(AndroidResourcePackageSource)' == ''" Text="AndroidResourcePackageSource 未设置 / is not set. 请指定资源包根目录 / Specify the resource-package root directory." />
+        <Error Condition="!Exists('$(AndroidResourcePackageSource)')" Text="AndroidResourcePackageSource 不存在 / does not exist: $(AndroidResourcePackageSource)" />
+        <Error Condition="!Exists('$(AndroidResourcePackageSource)\interface.json') And !Exists('$(AndroidResourcePackageSource)\interface.jsonc')" Text="资源包根目录必须包含 interface.json 或 interface.jsonc / The resource-package root must contain interface.json or interface.jsonc: $(AndroidResourcePackageSource)" />
+    </Target>
+
+    <Target Name="PrepareAndroidResourcePackage" BeforeTargets="PrepareForBuild" DependsOnTargets="ValidateAndroidResourcePackage" Condition="'$(AndroidEmbedResourcePackage)' == 'true'">
+        <PropertyGroup>
+            <_AndroidResourceSource Condition="Exists('$(AndroidResourcePackageSource)\resource')">$(AndroidResourcePackageSource)\resource</_AndroidResourceSource>
+            <_AndroidResourceSource Condition="'$(_AndroidResourceSource)' == '' And Exists('$(AndroidResourcePackageSource)\Resource')">$(AndroidResourcePackageSource)\Resource</_AndroidResourceSource>
+        </PropertyGroup>
+
+        <ItemGroup>
+            <_AndroidAgentFile Include="$(AndroidResourcePackageSource)\agent\**\*" Condition="Exists('$(AndroidResourcePackageSource)\agent')" />
+            <_AndroidConfigFile Include="$(AndroidResourcePackageSource)\config\**\*" Condition="Exists('$(AndroidResourcePackageSource)\config')" />
+            <_AndroidDataFile Include="$(AndroidResourcePackageSource)\data\**\*" Condition="Exists('$(AndroidResourcePackageSource)\data')" />
+            <_AndroidLocalesFile Include="$(AndroidResourcePackageSource)\locales\**\*" Condition="Exists('$(AndroidResourcePackageSource)\locales')" />
+            <_AndroidPythonFile Include="$(AndroidResourcePackageSource)\python\**\*" Condition="Exists('$(AndroidResourcePackageSource)\python')" />
+            <_AndroidResourceFile Include="$(_AndroidResourceSource)\**\*" Condition="'$(_AndroidResourceSource)' != ''" />
+            <_AndroidTaskFile Include="$(AndroidResourcePackageSource)\tasks\**\*" Condition="Exists('$(AndroidResourcePackageSource)\tasks')" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\interface.json" Condition="Exists('$(AndroidResourcePackageSource)\interface.json')" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\interface.jsonc" Condition="Exists('$(AndroidResourcePackageSource)\interface.jsonc')" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\changes.json" Condition="Exists('$(AndroidResourcePackageSource)\changes.json')" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\CONTACT*" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\LICENSE*" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\README*" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\requirements*.txt" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\*.ico" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\*.jpg" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\*.jpeg" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\*.png" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\*.webp" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\*.md" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\.python-version" Condition="Exists('$(AndroidResourcePackageSource)\.python-version')" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\pyproject.toml" Condition="Exists('$(AndroidResourcePackageSource)\pyproject.toml')" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\uv.lock" Condition="Exists('$(AndroidResourcePackageSource)\uv.lock')" />
+            <_AndroidRootFile Include="$(AndroidResourcePackageSource)\maa-project.json" Condition="Exists('$(AndroidResourcePackageSource)\maa-project.json')" />
+        </ItemGroup>
+
+        <MakeDir Directories="$(AndroidResourcePackageStagingDirectory)" />
+        <Copy SourceFiles="@(_AndroidAgentFile)" DestinationFiles="@(_AndroidAgentFile->'$(AndroidResourcePackageStagingDirectory)\agent\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+        <Copy SourceFiles="@(_AndroidConfigFile)" DestinationFiles="@(_AndroidConfigFile->'$(AndroidResourcePackageStagingDirectory)\config\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+        <Copy SourceFiles="@(_AndroidDataFile)" DestinationFiles="@(_AndroidDataFile->'$(AndroidResourcePackageStagingDirectory)\data\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+        <Copy SourceFiles="@(_AndroidLocalesFile)" DestinationFiles="@(_AndroidLocalesFile->'$(AndroidResourcePackageStagingDirectory)\locales\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+        <Copy SourceFiles="@(_AndroidPythonFile)" DestinationFiles="@(_AndroidPythonFile->'$(AndroidResourcePackageStagingDirectory)\python\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+        <Copy SourceFiles="@(_AndroidResourceFile)" DestinationFiles="@(_AndroidResourceFile->'$(AndroidResourcePackageStagingDirectory)\resource\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+        <Copy SourceFiles="@(_AndroidTaskFile)" DestinationFiles="@(_AndroidTaskFile->'$(AndroidResourcePackageStagingDirectory)\tasks\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+        <RemoveDuplicates Inputs="@(_AndroidRootFile)">
+            <Output TaskParameter="Filtered" ItemName="_AndroidUniqueRootFile" />
+        </RemoveDuplicates>
+        <Copy SourceFiles="@(_AndroidUniqueRootFile)" DestinationFolder="$(AndroidResourcePackageStagingDirectory)" SkipUnchangedFiles="true" />
+        <MakeDir Directories="$(AndroidResourcePackageWorkDirectory)" />
+        <ZipDirectory SourceDirectory="$(AndroidResourcePackageStagingDirectory)" DestinationFile="$(AndroidResourcePackageArchive)" Overwrite="true" />
+        <GetFileHash Files="$(AndroidResourcePackageArchive)" Algorithm="SHA256" HashEncoding="hex">
+            <Output TaskParameter="Items" ItemName="_AndroidResourcePackageHash" />
+        </GetFileHash>
+        <WriteLinesToFile File="$(AndroidResourcePackageFingerprint)" Lines="@(_AndroidResourcePackageHash->'%(FileHash)')" Overwrite="true" />
+        <RemoveDir Directories="$(AndroidResourcePackageStagingDirectory)" ContinueOnError="WarnAndContinue" />
+    </Target>
+
+    <Target Name="CleanupAndroidResourcePackage" AfterTargets="_GenerateAndroidAssetsDir" Condition="'$(AndroidEmbedResourcePackage)' == 'true'">
+        <Delete Files="$(AndroidResourcePackageArchive);$(AndroidResourcePackageFingerprint)" ContinueOnError="WarnAndContinue" />
+        <RemoveDir Directories="$(AndroidResourcePackageStagingDirectory)" ContinueOnError="WarnAndContinue" />
+    </Target>
+
+    <ItemGroup>
+        <AndroidNativeLibrary Remove="Native/build-arm64/**/*.so" />
+        <AndroidNativeLibrary Remove="Native/build-x64/**/*.so" />
+        <!--
+          GeneratePathProperty on the PackageReference creates these Pkg* properties using the
+          actual restored package path. Avoid composing NuGetPackageRoot with a hard-coded version
+          and Windows separators: that evaluated on Windows but produced no native items on the
+          Ubuntu release runner.
+        -->
+        <AndroidNativeLibrary Include="$(PkgMaa_Framework_Runtime_android-arm64)/bin/*.so" Abi="arm64-v8a" Condition="'$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == 'android-arm64'" />
+        <AndroidNativeLibrary Include="$(PkgMaa_Framework_Runtime_android-x64)/bin/*.so" Abi="x86_64" Condition="'$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == 'android-x64'" />
+    </ItemGroup>
+
+    <Target Name="ValidateAndroidMaaFrameworkNativeLibraries" BeforeTargets="PrepareForBuild">
+        <ItemGroup>
+            <_AndroidMaaFrameworkNativeLibrary Include="@(AndroidNativeLibrary)"
+                                               Condition="'%(AndroidNativeLibrary.Filename)%(AndroidNativeLibrary.Extension)' == 'libMaaFramework.so'" />
+        </ItemGroup>
+        <Error Condition="'@(_AndroidMaaFrameworkNativeLibrary)' == ''"
+               Text="MaaFramework Android native libraries were not resolved for $(RuntimeIdentifier). Check the Maa.Framework.Runtime.android-* package paths." />
+    </Target>
+
+    <ItemGroup>
+        <ProjectReference Include="..\MFAAvalonia\MFAAvalonia.csproj" GlobalPropertiesToRemove="RuntimeIdentifier;RuntimeIdentifiers" />
     </ItemGroup>
 </Project>

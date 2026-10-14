@@ -332,6 +332,20 @@ namespace Markdown.Avalonia.Html.Core.Utils
         /// </summary>
         public static Brush? GetBackgroundColor(HtmlNode node)
         {
+            var bgcolor = node.Attributes["bgcolor"]?.Value;
+            if (!string.IsNullOrWhiteSpace(bgcolor))
+            {
+                try
+                {
+                    return ParseColorToBrush(bgcolor.Trim());
+                }
+                catch
+                {
+                    // Fall through to the CSS declaration when the legacy
+                    // attribute contains an invalid color.
+                }
+            }
+
             var styleAttr = node.Attributes["style"]?.Value;
             if (string.IsNullOrEmpty(styleAttr)) return null;
 

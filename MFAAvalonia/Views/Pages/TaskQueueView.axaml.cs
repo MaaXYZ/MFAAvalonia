@@ -93,6 +93,7 @@ public partial class TaskQueueView : UserControl
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         UpdateViewModelSubscription(DataContext as TaskQueueViewModel);
+        ApplyLiveViewCardState();
     }
 
     private TaskQueueViewModel? _subscribedViewModel;
@@ -114,6 +115,7 @@ public partial class TaskQueueView : UserControl
             _subscribedViewModel.SetOptionRequested += OnSetOptionRequested;
             _subscribedViewModel.TaskItemViewModels.CollectionChanged += OnTaskItemsCollectionChanged;
             Dispatcher.UIThread.Post(ClearUnsupportedSelection, DispatcherPriority.Background);
+            Dispatcher.UIThread.Post(ApplyLiveViewCardState, DispatcherPriority.Background);
         }
     }
 
@@ -847,51 +849,20 @@ public partial class TaskQueueView : UserControl
 
     private void GeneratePanelContent(StackPanel panel, DragItemViewModel dragItem)
     {
-
-        AddRepeatOption(panel, dragItem);
-
-        if (dragItem.InterfaceItem?.Option != null)
-        {
-            // 使用 ToList() 创建副本，避免遍历时修改集合导致异常
-            foreach (var option in dragItem.InterfaceItem.Option.ToList())
-            {
-                AddOption(panel, option, dragItem);
-            }
-        }
-
-        if (dragItem.InterfaceItem?.Advanced != null)
-        {
-            foreach (var option in dragItem.InterfaceItem.Advanced.ToList())
-            {
-                AddAdvancedOption(panel, option);
-            }
-        }
-
+        if (DataContext is TaskQueueViewModel vm)
+            new TaskOptionGenerator(vm, SaveConfiguration).GeneratePanelContent(panel, dragItem);
     }
 
     private void GenerateCommonPanelContent(StackPanel panel, DragItemViewModel dragItem)
     {
-        AddRepeatOption(panel, dragItem);
-
-        if (dragItem.InterfaceItem?.Option != null)
-        {
-            // 使用 ToList() 创建副本，避免遍历时修改集合导致异常
-            foreach (var option in dragItem.InterfaceItem.Option.ToList())
-            {
-                AddOption(panel, option, dragItem);
-            }
-        }
+        if (DataContext is TaskQueueViewModel vm)
+            new TaskOptionGenerator(vm, SaveConfiguration).GenerateCommonPanelContent(panel, dragItem);
     }
 
     private void GenerateAdvancedPanelContent(StackPanel panel, DragItemViewModel dragItem)
     {
-        if (dragItem.InterfaceItem?.Advanced != null)
-        {
-            foreach (var option in dragItem.InterfaceItem.Advanced.ToList())
-            {
-                AddAdvancedOption(panel, option);
-            }
-        }
+        if (DataContext is TaskQueueViewModel vm)
+            new TaskOptionGenerator(vm, SaveConfiguration).GenerateAdvancedPanelContent(panel, dragItem);
     }
 
     /// <summary>
@@ -899,42 +870,8 @@ public partial class TaskQueueView : UserControl
     /// </summary>
     private void GenerateResourceOptionPanelContent(StackPanel panel, DragItemViewModel dragItem)
     {
-        if (dragItem.ResourceItem?.SelectOptions == null)
-            return;
-
-        // 收集所有子选项名称（这些选项不应该在顶级显示）
-        var subOptionNames = new HashSet<string>();
-        foreach (var selectOption in dragItem.ResourceItem.SelectOptions)
-        {
-            if (MaaProcessor.Interface?.Option?.TryGetValue(selectOption.Name ?? string.Empty, out var interfaceOption) == true)
-            {
-                // 收集所有 case 中定义的子选项
-                if (interfaceOption.Cases != null)
-                {
-                    foreach (var caseOption in interfaceOption.Cases)
-                    {
-                        if (caseOption.Option != null)
-                        {
-                            foreach (var subOptionName in caseOption.Option)
-                            {
-                                subOptionNames.Add(subOptionName);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 只显示顶级选项（不是子选项的选项）
-        foreach (var selectOption in dragItem.ResourceItem.SelectOptions)
-        {
-            //跳过子选项，它们会在父选项的 UpdateSubOptions 中动态添加
-            if (subOptionNames.Contains(selectOption.Name ?? string.Empty))
-                continue;
-
-            // 复用 AddOption 方法，它会根据 option 类型创建相应的控件
-            AddOption(panel, selectOption, dragItem);
-        }
+        if (DataContext is TaskQueueViewModel vm)
+            new TaskOptionGenerator(vm, SaveConfiguration).GenerateResourceOptionPanelContent(panel, dragItem);
     }
 
     private void HideCurrentPanel(string key)
@@ -1018,6 +955,8 @@ public partial class TaskQueueView : UserControl
             Margin = new Thickness(0, 2, 0, 2),
             Increment = 1,
             Minimum = -1,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Classes = { "TaskOptionLikeCombo" },
         };
         numericUpDown.Bind(IsEnabledProperty, new Binding("Idle")
         {
@@ -1904,7 +1843,7 @@ public partial class TaskQueueView : UserControl
     }
 
     /// </summary>
-    private static string? GetTooltipText(string? description, List<string>? document)
+    internal static string? GetTooltipText(string? description, List<string>? document)
     {
         // 优先使用 Description
         if (!string.IsNullOrWhiteSpace(description))
@@ -2841,9 +2780,9 @@ public partial class TaskQueueView : UserControl
 
     private void OnTaskQueueViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(TaskQueueViewModel.IsLiveViewVisible))
+        if (e.PropertyName == nameof(TaskQueueViewModel.EnableLiveView))
         {
-            // ApplyLiveViewCardState();
+            ApplyLiveViewCardState();
             return;
         }
 
@@ -2908,8 +2847,6 @@ public partial class TaskQueueView : UserControl
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        // ApplyLiveViewCardState();
-
         TopToolbar.SizeChanged += OnTopToolbarSizeChanged;
         Dispatcher.UIThread.Post(() => UpdateTopToolbarLayout(true), DispatcherPriority.Render);
         Dispatcher.UIThread.Post(ClearUnsupportedSelection, DispatcherPriority.Background);
@@ -2918,6 +2855,17 @@ public partial class TaskQueueView : UserControl
         LanguageHelper.LanguageChanged += OnLanguageChanged;
 
         UpdateViewModelSubscription(DataContext as TaskQueueViewModel);
+        ApplyLiveViewCardState();
+    }
+
+    private void ApplyLiveViewCardState()
+    {
+        if (DataContext is not TaskQueueViewModel vm || LiveViewCard == null)
+        {
+            return;
+        }
+
+        LiveViewCard.IsVisible = vm.EnableLiveView;
     }
 
     private void OnSetOptionRequested(DragItemViewModel item, bool value)

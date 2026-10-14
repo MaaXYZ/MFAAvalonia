@@ -41,11 +41,9 @@ namespace Markdown.Avalonia.Html.Core.Parsers
                 Content = Create(manager.Engine, manager.Grouping(manager.ParseChildrenJagging(content))),
             };
 
-            if (node.Attributes["open"] is HtmlAttribute openAttr
-                && bool.TryParse(openAttr.Value, out var isOpened))
-            {
-                expander.IsExpanded = isOpened;
-            }
+            // HTML boolean attributes are enabled by presence; values such as
+            // open="open" and an empty open attribute are both valid.
+            expander.IsExpanded = node.Attributes["open"] is not null;
 
             generated = [expander];
             return true;

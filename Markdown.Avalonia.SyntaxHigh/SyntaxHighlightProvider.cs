@@ -14,6 +14,7 @@ using System.IO;
 using System.Text;
 using System.Xml;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using TextMateSharp.Grammars;
 
@@ -32,6 +33,7 @@ namespace Markdown.Avalonia.SyntaxHigh
         // 缓存已安装 TextMate 的编辑器及其对应的 scopeName，用于主题切换时重新应用高亮
         private static readonly Dictionary<TextEditor, (TextMate.Installation Installation, string ScopeName)> _textMateInstallations =
             new();
+        private static readonly ConditionalWeakTable<TextEditor, object> _lifecycleSubscriptions = new();
         private static readonly Lock _installLock = new();
         // 是否已订阅主题变更事件
         private static bool _isThemeChangeSubscribed = false;
@@ -113,7 +115,7 @@ namespace Markdown.Avalonia.SyntaxHigh
                     try
                     {
                         // 释放旧的安装
-                        kvp.Value.Installation.Dispose();
+                        DisposeInstallation(editor, kvp.Value.Installation);
                         _textMateInstallations.Remove(editor);
 
                         // 使用新的 RegistryOptions 重新安装 TextMate
@@ -189,18 +191,23 @@ namespace Markdown.Avalonia.SyntaxHigh
                         installation.SetGrammar(scopeName);
                         _textMateInstallations[editor] = (installation, scopeName);
 
-                        // 当编辑器被卸载时清理缓存
-                        editor.DetachedFromVisualTree += (s, e) =>
+                        // Subscribe once per editor. A virtualized editor may be
+                        // detached/attached many times during its lifetime.
+                        if (!_lifecycleSubscriptions.TryGetValue(editor, out _))
                         {
-                            lock (_installLock)
+                            editor.DetachedFromVisualTree += (s, e) =>
                             {
-                                if (_textMateInstallations.TryGetValue(editor, out var inst))
+                                lock (_installLock)
                                 {
-                                    inst.Installation.Dispose();
-                                    _textMateInstallations.Remove(editor);
+                                    if (_textMateInstallations.TryGetValue(editor, out var inst))
+                                    {
+                                        DisposeInstallation(editor, inst.Installation);
+                                        _textMateInstallations.Remove(editor);
+                                    }
                                 }
-                            }
-                        };
+                            };
+                            _lifecycleSubscriptions.Add(editor, new object());
+                        }
                     }
                     else
                     {
@@ -216,6 +223,24 @@ namespace Markdown.Avalonia.SyntaxHigh
             catch (Exception)
             {
                 // TextMate 高亮失败时静默处理，编辑器将显示无高亮的纯文本
+            }
+        }
+
+        /// <summary>
+        /// Completely removes a TextMate installation from an editor.
+        /// AvaloniaEdit.TextMate 11.4.1 disposes its coloring transformer but
+        /// leaves it in LineTransformers. Reusing that disposed transformer can
+        /// prevent asynchronous grammars (for example JavaScript) from being
+        /// redrawn after a virtualized control is attached again.
+        /// </summary>
+        private static void DisposeInstallation(TextEditor editor, TextMate.Installation installation)
+        {
+            installation.Dispose();
+
+            var lineTransformers = editor.TextArea.TextView.LineTransformers;
+            foreach (var transformer in lineTransformers.OfType<TextMateColoringTransformer>().ToArray())
+            {
+                lineTransformers.Remove(transformer);
             }
         }
 

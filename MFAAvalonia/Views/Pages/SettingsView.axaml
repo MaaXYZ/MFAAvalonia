@@ -30,7 +30,8 @@
             Margin="20,24,0,0"
             Text="{markup:I18n {x:Static helper:LangKeys.Settings}}" />
         <suki:SukiStackPage Margin="16,0,16,16" Name="Settings">
-            <suki:SettingsLayout Name="SettingsLayout" ScrollAnimationSpeed="3" MinWidthWhetherStackSummaryShow="700" StackSummaryWidth="220">
+            <suki:SettingsLayout Name="SettingsLayout" ScrollAnimationSpeed="3" MinWidthWhetherStackSummaryShow="700"
+                                 StackSummaryWidth="220">
                 <suki:SettingsLayout.Items>
                     <suki:SettingsLayoutItem
                         Content="{extensions:ServiceProvider ServiceType={x:Type settings:ConfigurationMgrUserControl}}"

@@ -33,6 +33,10 @@ namespace ColorTextBlock.Avalonia.Geometries
         {
             get => Owner is null ? false : Owner.IsUnderline;
         }
+        public CTextUnderlineStyle UnderlineStyle
+        {
+            get => Owner?.UnderlineStyle ?? CTextUnderlineStyle.Solid;
+        }
         public bool IsStrikethrough
         {
             get => Owner is null ? false : Owner.IsStrikethrough;

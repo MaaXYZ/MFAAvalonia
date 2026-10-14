@@ -30,6 +30,7 @@ public class HotkeyIpcServer : IDisposable
     private bool _isRunning;
     private bool _disposed;
     private int _actualPort;
+    private Task? _acceptTask;
 
     public event Action<HotkeyMessage>? MessageReceived;
     public event Action<string>? ClientConnected;
@@ -68,8 +69,8 @@ public class HotkeyIpcServer : IDisposable
             LoggerHelper.Error("热键 IPC 服务端启动失败：未找到可用端口。");
             return Task.CompletedTask;
         }
-        _ = Task.Run(AcceptClientsAsync);
-        return Task.CompletedTask;
+        _acceptTask = Task.Run(AcceptClientsAsync);
+        return _acceptTask;
     }
 
     private void SavePortToFile(int port)
@@ -122,6 +123,7 @@ public class HotkeyIpcServer : IDisposable
             }
             catch (OperationCanceledException) { break; }
             catch (ObjectDisposedException) { break; }
+            catch (SocketException) when (_cts.IsCancellationRequested || !_isRunning) { break; }
             catch (Exception ex)
             {
                 LoggerHelper.Warning($"热键 IPC 服务端接受连接失败：原因={ex.Message}");

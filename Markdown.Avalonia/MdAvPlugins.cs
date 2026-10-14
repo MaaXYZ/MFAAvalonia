@@ -2,6 +2,7 @@
 using Markdown.Avalonia.Plugins;
 using Markdown.Avalonia.Svg;
 using Markdown.Avalonia.SyntaxHigh;
+using Markdown.Avalonia.Math;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -24,6 +25,7 @@ namespace Markdown.Avalonia.Full
             var hasSyntaxHigh = false;
             var hasSvgFormat = false;
             var hasHtml = false;
+            var hasMath = false;
 
             SyntaxHighlight? syntaxPlugin = null;
 
@@ -48,6 +50,7 @@ namespace Markdown.Avalonia.Full
                 }
                 hasSvgFormat |= plugin is SvgFormat;
                 hasHtml |= plugin is HtmlPlugin;
+                hasMath |= plugin is MathPlugin;
             }
 
             if (!hasSyntaxHigh)
@@ -68,6 +71,11 @@ namespace Markdown.Avalonia.Full
                 if (syntaxPlugin != null)
                     htmlPlugin.Inject([syntaxPlugin]);
                 htmlPlugin.Setup(setupInf);
+            }
+
+            if (!hasMath)
+            {
+                new MathPlugin().Setup(setupInf);
             }
 
             if (PathResolver is not null)

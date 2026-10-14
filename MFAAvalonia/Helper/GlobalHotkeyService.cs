@@ -9,6 +9,7 @@ using SharpHook.Native;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Windows.Input;
 
@@ -22,6 +23,7 @@ public static class GlobalHotkeyService
     private static HotkeyPrimaryElection? _election;
     private static HotkeyIpcServer? _server;
     private static HotkeyIpcClient? _client;
+    private static Task? _hookTask;
 
     public static bool IsStopped { get; private set; }
     public static bool IsPrimary => _election?.IsPrimary == true;
@@ -33,6 +35,7 @@ public static class GlobalHotkeyService
             return;
         if (_election != null) return;if (Design.IsDesignMode)
             return;
+        IsStopped = false;
         // 使用全局互斥锁选举主进程
         // 与 Program.IsNewInstance 不同，这里对所有 MFAAvalonia 实例生效（不区分目录）
         _election = new HotkeyPrimaryElection();
@@ -48,10 +51,11 @@ public static class GlobalHotkeyService
         try
         {
             _server = new HotkeyIpcServer();
-            _ = _server.StartAsync();
+            ObserveBackgroundTask(_server.StartAsync(), "启动热键 IPC 服务");
             _hook = new SimpleGlobalHook();
             _hook.KeyPressed += HandleKeyEvent;
-            _hook.RunAsync();
+            _hookTask = _hook.RunAsync();
+            ObserveBackgroundTask(_hookTask, "运行全局热键 Hook");
             var saved = HotkeyPrimaryElection.LoadState();
             if (saved != null) LoggerHelper.Info($"全局热键服务：已恢复 {saved.Length} 个热键。");
             IsEnabled = true;
@@ -206,6 +210,30 @@ public static class GlobalHotkeyService
         return false;
     }
 
+    private static async void ObserveBackgroundTask(Task task, string operation)
+    {
+        try
+        {
+            await task;
+        }
+        catch (OperationCanceledException) when (IsStopped)
+        {
+            LoggerHelper.Debug($"全局热键服务关闭时已取消：{operation}");
+        }
+        catch (SocketException ex) when (IsStopped || ex.SocketErrorCode is SocketError.OperationAborted or SocketError.Interrupted)
+        {
+            LoggerHelper.Debug($"全局热键服务关闭连接时已忽略：{operation}，原因={ex.Message}");
+        }
+        catch (HookException ex) when (IsStopped)
+        {
+            LoggerHelper.Debug($"全局热键服务关闭 Hook 时已忽略：{operation}，原因={ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"全局热键后台任务失败：操作={operation}，原因={ex.Message}");
+        }
+    }
+
     public static void Unregister(KeyGesture? g)
     {
         if (g == null) return;
@@ -226,12 +254,23 @@ public static class GlobalHotkeyService
 
     public static void Shutdown()
     {
+        if (IsStopped) return;
+        IsStopped = true;
+
         if (_hook != null)
         {
             _hook.KeyPressed -= HandleKeyEvent;
-            _hook.Dispose();
+            try
+            {
+                _hook.Dispose();
+            }
+            catch (HookException ex)
+            {
+                LoggerHelper.Warning($"停止全局热键 Hook 失败，已继续退出：{ex.Message}");
+            }
             _hook = null;
         }
+        _hookTask = null;
         _client?.Dispose();
         _client = null;
         _server?.Dispose();
@@ -240,7 +279,6 @@ public static class GlobalHotkeyService
         _election = null;
         _commands.Clear();
         _owners.Clear();
-        IsStopped = true;
         IsEnabled = false;
         HotkeyPrimaryElection.ClearState();
     }

@@ -1,0 +1,560 @@
+Exit code: 0
+Wall time: 2.1 seconds
+Output:
+name: Android resource APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Resource project integration settings. Resource developers normally only
+# need to edit this block when copying the workflow to another repository.
+env:
+  PROJECT_NAME: MaaExample
+  APPLICATION_ID: io.github.example.maaexample
+  LAUNCHER_LABEL: MaaExample
+  LAUNCHER_ICON: android/icon.png
+  RESOURCE_ROOT: .
+  MFA_REPOSITORY: MaaXYZ/MFAAvalonia
+  MFA_REF: main
+  P4A_ENTRYPOINT: agent/main.py
+  P4A_REF: v2026.05.09
+  P4A_NDK_VERSION: 28.2.13676358
+  AVALONIA_VERSION: 11.3.13
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-android:
+    name: Build Android (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: android-arm64
+            abi: arm64-v8a
+            arch: arm64
+          - rid: android-x64
+            abi: x86_64
+            arch: x64
+
+    steps:
+      - name: Checkout MaaExample
+        uses: actions/checkout@v5
+        with:
+          path: resource-source
+          submodules: recursive
+
+      - name: Checkout MFAAvalonia Android shell
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.MFA_REPOSITORY }}
+          ref: ${{ env.MFA_REF }}
+          path: mfa-source
+
+      # The resolver below uses packaging's PEP 508 parser.  Install it
+      # before resolving requirements (the runner image does not guarantee it).
+      - name: Setup workflow Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install workflow parser dependencies
+        shell: bash
+        run: python -m pip install --upgrade pip packaging
+
+      - name: Resolve Android Python requirements
+        id: python_requirements
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          root = Path("resource-source") / os.environ.get("RESOURCE_ROOT", ".")
+          path = next(
+              (candidate for candidate in
+               (root / "requirements-android.txt", root / "requirements.txt")
+               if candidate.is_file()),
+              None,
+          )
+          requirements = []
+          if path:
+              for line_number, raw in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
+                  line = raw.strip()
+                  if not line or line.startswith("#"):
+                      continue
+                  if line.startswith(("-r", "--requirement", "-c", "--constraint")):
+                      raise SystemExit(
+                          f"Nested requirements are not supported: {path}:{line_number}"
+                      )
+                  if line.startswith("-"):
+                      raise SystemExit(
+                          f"Unsupported requirements option: {path}:{line_number}: {line}"
+                      )
+                  requirements.append(re.sub(r"\s+#.*$", "", line).strip())
+
+          if not any(re.match(r"^python\d*(?:[<>=!~].*)?$", item, re.I) for item in requirements):
+              requirements.insert(0, "python3")
+
+          maafw_version = ""
+          for requirement in requirements:
+              match = re.match(r"^maafw\s*==\s*([^;\s]+)", requirement, re.I)
+              if match:
+                  maafw_version = match.group(1)
+                  break
+          if not maafw_version:
+              raise SystemExit(
+                  "MaaExample Android build requires an exact maafw==VERSION requirement"
+              )
+          maafw_ref = f"v{maafw_version}"
+
+          # Resolve the Python distribution dependency closure at build time.
+          # Desktop-only MaaFw packages are intentionally excluded: Android uses
+          # the APK's native MaaFramework runtime and the checked-out pure-Python
+          # binding instead of maaagentbinary's desktop executables.
+          import json
+          import urllib.request
+          from packaging.requirements import InvalidRequirement, Requirement
+          from packaging.utils import canonicalize_name
+
+          excluded_distributions = {"maaagentbinary"}
+          resolved = []
+          seen = set()
+
+          def parse_requirement(requirement: str) -> Requirement:
+              try:
+                  return Requirement(requirement)
+              except InvalidRequirement as exc:
+                  raise SystemExit(f"Invalid Python requirement {requirement!r}: {exc}")
+
+          def normalized_requirement(parsed: Requirement) -> str:
+              extras = f"[{','.join(sorted(parsed.extras))}]" if parsed.extras else ""
+              return f"{parsed.name}{extras}{parsed.specifier}"
+
+          def add_requirement(requirement: str) -> None:
+              parsed = parse_requirement(requirement)
+              if parsed.marker and not parsed.marker.evaluate():
+                  return
+              name = canonicalize_name(parsed.name)
+              if not name or name in {"python3", "python"} or name in excluded_distributions or name in seen:
+                  return
+              seen.add(name)
+              resolved.append(normalized_requirement(parsed))
+              pinned = next(
+                  (specifier.version for specifier in parsed.specifier if specifier.operator == "==" and "*" not in specifier.version),
+                  None,
+              )
+              url = (
+                  f"https://pypi.org/pypi/{name}/{pinned}/json"
+                  if pinned
+                  else f"https://pypi.org/pypi/{name}/json"
+              )
+              try:
+                  with urllib.request.urlopen(url, timeout=30) as response:
+                      metadata = json.load(response).get("info", {})
+              except Exception as exc:
+                  raise SystemExit(f"Unable to resolve PyPI metadata for {requirement}: {exc}")
+              for dependency in metadata.get("requires_dist") or []:
+                  add_requirement(dependency)
+
+          for requirement in requirements:
+              if not re.match(r"^python\d*(?:[<>=!~].*)?$", requirement, re.I):
+                  add_requirement(requirement)
+          android_requirements = ["python3"] + resolved
+
+          with Path("requirements.env").open("a", encoding="utf-8") as output:
+              output.write(f"requirements={','.join(android_requirements)}\n")
+              output.write(f"maafw_version={maafw_version}\n")
+              output.write(f"maafw_ref={maafw_ref}\n")
+          print(f"requirements source: {path or 'default'}")
+          print(f"python-for-android requirements: {','.join(android_requirements)}")
+          print(f"MaaFramework Python ref: {maafw_ref}")
+          PY
+          cat requirements.env >> "$GITHUB_OUTPUT"
+
+      - name: Checkout matching MaaFramework Python binding
+        uses: actions/checkout@v5
+        with:
+          repository: MaaXYZ/MaaFramework
+          ref: ${{ steps.python_requirements.outputs.maafw_ref }}
+          path: maafw-python-source
+          sparse-checkout: source/binding/Python/maa
+
+      - name: Align and verify MFAAvalonia Android dependencies
+        id: mfa_source
+        shell: bash
+        env:
+          MAAFW_VERSION: ${{ steps.python_requirements.outputs.maafw_version }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import xml.etree.ElementTree as ET
+
+          avalonia_version = os.environ["AVALONIA_VERSION"]
+          avalonia_package_names = {
+              "Avalonia",
+              "Avalonia.Android",
+              "Avalonia.Controls.ColorPicker",
+              "Avalonia.Controls.DataGrid",
+              "Avalonia.Diagnostics",
+              "Avalonia.Fonts.Inter",
+              "Avalonia.Themes.Fluent",
+              "Avalonia.Themes.Simple",
+          }
+          maafw_runtime_package_names = {
+              "Maa.Framework.Runtimes",
+              "Maa.Framework.Runtime.android-arm64",
+              "Maa.Framework.Runtime.android-x64",
+          }
+          maafw_version = os.environ["MAAFW_VERSION"]
+          project_paths = [
+              Path("mfa-source/MFAAvalonia/MFAAvalonia.csproj"),
+              Path("mfa-source/MFAAvalonia.Android/MFAAvalonia.Android.csproj"),
+          ]
+          updated_avalonia_packages = set()
+          updated_maafw_runtime_packages = set()
+
+          for project_path in project_paths:
+              tree = ET.parse(project_path)
+              root = tree.getroot()
+              for reference in root.findall(".//PackageReference"):
+                  name = reference.get("Include")
+                  if name in avalonia_package_names:
+                      reference.set("Version", avalonia_version)
+                      updated_avalonia_packages.add(name)
+                  if name in maafw_runtime_package_names:
+                      reference.set("Version", maafw_version)
+                      updated_maafw_runtime_packages.add(name)
+
+              ET.indent(tree, space="    ")
+              tree.write(project_path, encoding="utf-8", xml_declaration=False)
+
+          adapter_path = Path("mfa-source/workflows/android/mfa_android_agent.py")
+          adapter_text = adapter_path.read_text(encoding="utf-8")
+          # The adapter preloads Maa before agent/main.py, so expose the APK's
+          # native MaaAgentServer directory before importing the binding.
+          native_dir_line = '        os.environ["MAA_FRAMEWORK_LIB_DIR"] = native_library_dir\n'
+          binary_path_line = '        os.environ.setdefault("MAAFW_BINARY_PATH", native_library_dir)\n'
+          if binary_path_line not in adapter_text:
+              if native_dir_line not in adapter_text:
+                  raise RuntimeError(
+                      "MFA Android adapter no longer exposes its native library directory"
+                  )
+              adapter_text = adapter_text.replace(
+                  native_dir_line,
+                  native_dir_line + binary_path_line,
+                  1,
+              )
+              adapter_path.write_text(adapter_text, encoding="utf-8")
+          if adapter_text.index(binary_path_line) > adapter_text.index(
+              "    _preload_maa_agent_binding()"
+          ):
+              raise RuntimeError(
+                  "MAAFW_BINARY_PATH must be set before Maa binding preload"
+              )
+
+          missing_avalonia_packages = avalonia_package_names - updated_avalonia_packages
+          if missing_avalonia_packages:
+              raise RuntimeError(
+                  "Expected Avalonia package references are missing: "
+                  f"{sorted(missing_avalonia_packages)}"
+              )
+          missing_maafw_runtime_packages = (
+              maafw_runtime_package_names - updated_maafw_runtime_packages
+          )
+          if missing_maafw_runtime_packages:
+              raise RuntimeError(
+                  "Expected MaaFramework runtime package references are missing: "
+                  f"{sorted(missing_maafw_runtime_packages)}"
+              )
+          PY
+
+          mfa_commit="$(git -C mfa-source rev-parse HEAD)"
+          echo "mfa_commit=$mfa_commit" >> "$GITHUB_OUTPUT"
+          echo "Using MFAAvalonia $MFA_REPOSITORY@$mfa_commit (requested ref: $MFA_REF)"
+          grep -F '<AndroidEnableMarshalMethods>false</AndroidEnableMarshalMethods>' \
+            mfa-source/MFAAvalonia.Android/MFAAvalonia.Android.csproj
+          grep -F '_AndroidLocalesFile' \
+            mfa-source/MFAAvalonia.Android/MFAAvalonia.Android.csproj
+          grep -F 'shizukuAuthority=$(ApplicationId).shizuku' \
+            mfa-source/MFAAvalonia.Android/MFAAvalonia.Android.csproj
+          grep -F 'fileProviderAuthority=$(ApplicationId).fileprovider' \
+            mfa-source/MFAAvalonia.Android/MFAAvalonia.Android.csproj
+          grep -E '"agent".*"python"' \
+            mfa-source/MFAAvalonia.Android/AndroidAssetBootstrap.cs
+          test -f mfa-source/MFAAvalonia.Android/AndroidCrashDiagnostics.cs
+          grep -F 'def _preload_maa_agent_binding() -> None:' \
+            mfa-source/workflows/android/mfa_android_agent.py
+          grep -F 'platform.system = lambda: "Linux"' \
+            mfa-source/workflows/android/mfa_android_agent.py
+          grep -F 'os.environ.setdefault("MAAFW_BINARY_PATH", native_library_dir)' \
+            mfa-source/workflows/android/mfa_android_agent.py
+          grep -Fx '        platform.system = original_system' \
+            mfa-source/workflows/android/mfa_android_agent.py
+          grep -Fx '    _preload_maa_agent_binding()' \
+            mfa-source/workflows/android/mfa_android_agent.py
+          grep -F 'protected override AutomationPeer OnCreateAutomationPeer() => new PreviewHostAutomationPeer(this);' \
+            mfa-source/MFAAvalonia.Android/AndroidVirtualDisplayPreviewHost.cs
+          if grep -E 'Include="Avalonia([."]|$).*Version="11\.3\.12"' \
+            mfa-source/MFAAvalonia/MFAAvalonia.csproj \
+            mfa-source/MFAAvalonia.Android/MFAAvalonia.Android.csproj; then
+            echo "[ERR] Avalonia 11.3.12 remains in MFA projects"
+            exit 1
+          fi
+
+      - name: Resolve APK metadata
+        id: metadata
+        shell: bash
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          echo "application_id=$APPLICATION_ID" >> "$GITHUB_OUTPUT"
+          echo "display_version=ci.${GITHUB_RUN_NUMBER}-${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "output_name=${PROJECT_NAME}-ci.${GITHUB_RUN_NUMBER}-${short_sha}-android-${{ matrix.arch }}.apk" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=${PROJECT_NAME}-ci.${GITHUB_RUN_NUMBER}-${short_sha}-android-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
+          launcher_icon=$(realpath -m "resource-source/$LAUNCHER_ICON")
+          resource_root=$(realpath resource-source)
+          case "$launcher_icon" in "$resource_root"/*) ;; *) echo "[ERR] launcher icon outside resource repository"; exit 1;; esac
+          test -f "$launcher_icon"
+          case "${launcher_icon,,}" in *.png) ;; *) echo "[ERR] launcher icon must be PNG"; exit 1;; esac
+          echo "launcher_label=$LAUNCHER_LABEL" >> "$GITHUB_OUTPUT"
+          echo "launcher_icon=$launcher_icon" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare Android resource payload
+        id: payload
+        shell: bash
+        run: |
+          source_root=$(realpath resource-source)
+          resource_root=$(realpath -m "resource-source/$RESOURCE_ROOT")
+          case "$resource_root/" in "$source_root/"*) ;; *) echo "[ERR] RESOURCE_ROOT must stay inside the repository"; exit 1;; esac
+          test -f "$resource_root/interface.json" || test -f "$resource_root/interface.jsonc"
+
+          payload_root="$RUNNER_TEMP/mfa-resource-${{ matrix.arch }}"
+          mkdir -p "$payload_root"
+          rsync -a --delete \
+            --exclude='.git/' --exclude='.github/' --exclude='.venv/' \
+            --exclude='node_modules/' --exclude='__pycache__/' \
+            "$resource_root/" "$payload_root/"
+
+          # Python source binding must match the native MaaFramework version.
+          mkdir -p "$payload_root/python"
+          cp -a maafw-python-source/source/binding/Python/maa "$payload_root/python/maa"
+          find "$payload_root" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+          find "$payload_root" -type d -name '__pycache__' -prune -exec rm -rf -- {} +
+          echo "root=$payload_root" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK, build tools and NDK
+        shell: bash
+        run: |
+          sdkmanager \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;$P4A_NDK_VERSION"
+
+      - name: Setup build Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install python-for-android host dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake ccache cmake gettext libffi-dev libltdl-dev \
+            libssl-dev libtool openjdk-17-jdk patch pkg-config unzip zip
+          python -m pip install --upgrade pip wheel setuptools packaging
+          git clone --depth 1 --branch "$P4A_REF" \
+            https://github.com/kivy/python-for-android.git "$RUNNER_TEMP/python-for-android"
+          python -m pip install --editable "$RUNNER_TEMP/python-for-android"
+
+      - name: Build python-for-android service AAR
+        id: python_runtime
+        shell: bash
+        env:
+          ANDROIDSDK: ${{ env.ANDROID_HOME }}
+          ANDROIDNDK: ${{ env.ANDROID_HOME }}/ndk/${{ env.P4A_NDK_VERSION }}
+          ANDROIDAPI: "36"
+          NDKAPI: "26"
+          P4A_REQUIREMENTS: ${{ steps.python_requirements.outputs.requirements }}
+        run: |
+          private_root="$RUNNER_TEMP/mfa-p4a-private-${{ matrix.arch }}"
+          mkdir -p "$private_root"
+          cp mfa-source/workflows/android/mfa_android_agent.py "$private_root/mfa_android_agent.py"
+
+          build_root="$RUNNER_TEMP/mfa-p4a-build-${{ matrix.arch }}"
+          mkdir -p "$build_root"
+          cd "$build_root"
+          p4a aar \
+            --private "$private_root" \
+            --package com.fox.mfa.python \
+            --name MFAAndroidPythonAgent \
+            --version 1.0 \
+            --bootstrap service_library \
+            --requirements "$P4A_REQUIREMENTS" \
+            --service mfaagent:mfa_android_agent.py \
+            --arch "${{ matrix.abi }}" \
+            --android-api 36 \
+            --ndk-api 26 \
+            --release
+
+          aar_path=$(find "$build_root" -type f -name '*.aar' -print -quit)
+          if [[ -z "$aar_path" ]]; then
+            echo "[ERR] python-for-android did not generate an AAR"
+            exit 1
+          fi
+
+          # Android 14+ requires a type for foreground services. p4a's
+          # service_library manifest omits it, while MFA deliberately starts
+          # the Agent with StartForegroundService so it survives game launch.
+          aar_manifest_dir="$RUNNER_TEMP/mfa-python-aar-manifest-${{ matrix.arch }}"
+          mkdir -p "$aar_manifest_dir"
+          unzip -q "$aar_path" AndroidManifest.xml -d "$aar_manifest_dir"
+          python - "$aar_manifest_dir/AndroidManifest.xml" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8")
+          marker = 'android:process=":service_mfaagent"'
+          replacement = marker + '\n            android:foregroundServiceType="dataSync"'
+          if 'android:foregroundServiceType=' not in text:
+              if marker not in text:
+                  raise SystemExit("[ERR] p4a Agent service was not found in the AAR manifest")
+              text = text.replace(marker, replacement, 1)
+              path.write_text(text, encoding="utf-8")
+          PY
+          (cd "$aar_manifest_dir" && zip -q -u "$aar_path" AndroidManifest.xml)
+          aar_entries="$RUNNER_TEMP/mfa-python-aar-${{ matrix.arch }}-entries.txt"
+          unzip -Z1 "$aar_path" > "$aar_entries"
+          if ! grep -Eq "^jni/${{ matrix.abi }}/libpython3\.[0-9]+\.so$" "$aar_entries"; then
+            echo "[ERR] AAR does not contain CPython for ${{ matrix.abi }}"
+            exit 1
+          fi
+          echo "aar=$aar_path" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+          config-file: mfa-source/NuGet.config
+
+      - name: Install .NET Android workload
+        run: dotnet workload install android --skip-manifest-update
+
+      - name: Restore MFAAvalonia Android dependencies
+        shell: bash
+        env:
+          NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+        working-directory: mfa-source
+        run: |
+          dotnet restore MFAAvalonia.Android/MFAAvalonia.Android.csproj \
+            -r "${{ matrix.rid }}" \
+            -p:AndroidSdkDirectory="$ANDROID_HOME"
+
+      - name: Build APK with MaaExample resources
+        shell: bash
+        env:
+          NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+          PAYLOAD_ROOT: ${{ steps.payload.outputs.root }}
+          LAUNCHER_ICON: ${{ steps.metadata.outputs.launcher_icon }}
+          LAUNCHER_LABEL: ${{ steps.metadata.outputs.launcher_label }}
+          PYTHON_AAR: ${{ steps.python_runtime.outputs.aar }}
+          APPLICATION_ID: ${{ steps.metadata.outputs.application_id }}
+          DISPLAY_VERSION: ${{ steps.metadata.outputs.display_version }}
+        working-directory: mfa-source
+        run: |
+          dotnet publish MFAAvalonia.Android/MFAAvalonia.Android.csproj \
+            -c Release \
+            -f net10.0-android \
+            -r "${{ matrix.rid }}" \
+            --no-restore \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" \
+            -p:AndroidEmbedResourcePackage=true \
+            "-p:ApplicationId=$APPLICATION_ID" \
+            "-p:ApplicationVersion=$GITHUB_RUN_NUMBER" \
+            "-p:ApplicationDisplayVersion=$DISPLAY_VERSION" \
+            "-p:AndroidResourcePackageSource=$PAYLOAD_ROOT" \
+            "-p:AndroidLauncherLabel=$LAUNCHER_LABEL" \
+            "-p:AndroidLauncherIcon=$LAUNCHER_ICON" \
+            "-p:AndroidPythonRuntimeAar=$PYTHON_AAR" \
+            "-p:AndroidPythonAgentEntryPoint=$P4A_ENTRYPOINT"
+
+          # Android 12 splash uses the same Icon drawable as the launcher.
+          grep -Rqs 'windowSplashScreenAnimatedIcon.*@drawable/Icon' MFAAvalonia.Android/Resources
+
+      - name: Verify and collect Android APK
+        id: apk
+        shell: bash
+        env:
+          OUTPUT_NAME: ${{ steps.metadata.outputs.output_name }}
+          APPLICATION_ID: ${{ steps.metadata.outputs.application_id }}
+        run: |
+          publish_dir="mfa-source/MFAAvalonia.Android/bin/Release/net10.0-android/${{ matrix.rid }}/publish"
+          apk_path=$(find "$publish_dir" -maxdepth 1 -type f -name '*-Signed.apk' -print -quit)
+          if [[ -z "$apk_path" ]]; then
+            echo "[ERR] Signed Android APK was not generated in $publish_dir"
+            exit 1
+          fi
+
+          apk_entries="$RUNNER_TEMP/mfa-resource-apk-${{ matrix.arch }}-entries.txt"
+          unzip -Z1 "$apk_path" > "$apk_entries"
+          grep -Fxq 'assets/MfaPackage/package.zip' "$apk_entries"
+          grep -Fxq 'assets/MfaDependencies/shizuku.apk' "$apk_entries"
+          grep -Fxq "lib/${{ matrix.abi }}/libMaaFramework.so" "$apk_entries"
+          grep -Eq "^lib/${{ matrix.abi }}/libpython3\.[0-9]+\.so$" "$apk_entries"
+
+          merged_manifest="mfa-source/MFAAvalonia.Android/obj/Release/net10.0-android/${{ matrix.rid }}/android/AndroidManifest.xml"
+          if [[ ! -f "$merged_manifest" ]]; then
+            echo "[ERR] Merged Android manifest was not generated: $merged_manifest"
+            exit 1
+          fi
+          if ! grep -Eq 'foregroundServiceType.*(dataSync|0x0*1([^0-9a-fA-F]|$))' "$merged_manifest"; then
+            echo "[ERR] Python Agent foreground service type is missing from merged manifest"
+            exit 1
+          fi
+
+          apk_badging="$RUNNER_TEMP/resource-apk-${{ matrix.arch }}-badging.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging "$apk_path" > "$apk_badging"
+          actual_application_id=$(sed -n "s/^package: name='\([^']*\)'.*/\1/p" "$apk_badging")
+          if [[ "$actual_application_id" != "$APPLICATION_ID" ]]; then
+            echo "[ERR] Unexpected application ID: $actual_application_id"
+            exit 1
+          fi
+
+          payload_archive="$RUNNER_TEMP/resource-payload-${{ matrix.arch }}.zip"
+          payload_entries="$RUNNER_TEMP/resource-payload-${{ matrix.arch }}-entries.txt"
+          unzip -p "$apk_path" assets/MfaPackage/package.zip > "$payload_archive"
+          unzip -Z1 "$payload_archive" > "$payload_entries"
+          grep -Eq '^interface\.jsonc?$' "$payload_entries"
+          grep -Fxq 'python/maa/__init__.py' "$payload_entries"
+
+          output_dir="$GITHUB_WORKSPACE/android-artifacts"
+          mkdir -p "$output_dir"
+          cp "$apk_path" "$output_dir/$OUTPUT_NAME"
+          (cd "$output_dir" && sha256sum "$OUTPUT_NAME" > "$OUTPUT_NAME.sha256")
+          echo "path=$output_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.metadata.outputs.artifact_name }}
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+          retention-days: 7

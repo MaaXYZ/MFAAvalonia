@@ -1,0 +1,428 @@
+<UserControl x:Class="MFAAvalonia.Views.Mobile.MobileTaskQueueView"
+             x:DataType="pages:TaskQueueViewModel"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:fluent="clr-namespace:FluentIcons.Avalonia.Fluent;assembly=FluentIcons.Avalonia.Fluent"
+             xmlns:extensions="clr-namespace:MFAAvalonia.Extensions"
+             xmlns:helper="clr-namespace:MFAAvalonia.Helper"
+             xmlns:markup="https://codewf.com"
+             xmlns:mdxaml="https://github.com/whistyun/Markdown.Avalonia"
+             xmlns:maa="clr-namespace:MFAAvalonia.Extensions.MaaFW"
+             xmlns:pages="clr-namespace:MFAAvalonia.ViewModels.Pages"
+             xmlns:other="clr-namespace:MFAAvalonia.ViewModels.Other"
+             xmlns:suki="https://github.com/kikipoulet/SukiUI"
+             xmlns:valueType="clr-namespace:MFAAvalonia.Helper.ValueType"
+             mc:Ignorable="d" d:DesignWidth="390" d:DesignHeight="760">
+    <UserControl.Resources>
+        <ContextMenu x:Key="MobileTaskMenu" Opening="TaskMenu_OnOpening">
+            <MenuItem Click="RunSingleTask" Header="{markup:I18n {x:Static helper:LangKeys.RunSingle}}" />
+            <MenuItem Click="RunCheckedFromCurrent" Header="{markup:I18n {x:Static helper:LangKeys.RunCheckedFromCurrent}}" />
+            <Separator />
+            <MenuItem Click="CopyTask" Header="{markup:I18n {x:Static helper:LangKeys.Copy}}" />
+            <MenuItem Click="PasteTask" Header="{markup:I18n {x:Static helper:LangKeys.Paste}}" />
+            <Separator />
+            <MenuItem Click="EditTaskRemark" Header="{markup:I18n {x:Static helper:LangKeys.TaskRemarkMenu}}" />
+            <Separator />
+            <MenuItem Click="DeleteTask" Classes="DangerContextDelete"
+                      Header="{markup:I18n {x:Static helper:LangKeys.Delete}}" />
+        </ContextMenu>
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <Style Selector="Button.MobilePageTab">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="Foreground" Value="{DynamicResource SukiLowText}" />
+        </Style>
+        <Style Selector="Button.MobilePageTab.selected">
+            <Setter Property="Foreground" Value="{DynamicResource SukiPrimaryColor}" />
+        </Style>
+        <Style Selector="Button.MobilePageTab Border.TabIndicator">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Button.MobilePageTab.selected Border.TabIndicator">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="Button.MobilePageTab:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.MobilePageTab:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Path.TaskRunSpinner">
+            <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+            <Setter Property="RenderTransform">
+                <RotateTransform Angle="0" />
+            </Setter>
+            <Style.Animations>
+                <Animation Duration="0:0:0.9" IterationCount="INFINITE">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="RotateTransform.Angle" Value="0" />
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="RotateTransform.Angle" Value="360" />
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <Style Selector="Ellipse#MobileLiveStatusDot">
+            <Style.Animations>
+                <Animation Duration="0:0:1.5" IterationCount="INFINITE" Easing="CubicEaseInOut">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="ScaleTransform.ScaleX" Value="1" />
+                        <Setter Property="ScaleTransform.ScaleY" Value="1" />
+                        <Setter Property="Opacity" Value="1" />
+                    </KeyFrame>
+                    <KeyFrame Cue="50%">
+                        <Setter Property="ScaleTransform.ScaleX" Value="1.2" />
+                        <Setter Property="ScaleTransform.ScaleY" Value="1.2" />
+                        <Setter Property="Opacity" Value="0.8" />
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="ScaleTransform.ScaleX" Value="1" />
+                        <Setter Property="ScaleTransform.ScaleY" Value="1" />
+                        <Setter Property="Opacity" Value="1" />
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <Style Selector="Ellipse#MobilePulseRing1, Ellipse#MobilePulseRing2">
+            <Style.Animations>
+                <Animation Duration="0:0:1.5" IterationCount="INFINITE" Easing="CubicEaseOut">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="ScaleTransform.ScaleX" Value="1" />
+                        <Setter Property="ScaleTransform.ScaleY" Value="1" />
+                        <Setter Property="Opacity" Value="0.6" />
+                        <Setter Property="StrokeThickness" Value="2" />
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="ScaleTransform.ScaleX" Value="2.5" />
+                        <Setter Property="ScaleTransform.ScaleY" Value="2.5" />
+                        <Setter Property="Opacity" Value="0" />
+                        <Setter Property="StrokeThickness" Value="0.5" />
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <Style Selector="Ellipse#MobilePulseRing2">
+            <Style.Animations>
+                <Animation Duration="0:0:1.5" IterationCount="INFINITE" Easing="CubicEaseOut" Delay="0:0:0.75">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="ScaleTransform.ScaleX" Value="1" />
+                        <Setter Property="ScaleTransform.ScaleY" Value="1" />
+                        <Setter Property="Opacity" Value="0.6" />
+                        <Setter Property="StrokeThickness" Value="2" />
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="ScaleTransform.ScaleX" Value="2.5" />
+                        <Setter Property="ScaleTransform.ScaleY" Value="2.5" />
+                        <Setter Property="Opacity" Value="0" />
+                        <Setter Property="StrokeThickness" Value="0.5" />
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="12,12,12,10">
+        <Border x:Name="PreviewHost" Height="230" CornerRadius="8" ClipToBounds="True"
+                SizeChanged="OnPreviewHostSizeChanged"
+                Background="#12000000" BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+            <Grid>
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="7">
+                    <fluent:FluentIcon Icon="Desktop" IconSize="Size32" Foreground="{DynamicResource SukiLowText}" />
+                    <TextBlock x:Name="VirtualDisplayTitle" Text="Virtual display" Foreground="{DynamicResource SukiLowText}" />
+                </StackPanel>
+                <ContentControl x:Name="NativePreviewHost"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Image x:Name="VirtualDisplayImage" Stretch="Uniform" IsVisible="False" />
+                <Border x:Name="VirtualDisplayRunningBadge" IsVisible="True"
+                        HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8"
+                        Padding="8,5" CornerRadius="5" Background="#C0202020">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Grid Width="16" Height="16" VerticalAlignment="Center">
+                            <Ellipse x:Name="MobilePulseRing1" Width="8" Height="8"
+                                     Fill="Transparent" Stroke="{DynamicResource SukiSuccessColor}"
+                                     StrokeThickness="2" Opacity="0" HorizontalAlignment="Center"
+                                     VerticalAlignment="Center" RenderTransformOrigin="50%,50%">
+                                <Ellipse.RenderTransform><ScaleTransform ScaleX="1" ScaleY="1" /></Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Ellipse x:Name="MobilePulseRing2" Width="8" Height="8"
+                                     Fill="Transparent" Stroke="{DynamicResource SukiSuccessColor}"
+                                     StrokeThickness="2" Opacity="0" HorizontalAlignment="Center"
+                                     VerticalAlignment="Center" RenderTransformOrigin="50%,50%">
+                                <Ellipse.RenderTransform><ScaleTransform ScaleX="1" ScaleY="1" /></Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Ellipse x:Name="MobileLiveStatusDot" Width="8" Height="8"
+                                     Fill="{DynamicResource SukiSuccessColor}" HorizontalAlignment="Center"
+                                     VerticalAlignment="Center" RenderTransformOrigin="50%,50%">
+                                <Ellipse.RenderTransform><ScaleTransform ScaleX="1" ScaleY="1" /></Ellipse.RenderTransform>
+                            </Ellipse>
+                        </Grid>
+                        <TextBlock x:Name="VirtualDisplayStatus" Text="Virtual display is stopped"
+                                   FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SukiSuccessColor}" />
+                    </StackPanel>
+                </Border>
+                <Border x:Name="VirtualDisplayFpsBadge" IsVisible="True"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                        Padding="8,5" CornerRadius="5" Background="#C0202020">
+                    <TextBlock x:Name="VirtualDisplayFpsText" Text="FPS: 0.0"
+                               FontSize="11" Foreground="#F0FFFFFF" />
+                </Border>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="2,8,2,2">
+            <ComboBox x:Name="AndroidRunModeSelector" SelectionChanged="OnAndroidRunModeChanged">
+                <ComboBoxItem x:Name="VirtualDisplayModeItem" Tag="VirtualDisplay" />
+                <ComboBoxItem x:Name="CurrentScreenModeItem" Tag="CurrentScreen" />
+            </ComboBox>
+            <ComboBox x:Name="AndroidResolutionSelector" Grid.Column="1" SelectionChanged="OnAndroidResolutionChanged">
+                <ComboBoxItem Content="720P" Tag="P720" />
+                <ComboBoxItem Content="1080P" Tag="P1080" />
+            </ComboBox>
+        </Grid>
+
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="2,4,2,2">
+            <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.ResourceOption}}"
+                       VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                       Foreground="{DynamicResource SukiLowText}" />
+            <ComboBox Grid.Column="1"
+                      IsEnabled="{Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
+                      ItemsSource="{Binding CurrentResources}"
+                      SelectedValue="{Binding CurrentResource, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                      SelectedValueBinding="{Binding Name}"
+                      HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="maa:MaaInterface+MaaInterfaceResource">
+                        <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </Grid>
+
+        <Grid Grid.Row="3" ColumnDefinitions="*,*" Height="44" Margin="2,4,2,0">
+            <Button x:Name="TaskQueueTabButton" Classes="MobilePageTab selected" Click="ShowTaskQueueTab">
+                <Grid RowDefinitions="*,3">
+                    <TextBlock x:Name="TaskQueueTabText" Text="Task queue"
+                               Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Border Grid.Row="1" Classes="TabIndicator" Height="3"
+                            Background="{DynamicResource SukiPrimaryColor}" />
+                </Grid>
+            </Button>
+            <Button x:Name="LogTabButton" Grid.Column="1" Classes="MobilePageTab" Click="ShowLogTab">
+                <Grid RowDefinitions="*,3">
+                    <TextBlock x:Name="LogTabText" Text="Logs"
+                               Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Border Grid.Row="1" Classes="TabIndicator" Height="3"
+                            Background="{DynamicResource SukiPrimaryColor}" />
+                </Grid>
+            </Button>
+        </Grid>
+
+        <Grid x:Name="TaskQueueHost" Grid.Row="4" RowDefinitions="Auto,*,Auto" Margin="2,14,2,0">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,8">
+                <StackPanel>
+                    <TextBlock x:Name="TaskQueueTitle" Text="Task queue" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock x:Name="TaskQueueDescription" Text="Select tasks to run in the default instance" FontSize="11"
+                               Foreground="{DynamicResource SukiLowText}" />
+                </StackPanel>
+                <Button x:Name="SelectAllButton" Grid.Column="1" Width="42" Height="42" Padding="0"
+                        Command="{Binding SelectAllCommand}" ToolTip.Tip="Select all">
+                    <fluent:FluentIcon Icon="SelectAllOn" IconSize="Size20" />
+                </Button>
+                <Button x:Name="AddTaskButton" Grid.Column="2" Width="42" Height="42" Padding="0"
+                        Command="{Binding AddTaskCommand}"
+                        ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.AddTask}}">
+                    <fluent:FluentIcon Icon="Add" IconSize="Size20" />
+                </Button>
+            </Grid>
+            <ListBox x:Name="TaskList" Grid.Row="1" Classes="Fluent" ItemsSource="{Binding TaskItemViewModels}"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="valueType:DragItemViewModel">
+                        <Border MinHeight="52" Padding="10,6" Margin="0,0,0,6" CornerRadius="6"
+                                Background="{DynamicResource SukiCardBackground}"
+                                BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1"
+                                ContextMenu="{StaticResource MobileTaskMenu}"
+                                ContextRequested="TaskItem_OnContextRequested">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,22">
+                                <CheckBox IsThreeState="True" MinWidth="40"
+                                          IsEnabled="{Binding !IsResourceOptionItem}"
+                                          IsChecked="{Binding IsCheckedWithNull}" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding RunElapsedText}" FontSize="11"
+                                               Foreground="{DynamicResource SukiLowText}"
+                                               IsVisible="{Binding IsRunElapsedVisible}" />
+                                </StackPanel>
+                                <Grid Grid.Column="5" Width="22" Height="36"
+                                      IsHitTestVisible="False"
+                                      IsVisible="{Binding IsRunStatusVisible}"
+                                      VerticalAlignment="Center">
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Classes="TaskRunSpinner"
+                                          Data="{x:Static suki:Icons.Refresh}"
+                                          Fill="{DynamicResource SukiPrimaryColor}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          IsVisible="{Binding IsRunRunning}" />
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Data="{x:Static suki:Icons.CircleCheck}"
+                                          Fill="{DynamicResource SukiSuccessColor}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          IsVisible="{Binding IsRunSucceeded}" />
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Data="{x:Static suki:Icons.CircleClose}"
+                                          Fill="{DynamicResource SukiDangerColor}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          IsVisible="{Binding IsRunFailed}" />
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Data="{x:Static suki:Icons.CircleOutline}"
+                                          Fill="{DynamicResource SukiLowText}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          IsVisible="{Binding IsRunQueued}" />
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Data="{x:Static suki:Icons.Cancel}"
+                                          Fill="{DynamicResource SukiLowText}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          IsVisible="{Binding IsRunStopped}" />
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Data="{x:Static suki:Icons.CircleOutlineMinus}"
+                                          Fill="{DynamicResource SukiLowText}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          IsVisible="{Binding IsRunSkipped}" />
+                                </Grid>
+                                <Button Grid.Column="2" Width="36" Height="36" Padding="0"
+                                        IsVisible="{Binding !IsResourceOptionItem}"
+                                        Click="MoveTaskUp" CommandParameter="{Binding}">
+                                    <fluent:FluentIcon Icon="ArrowUp" IconSize="Size20" />
+                                </Button>
+                                <Button Grid.Column="3" Width="36" Height="36" Padding="0"
+                                        IsVisible="{Binding !IsResourceOptionItem}"
+                                        Click="MoveTaskDown" CommandParameter="{Binding}">
+                                    <fluent:FluentIcon Icon="ArrowDown" IconSize="Size20" />
+                                </Button>
+                                <Button Grid.Column="4" Width="36" Height="36" Padding="0"
+                                        IsVisible="{Binding HasMobileOptions}"
+                                        Click="OpenTaskOptions" CommandParameter="{Binding}">
+                                    <fluent:FluentIcon Icon="Settings" IconSize="Size20" />
+                                </Button>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <Grid x:Name="OptionHost" Grid.Row="1" RowDefinitions="Auto,*" IsVisible="False">
+                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+                    <Button Width="40" Height="40" Padding="0" Click="ShowTasks">
+                        <fluent:FluentIcon Icon="ArrowLeft" IconSize="Size20" />
+                    </Button>
+                    <TextBlock x:Name="OptionTitle" Grid.Column="1" FontSize="16" FontWeight="SemiBold"
+                               Margin="10,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </Grid>
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="10">
+                        <Border x:Name="OptionIntroductionCard" IsVisible="False"
+                                CornerRadius="8" Padding="12"
+                                Background="{DynamicResource SukiCardBackground}"
+                                BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                            <StackPanel Spacing="8">
+                                <TextBlock x:Name="OptionIntroductionTitle" Text="Task description"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource SukiLowText}" />
+                                <mdxaml:MarkdownScrollViewer x:Name="OptionIntroduction"
+                                                             VerticalScrollBarVisibility="Disabled"
+                                                             HorizontalScrollBarVisibility="Disabled"
+                                                             EnableVirtualization="False">
+                                    <mdxaml:MarkdownScrollViewer.Engine>
+                                        <extensions:MarkdownExtension />
+                                    </mdxaml:MarkdownScrollViewer.Engine>
+                                    <mdxaml:MarkdownScrollViewer.Plugins>
+                                        <StaticResource ResourceKey="MdXamlPlugin" />
+                                    </mdxaml:MarkdownScrollViewer.Plugins>
+                                    <mdxaml:MarkdownScrollViewer.Styles>
+                                        <StyleInclude Source="avares://MFAAvalonia.Core/Assets/Style/MdXamlDocStyle.axaml" />
+                                    </mdxaml:MarkdownScrollViewer.Styles>
+                                </mdxaml:MarkdownScrollViewer>
+                            </StackPanel>
+                        </Border>
+                        <Border CornerRadius="8" Padding="12" Background="{DynamicResource SukiCardBackground}"
+                                BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                            <StackPanel x:Name="MobileOptionPanel" Spacing="8" />
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+        </Grid>
+
+        <Grid x:Name="LogHost" Grid.Row="4" RowDefinitions="Auto,*"
+              Margin="2,14,2,0" IsVisible="False">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,10">
+                <TextBlock x:Name="UserLogsTitle" Text="User logs" FontSize="18" FontWeight="SemiBold"
+                           VerticalAlignment="Center" />
+                <Button Grid.Column="1" Width="42" Height="42" Padding="0" Command="{Binding ExportCommand}">
+                    <fluent:FluentIcon Icon="Save" IconSize="Size20" />
+                </Button>
+                <Button Grid.Column="2" Width="42" Height="42" Padding="0" Command="{Binding ClearCommand}">
+                    <fluent:FluentIcon Icon="Delete" IconSize="Size20" />
+                </Button>
+            </Grid>
+            <Border Grid.Row="1" CornerRadius="8" Padding="12"
+                    Background="{DynamicResource SukiCardBackground}"
+                    BorderBrush="{DynamicResource SukiControlBorderBrush}" BorderThickness="1">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding LogItemViewModels}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="other:LogItemViewModel">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Margin="0,0,0,8">
+                                    <TextBlock Text="{Binding Time}" FontSize="11" Width="58"
+                                               Foreground="{DynamicResource SukiLowText}"
+                                               HorizontalAlignment="Stretch"
+                                               TextAlignment="Right"
+                                               VerticalAlignment="Top"
+                                               Margin="0,3,0,0"
+                                               TextWrapping="NoWrap"
+                                               IsVisible="{Binding ShowTime}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Content}" TextWrapping="Wrap"
+                                               VerticalAlignment="Top"
+                                               Foreground="{Binding Color}" FontWeight="{Binding Weight}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <Button x:Name="TaskToggleButton" Grid.Row="5" Height="52" Margin="0,10,0,0" Command="{Binding ToggleCommand}"
+                IsEnabled="{Binding ToggleEnable}" Background="{DynamicResource SukiPrimaryColor}"
+                Foreground="White">
+            <Grid>
+                <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding !IsRunning}">
+                    <fluent:FluentIcon Icon="Play" IconSize="Size20" />
+                    <TextBlock x:Name="StartTasksText" Text="Start tasks" FontSize="15" FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsRunning}">
+                    <fluent:FluentIcon Icon="Stop" IconSize="Size20" />
+                    <TextBlock x:Name="StopTasksText" Text="Stop tasks" FontSize="15" FontWeight="SemiBold" />
+                </StackPanel>
+            </Grid>
+        </Button>
+    </Grid>
+</UserControl>

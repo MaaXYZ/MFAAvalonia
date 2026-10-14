@@ -18,6 +18,7 @@ namespace Markdown.Avalonia.Html.Core
         TagBlockquote,
         TagBold,
         TagCite,
+        TagVar,
         TagFooter,
         TagItalic,
         TagMark,
@@ -38,6 +39,10 @@ namespace Markdown.Avalonia.Html.Core
         TagHeading6,
 
         TagCodeSpan,
+        TagKbd,
+        TagBig,
+        TagSmall,
+        TagTeletype,
         TagCodeBlock,
         TagAddress,
         TagArticle,

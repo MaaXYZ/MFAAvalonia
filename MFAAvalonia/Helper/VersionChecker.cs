@@ -11,10 +11,12 @@ using MFAAvalonia.Helper.Converters;
 using MFAAvalonia.Helper.ValueType;
 using MFAAvalonia.ViewModels.UsersControls.Settings;
 using MFAAvalonia.ViewModels.Windows;
+using MFAAvalonia.Views.UserControls;
 using MFAAvalonia.Views.Windows;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Semver;
+using SharpCompress.Archives;
 using SukiUI.Controls;
 using SukiUI.Dialogs;
 using SukiUI.Enums;
@@ -61,6 +63,156 @@ public static class VersionChecker
     }
 
     private static readonly ConcurrentQueue<ValueType.MFATask> Queue = new();
+    private static readonly SemaphoreSlim CheckExecutionLock = new(1, 1);
+    private static readonly object StartupCheckLock = new();
+    private static Task? _startupCheckTask;
+    private static int _restartPending;
+
+    public static bool IsRestartPending => Volatile.Read(ref _restartPending) != 0;
+
+    public sealed record LocalResourcePackageInspection(
+        bool HasInterface,
+        bool IsValid,
+        string ResourceName,
+        string CurrentVersion,
+        string PackageVersion,
+        string ErrorMessage);
+
+    public static bool IsSupportedLocalResourcePackage(string packagePath)
+    {
+        if (string.IsNullOrWhiteSpace(packagePath))
+            return false;
+
+        var fileName = Path.GetFileName(packagePath);
+        return fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+               || fileName.EndsWith(".tar", StringComparison.OrdinalIgnoreCase)
+               || fileName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)
+               || fileName.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase)
+               || fileName.EndsWith(".rar", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static Task<LocalResourcePackageInspection> InspectLocalResourcePackageAsync(string packagePath) =>
+        Task.Run(() => InspectLocalResourcePackage(packagePath));
+
+    private static LocalResourcePackageInspection InspectLocalResourcePackage(string packagePath)
+    {
+        var currentName = MaaProcessor.Interface?.Name?.Trim() ?? string.Empty;
+        var currentRid = MaaProcessor.Interface?.RID?.Trim() ?? string.Empty;
+        var currentVersion = MaaProcessor.Interface?.Version?.Trim() ?? string.Empty;
+
+        try
+        {
+            if (!File.Exists(packagePath) || !IsSupportedLocalResourcePackage(packagePath))
+                return new(false, false, string.Empty, currentVersion, string.Empty, string.Empty);
+
+            using var archive = ArchiveFactory.Open(packagePath);
+            var entries = archive.Entries
+                .Where(entry => !entry.IsDirectory)
+                .Select(entry => new
+                {
+                    Entry = entry,
+                    Path = NormalizeArchiveEntryPath(entry.Key)
+                })
+                .Where(item => !string.IsNullOrWhiteSpace(item.Path))
+                .ToList();
+
+            var interfaceEntry = entries
+                .Where(item => IsSupportedPackageInterfacePath(item.Path))
+                .OrderBy(item => item.Path.Count(character => character == '/'))
+                .FirstOrDefault();
+            if (interfaceEntry == null)
+                return new(false, false, string.Empty, currentVersion, string.Empty, string.Empty);
+
+            var packageRoot = interfaceEntry.Path[..^"interface.json".Length];
+            var hasResourceContent = entries.Any(item =>
+                item.Path.StartsWith($"{packageRoot}resource/", StringComparison.OrdinalIgnoreCase));
+            var hasIncrementalManifest = entries.Any(item =>
+                item.Path.Equals($"{packageRoot}changes.json", StringComparison.OrdinalIgnoreCase));
+            if (!hasResourceContent && !hasIncrementalManifest)
+            {
+                return new(true, false, string.Empty, currentVersion, string.Empty,
+                    LangKeys.DroppedResourcePackageInvalid.ToLocalization());
+            }
+
+            JObject packageInterface;
+            try
+            {
+                using var entryStream = interfaceEntry.Entry.OpenEntryStream();
+                using var reader = new StreamReader(entryStream, Encoding.UTF8, true);
+                packageInterface = JObject.Parse(reader.ReadToEnd(), new JsonLoadSettings
+                {
+                    CommentHandling = CommentHandling.Ignore,
+                    LineInfoHandling = LineInfoHandling.Load
+                });
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Warning($"拖拽资源包 interface.json 解析失败：文件={packagePath}，原因={ex.Message}");
+                return new(true, false, string.Empty, currentVersion, string.Empty,
+                    LangKeys.DroppedResourcePackageInvalid.ToLocalization());
+            }
+
+            var packageName = packageInterface["name"]?.ToString().Trim() ?? string.Empty;
+            var packageRid = packageInterface["mirrorchyan_rid"]?.ToString().Trim() ?? string.Empty;
+            var packageVersion = packageInterface["version"]?.ToString().Trim() ?? string.Empty;
+            var displayName = !string.IsNullOrWhiteSpace(packageName)
+                ? packageName
+                : !string.IsNullOrWhiteSpace(currentName)
+                    ? currentName
+                    : packageRid;
+
+            if (!string.IsNullOrWhiteSpace(currentRid) && !string.IsNullOrWhiteSpace(packageRid))
+            {
+                if (!packageRid.Equals(currentRid, StringComparison.OrdinalIgnoreCase))
+                {
+                    return new(true, false, displayName, currentVersion, packageVersion,
+                        LangKeys.DroppedResourceRidMismatch.ToLocalizationFormatted(false, packageRid, currentRid));
+                }
+            }
+            else if (string.IsNullOrWhiteSpace(currentName)
+                     || string.IsNullOrWhiteSpace(packageName)
+                     || !packageName.Equals(currentName, StringComparison.OrdinalIgnoreCase))
+            {
+                return new(true, false, displayName, currentVersion, packageVersion,
+                    LangKeys.DroppedResourceNameMismatch.ToLocalizationFormatted(false, packageName, currentName));
+            }
+
+            if (!TryCompareVersions(packageVersion, currentVersion, out var versionComparison))
+            {
+                return new(true, false, displayName, currentVersion, packageVersion,
+                    LangKeys.DroppedResourcePackageInvalid.ToLocalization());
+            }
+
+            if (versionComparison < 0)
+            {
+                return new(true, false, displayName, currentVersion, packageVersion,
+                    LangKeys.DroppedResourceVersionTooLow.ToLocalizationFormatted(false, packageVersion, currentVersion));
+            }
+
+            // TODO: Use the currently loaded MaaFramework to preflight package resources and agents.
+            return new(true, true, displayName, currentVersion, packageVersion, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Error($"检查拖拽资源包失败：文件={packagePath}，原因={ex.Message}", ex);
+            return new(false, false, string.Empty, currentVersion, string.Empty, string.Empty);
+        }
+    }
+
+    private static string NormalizeArchiveEntryPath(string entryPath) =>
+        (entryPath ?? string.Empty).Replace('\\', '/').TrimStart('/');
+
+    private static bool IsSupportedPackageInterfacePath(string entryPath)
+    {
+        var segments = entryPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 1)
+            return segments[0].Equals("interface.json", StringComparison.OrdinalIgnoreCase);
+        if (segments.Length == 2)
+            return segments[1].Equals("interface.json", StringComparison.OrdinalIgnoreCase);
+        return segments.Length == 3
+               && segments[1].Equals("assets", StringComparison.OrdinalIgnoreCase)
+               && segments[2].Equals("interface.json", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool IsEnvEnabled(string envName)
     {
@@ -148,33 +300,92 @@ public static class VersionChecker
 
     private static string GetLocalPackageExtractDirectory(string localPackagePath)
     {
-        var packageDirectory = Path.GetDirectoryName(localPackagePath);
-        var packageName = Path.GetFileNameWithoutExtension(localPackagePath);
-        if (string.IsNullOrWhiteSpace(packageDirectory))
-            return Path.Combine(AppContext.BaseDirectory, $"{packageName}_extracted");
+        var normalizedPackagePath = Path.GetFullPath(localPackagePath);
+        var pathHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedPackagePath)))[..12]
+            .ToLowerInvariant();
+        return Path.Combine(AppPaths.TempResourceDirectory, $"local_package_{pathHash}_extracted");
+    }
 
-        return Path.Combine(packageDirectory, $"{packageName}_extracted");
+    private static async Task UpdateResourceFromLocalPackageCoreAsync(string packagePath, string currentVersion)
+    {
+        var extractDirectory = GetLocalPackageExtractDirectory(packagePath);
+        try
+        {
+            await UpdateResource(
+                    false,
+                    currentVersion: currentVersion,
+                    localPackagePath: packagePath)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            CleanupLocalPackageExtractDirectory(extractDirectory);
+        }
+    }
+
+    private static void CleanupLocalPackageExtractDirectory(string extractDirectory)
+    {
+        try
+        {
+            if (!Directory.Exists(extractDirectory))
+                return;
+
+            Directory.Delete(extractDirectory, true);
+            LoggerHelper.Info($"已清理本地资源包解压目录：目录={extractDirectory}");
+        }
+        catch (Exception ex)
+        {
+            // App startup also clears temp_res, so a locked directory is cleaned on the next launch.
+            LoggerHelper.Warning($"清理本地资源包解压目录失败，将在下次启动时重试：目录={extractDirectory}，原因={ex.Message}");
+        }
     }
 
     public static void Check()
     {
-        var config = new
-        {
-            AutoUpdateResource = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableAutoUpdateResource, false),
-            AutoUpdateMFA = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableAutoUpdateMFA, false),
-            CheckVersion = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableCheckVersion, true),
-        };
+        _ = CheckAsync();
+    }
 
-        AddCDKCheckTask();
+    /// <summary>
+    /// 主窗口首次就绪后执行一次启动更新检查。后续调用复用同一个任务，
+    /// 避免窗口重复 Loaded 或多个实例初始化导致重复请求与重复更新。
+    /// </summary>
+    public static Task CheckOnStartupAsync()
+    {
+        lock (StartupCheckLock)
+        {
+            return _startupCheckTask ??= CheckAsync(isStartup: true);
+        }
+    }
 
-        if (config.AutoUpdateResource && !GetResourceVersion().Contains("debug", StringComparison.OrdinalIgnoreCase))
+    public static async Task CheckAsync(bool isStartup = false)
+    {
+        await CheckExecutionLock.WaitAsync();
+        try
         {
-            AddResourceUpdateTask(config.AutoUpdateMFA);
-        }
-        else if (config.CheckVersion && !GetResourceVersion().Contains("debug", StringComparison.OrdinalIgnoreCase))
-        {
-            AddResourceCheckTask();
-        }
+            var config = new
+            {
+                AutoUpdateResource = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableAutoUpdateResource, false),
+                CheckVersion = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableCheckVersion, true),
+            };
+            var resourceVersion = GetResourceVersion();
+
+            if ((!config.AutoUpdateResource && !config.CheckVersion)
+                || resourceVersion.Contains("debug", StringComparison.OrdinalIgnoreCase))
+            {
+                LoggerHelper.Info("已按更新设置或调试资源版本跳过启动更新检测。");
+                return;
+            }
+
+            AddCDKCheckTask();
+
+            if (config.AutoUpdateResource)
+            {
+                AddResourceUpdateTask();
+            }
+            else if (config.CheckVersion)
+            {
+                AddResourceCheckTask(notifyWhenUpToDate: !isStartup, notifyOnError: !isStartup);
+            }
 
         // if (config.AutoUpdateMFA)
         // {
@@ -185,26 +396,36 @@ public static class VersionChecker
         //     AddMFACheckTask();
         // }
 
-        TaskManager.RunTaskAsync(async () => await ExecuteTasksAsync(),
-            () => ToastNotification.Show("自动更新时发生错误！"), "启动检测");
+            await TaskManager.RunTaskAsync(async () => await ExecuteTasksAsync(),
+                () => ToastNotification.Show("自动更新时发生错误！"), isStartup ? "启动更新检测" : "更新检测");
+        }
+        finally
+        {
+            CheckExecutionLock.Release();
+        }
     }
 
     public static void CheckCDKAsync() => TaskManager.RunTaskAsync(() => CheckForCDK(Instances.VersionUpdateSettingsUserControlModel.DownloadSourceIndex == 0), name: "查询CDK剩余时间");
     public static void CheckMFAVersionAsync() => TaskManager.RunTaskAsync(async () => await CheckForMFAUpdatesAsync(Instances.VersionUpdateSettingsUserControlModel.DownloadSourceIndex == 0), name: "检测MFA版本");
     public static void CheckResourceVersionAsync() => TaskManager.RunTaskAsync(async () => await CheckForResourceUpdatesAsync(Instances.VersionUpdateSettingsUserControlModel.DownloadSourceIndex == 0), name: "检测资源版本");
     public static void UpdateResourceAsync(string
-        currentVersion = "") => TaskManager.RunTaskAsync(() => UpdateResource(Instances.VersionUpdateSettingsUserControlModel.DownloadSourceIndex == 0, currentVersion: currentVersion), name: "更新MFA");
+        currentVersion = "") => TaskManager.RunTaskAsync(() => UpdateResource(Instances.VersionUpdateSettingsUserControlModel.DownloadSourceIndex == 0, currentVersion: currentVersion), name: "更新资源");
     public static void UpdateResourceFromLocalPackageAsync(string packagePath, string currentVersion = "") =>
-        TaskManager.RunTaskAsync(() => UpdateResource(false, currentVersion: currentVersion, localPackagePath: packagePath), name: "本地更新包更新");
-    public static void UpdateMFAAsync() => TaskManager.RunTaskAsync(() => UpdateMFA(Instances.VersionUpdateSettingsUserControlModel.DownloadSourceIndex == 0), name: "更新资源");
+        TaskManager.RunTaskAsync(
+            () => Task.Run(() => UpdateResourceFromLocalPackageCoreAsync(packagePath, currentVersion)),
+            name: "本地更新包更新");
+    public static void UpdateMFAAsync() => TaskManager.RunTaskAsync(() => UpdateMFA(Instances.VersionUpdateSettingsUserControlModel.DownloadSourceIndex == 0), name: "更新软件");
 
     public static void UpdateMaaFwAsync() => TaskManager.RunTaskAsync(() => UpdateMaaFw(), name: "更新MaaFw");
 
-    private static void AddResourceCheckTask()
+    private static void AddResourceCheckTask(bool notifyWhenUpToDate = true, bool notifyOnError = true)
     {
         Queue.Enqueue(new ValueType.MFATask
         {
-            Action = async () => await CheckForResourceUpdatesAsync(Instances.VersionUpdateSettingsUserControlModel.DownloadSourceIndex == 0),
+            Action = async () => await CheckForResourceUpdatesAsync(
+                Instances.VersionUpdateSettingsUserControlModel.DownloadSourceIndex == 0,
+                notifyWhenUpToDate,
+                notifyOnError),
             Name = "更新资源"
         });
     }
@@ -225,11 +446,14 @@ public static class VersionChecker
             Name = "查询CDK"
         });
     }
-    private static void AddResourceUpdateTask(bool autoUpdateMFA)
+    private static void AddResourceUpdateTask()
     {
         Queue.Enqueue(new ValueType.MFATask
         {
-            Action = async () => await UpdateResource(Instances.VersionUpdateSettingsUserControlModel.DownloadSourceIndex == 0, autoUpdateMFA, autoUpdateMFA),
+            Action = async () => await UpdateResource(
+                Instances.VersionUpdateSettingsUserControlModel.DownloadSourceIndex == 0,
+                closeDialog: true,
+                noDialog: true),
             Name = "更新资源"
         });
     }
@@ -266,7 +490,32 @@ public static class VersionChecker
         }
     }
 
-    public static async Task CheckForResourceUpdatesAsync(bool isGithub = true)
+    private static object CreateUpdateToastContent(string subject, string latestVersion)
+    {
+        var summary = subject + LangKeys.NewVersionAvailableLatestVersion.ToLocalization() + latestVersion;
+        var releasePath = Path.Combine(AppPaths.ResourceDirectory, ChangelogViewModel.ReleaseFileName);
+
+        try
+        {
+            if (File.Exists(releasePath))
+            {
+                var release = File.ReadAllText(releasePath);
+                if (!string.IsNullOrWhiteSpace(release) && !release.Trim().Equals("placeholder", StringComparison.OrdinalIgnoreCase))
+                    return new UpdateToastContentView($"{summary}\n\n{release}");
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"读取更新说明失败：{ex.Message}");
+        }
+
+        return summary;
+    }
+
+    public static async Task CheckForResourceUpdatesAsync(
+        bool isGithub = true,
+        bool notifyWhenUpToDate = true,
+        bool notifyOnError = true)
     {
         Instances.RootViewModel.SetUpdating(true);
         var url = MaaProcessor.Interface?.Github ?? MaaProcessor.Interface?.Url ?? string.Empty;
@@ -315,7 +564,8 @@ public static class VersionChecker
                     Instances.RootViewModel.WindowUpdateInfo = LangKeys.MirrorChyanResourceUpdateShortTip.ToLocalizationFormatted(false, latestVersion);
 
                     Instances.ToastManager.CreateToast().WithTitle(LangKeys.UpdateResource.ToLocalization())
-                        .WithContent(LangKeys.ResourceOption.ToLocalization() + LangKeys.NewVersionAvailableLatestVersion.ToLocalization() + latestVersion).Dismiss().After(TimeSpan.FromSeconds(6))
+                        .WithContent(CreateUpdateToastContent(
+                            LangKeys.ResourceOption.ToLocalization(), latestVersion)).Dismiss().After(TimeSpan.FromSeconds(6))
                         .WithActionButton(LangKeys.Later.ToLocalization(), _ => { }, true, SukiButtonStyles.Basic)
                         .WithActionButton(LangKeys.Update.ToLocalization(), _ =>
                         {
@@ -329,7 +579,8 @@ public static class VersionChecker
                     DispatcherHelper.PostOnMainThread(() =>
                     {
                         Instances.ToastManager.CreateToast().WithTitle(LangKeys.UpdateResource.ToLocalization())
-                            .WithContent(LangKeys.ResourceOption.ToLocalization() + LangKeys.NewVersionAvailableLatestVersion.ToLocalization() + latestVersion).Dismiss().After(TimeSpan.FromSeconds(6))
+                            .WithContent(CreateUpdateToastContent(
+                                LangKeys.ResourceOption.ToLocalization(), latestVersion)).Dismiss().After(TimeSpan.FromSeconds(6))
                             .WithActionButton(LangKeys.Later.ToLocalization(), _ => { }, true, SukiButtonStyles.Basic)
                             .WithActionButton(LangKeys.Update.ToLocalization(), _ =>
                             {
@@ -339,22 +590,24 @@ public static class VersionChecker
                                     ToastHelper.Warn(LangKeys.Warning.ToLocalization(), LangKeys.CurrentOtherUpdatingTask.ToLocalization());
                             }, true).Queue();
                     });
-                DispatcherHelper.RunOnMainThread(ChangelogViewModel.CheckReleaseNote);
             }
             else
             {
-                DispatcherHelper.RunOnMainThread(ChangelogViewModel.CheckChangelog);
-                ToastHelper.Info(LangKeys.ResourcesAreLatestVersion.ToLocalization());
+                if (notifyWhenUpToDate)
+                    ToastHelper.Info(LangKeys.ResourcesAreLatestVersion.ToLocalization());
             }
             Instances.RootViewModel.SetUpdating(false);
         }
         catch (Exception ex)
         {
             Instances.RootViewModel.SetUpdating(false);
-            if (ex.Message.Contains("resource not found"))
-                ToastHelper.Error(LangKeys.CurrentResourcesNotSupportMirror.ToLocalization());
-            else
-                ToastHelper.Error(LangKeys.ErrorWhenCheck.ToLocalizationFormatted(true, "Resource"), ex.Message, -1);
+            if (notifyOnError)
+            {
+                if (ex.Message.Contains("resource not found"))
+                    ToastHelper.Error(LangKeys.CurrentResourcesNotSupportMirror.ToLocalization());
+                else
+                    ToastHelper.Error(LangKeys.ErrorWhenCheck.ToLocalizationFormatted(true, "Resource"), ex.Message, -1);
+            }
             LoggerHelper.Error($"检查资源更新失败：来源={(isGithub ? "GitHub" : "Mirror")}，原因={ex.Message}", ex);
         }
     }
@@ -390,7 +643,7 @@ public static class VersionChecker
                 DispatcherHelper.PostOnMainThread(() =>
                 {
                     Instances.ToastManager.CreateToast().WithTitle(LangKeys.SoftwareUpdate.ToLocalization())
-                        .WithContent("MFA" + LangKeys.NewVersionAvailableLatestVersion.ToLocalization() + latestVersion).Dismiss().After(TimeSpan.FromSeconds(6))
+                        .WithContent(CreateUpdateToastContent("MFA", latestVersion)).Dismiss().After(TimeSpan.FromSeconds(6))
                         .WithActionButton(LangKeys.Later.ToLocalization(), _ => { }, true, SukiButtonStyles.Basic)
                         .WithActionButton(LangKeys.Update.ToLocalization(), _ =>
                         {
@@ -566,6 +819,13 @@ public static class VersionChecker
             Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel.ClearDownloadProgress();
             return;
         }
+        if (OperatingSystem.IsAndroid() && !isLocalPackage && string.IsNullOrWhiteSpace(sha256))
+        {
+            Dismiss(sukiToast);
+            ToastHelper.Warn(LangKeys.Warning.ToLocalization(), "Android APK Release 未提供 SHA256 digest，已拒绝下载。", -1);
+            Instances.RootViewModel.SetUpdating(false);
+            return;
+        }
         MaaProcessorManager.Instance.Current.SetTasker();
         // 仅停止正在运行的任务，不 Dispose 处理器（避免界面变白/配置列表清空）
         // BeforeClosed 将在重启前调用
@@ -582,7 +842,7 @@ public static class VersionChecker
         var tempPath = AppPaths.TempResourceDirectory;
         Directory.CreateDirectory(tempPath);
         var debugSessionId = DateTime.Now.ToString("yyyyMMddHHmmss");
-        string fileExtension = GetFileExtensionFromUrl(downloadUrl);
+        string fileExtension = OperatingSystem.IsAndroid() ? ".apk" : GetFileExtensionFromUrl(downloadUrl);
         if (string.IsNullOrEmpty(fileExtension))
         {
             fileExtension = ".zip";
@@ -650,6 +910,37 @@ public static class VersionChecker
             Dismiss(sukiToast);
             ToastHelper.Warn(LangKeys.Warning.ToLocalization(), LangKeys.HashVerificationFailed.ToLocalization());
             Instances.RootViewModel.SetUpdating(false);
+            return;
+        }
+        if (OperatingSystem.IsAndroid())
+        {
+            if (!tempZipFilePath.EndsWith(".apk", StringComparison.OrdinalIgnoreCase))
+            {
+                Dismiss(sukiToast);
+                ToastHelper.Warn(LangKeys.Warning.ToLocalization(), "Android 更新资产不是 APK，已拒绝安装。", -1);
+                Instances.RootViewModel.SetUpdating(false);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(sha256) || !sha256Verified)
+            {
+                Dismiss(sukiToast);
+                ToastHelper.Warn(LangKeys.Warning.ToLocalization(), "Android APK 缺少有效的 SHA256 校验值，已拒绝安装。", -1);
+                Instances.RootViewModel.SetUpdating(false);
+                return;
+            }
+            if (PlatformApplicationRestart.InstallApkAsync == null)
+            {
+                Dismiss(sukiToast);
+                ToastHelper.Warn(LangKeys.Warning.ToLocalization(), LangKeys.PlatformNotSupportedOperation.ToLocalization());
+                Instances.RootViewModel.SetUpdating(false);
+                return;
+            }
+
+            SetStatusText(textBlock, downloadSpeedTextBlock, LangKeys.ApplyingUpdate.ToLocalization());
+            SetProgress(progress, 100);
+            Instances.RootViewModel.SetUpdating(false);
+            Dismiss(sukiToast);
+            await PlatformApplicationRestart.InstallApkAsync(tempZipFilePath);
             return;
         }
         SetStatusText(textBlock, downloadSpeedTextBlock, LangKeys.Extracting.ToLocalization());
@@ -740,6 +1031,22 @@ public static class VersionChecker
             isIncrementalPackage,
             debugEnabled,
             dryRun);
+
+        if (dryRun)
+        {
+            SetProgress(progress, 100);
+            SetStatusText(textBlock, downloadSpeedTextBlock, "UpdateResource DryRun completed");
+            LoggerHelper.Warning($"[UpdateResourceDebug] 已启用 DryRun，跳过实际覆盖与重启。tempExtractDir={tempExtractDir}");
+            ToastHelper.Info("UpdateResource DryRun 已完成", tempExtractDir, 5000);
+            Instances.RootViewModel.SetUpdating(false);
+            if (closeDialog)
+                Dismiss(sukiToast);
+            action?.Invoke();
+            return;
+        }
+
+        await StopTaskersAndAgentsForUpdateAsync();
+        using var updateTransaction = new UpdateFileTransaction(tempPath);
         LoggerHelper.Info((isGithub || isFull || currentVersion.Equals("v0.0.0", StringComparison.OrdinalIgnoreCase)) ? "全量更新" : "增量更新");
         if (isGithub || isFull || currentVersion.Equals("v0.0.0", StringComparison.OrdinalIgnoreCase))
         {
@@ -755,11 +1062,12 @@ public static class VersionChecker
                     {
                         File.SetAttributes(rfile, FileAttributes.Normal);
                         LoggerHelper.Info($"准备删除旧文件：文件={rfile}");
-                        DeleteFileWithBackup(rfile);
+                        updateTransaction.DeleteFile(rfile);
                     }
                     catch (Exception ex)
                     {
                         LoggerHelper.Error($"删除旧文件失败：文件={rfile}，原因={ex.Message}", ex);
+                        throw;
                     }
                 }
             }
@@ -775,11 +1083,12 @@ public static class VersionChecker
                     {
                         File.SetAttributes(rfile, FileAttributes.Normal);
                         LoggerHelper.Info($"准备删除旧文件：文件={rfile}");
-                        DeleteFileWithBackup(rfile);
+                        updateTransaction.DeleteFile(rfile);
                     }
                     catch (Exception ex)
                     {
                         LoggerHelper.Error($"删除旧文件失败：文件={rfile}，原因={ex.Message}", ex);
+                        throw;
                     }
                 }
             }
@@ -802,65 +1111,12 @@ public static class VersionChecker
                 try
                 {
                     var changesJson = JsonConvert.DeserializeObject<MirrorChangesJson>(changes);
-                    if (changesJson?.Deleted != null)
-                    {
-                        var delPaths = changesJson.Deleted
-                            .Select(del =>
-                            {
-                                var isSafe = TryGetSafeUpdateTargetPath(del, out var fullPath);
-                                if (!isSafe)
-                                    LoggerHelper.Warning($"跳过越界删除路径: {del}");
-                                return (isSafe, fullPath);
-                            })
-                            .Where(item => item.isSafe && File.Exists(item.fullPath))
-                            .Select(item => item.fullPath);
-
-                        foreach (var delPath in delPaths)
-                        {
-                            try
-                            {
-
-                                LoggerHelper.Info($"准备删除增量更新中标记为 Deleted 的文件：文件={delPath}");
-                                DeleteFileWithBackup(delPath);
-
-                            }
-                            catch (Exception e)
-                            {
-                                LoggerHelper.Error($"删除增量更新中标记为 Deleted 的文件失败：文件={delPath}，原因={e.Message}", e);
-                            }
-                        }
-                    }
-                    if (changesJson?.Modified != null)
-                    {
-                        var delPaths = changesJson.Modified
-                            .Select(del =>
-                            {
-                                var isSafe = TryGetSafeUpdateTargetPath(del, out var fullPath);
-                                if (!isSafe)
-                                    LoggerHelper.Warning($"跳过越界修改路径: {del}");
-                                return (isSafe, fullPath);
-                            })
-                            .Where(item => item.isSafe && File.Exists(item.fullPath))
-                            .Select(item => item.fullPath);
-
-                        foreach (var delPath in delPaths)
-                        {
-                            try
-                            {
-                                LoggerHelper.Info($"准备删除增量更新中标记为 Modified 的旧文件：文件={delPath}");
-                                DeleteFileWithBackup(delPath);
-                            }
-                            catch (Exception e)
-                            {
-                                LoggerHelper.Error($"删除增量更新中标记为 Modified 的旧文件失败：文件={delPath}，原因={e.Message}", e);
-                            }
-
-                        }
-                    }
+                    ApplyIncrementalDeletions(changesJson, updateTransaction);
                 }
                 catch (Exception e)
                 {
                     LoggerHelper.Error($"处理增量更新文件列表失败：changes.json={changesPath}，原因={e.Message}", e);
+                    throw;
                 }
             }
         }
@@ -868,47 +1124,11 @@ public static class VersionChecker
 
         SetProgress(progress, 1);
 
-        if (dryRun)
-        {
-            SetProgress(progress, 100);
-            SetStatusText(textBlock, downloadSpeedTextBlock, "UpdateResource DryRun completed");
-            LoggerHelper.Warning($"[UpdateResourceDebug] 已启用 DryRun，跳过实际覆盖与重启。tempExtractDir={tempExtractDir}");
-            ToastHelper.Info("UpdateResource DryRun 已完成", tempExtractDir, 5000);
-            Instances.RootViewModel.SetUpdating(false);
-            if (closeDialog)
-                Dismiss(sukiToast);
-            action?.Invoke();
-            return;
-        }
-
         var di = new DirectoryInfo(originPath);
         if (di.Exists)
         {
-            await CopyUpdatePayload(originPath, progress, true, default, copyDataFiles: true, copyInstallFiles: !containsCoreApplicationFiles);
+            await CopyUpdatePayload(originPath, progress, true, default, copyDataFiles: true, copyInstallFiles: !containsCoreApplicationFiles, updateTransaction: updateTransaction);
         }
-
-        // 最后再更新 interface.json，避免先写元数据后拷资源导致半更新状态
-        var newInterfacePath = Path.Combine(wpfDir, "interface.json");
-        if (File.Exists(interfacePath))
-        {
-            var jsonContent = await File.ReadAllTextAsync(interfacePath);
-            var @interface = JObject.Parse(jsonContent);
-            if (@interface != null)
-            {
-                @interface["github"] = MaaProcessor.Interface?.Github ?? MaaProcessor.Interface?.Url;
-                @interface["version"] = latestVersion;
-            }
-            await File.WriteAllTextAsync(newInterfacePath, @interface.ToString(Formatting.Indented));
-        }
-
-        SetProgress(progress, 100);
-        SetStatusText(textBlock, downloadSpeedTextBlock, LangKeys.UpdateCompleted.ToLocalization());
-        Instances.RootViewModel.SetUpdating(false);
-
-        if (closeDialog)
-            Dismiss(sukiToast);
-        shouldShowToast = true;
-        action?.Invoke();
 
         var restartExecutablePath = exeName;
         if (containsCoreApplicationFiles)
@@ -934,18 +1154,141 @@ public static class VersionChecker
                 default,
                 copyDataFiles: false,
                 copyInstallFiles: true,
-                continueOnCopyFailure: true,
-                skipRunningExecutable: true);
+                continueOnCopyFailure: false,
+                skipRunningExecutable: true,
+                updateTransaction: updateTransaction);
 
-            if (HasExecutableFileNameChanged(exeName, restartExecutablePath))
+        }
+
+        // 所有数据和安装文件成功写入后再提交版本元数据。
+        var newInterfacePath = Path.Combine(wpfDir, "interface.json");
+        if (File.Exists(interfacePath))
+        {
+            var jsonContent = await File.ReadAllTextAsync(interfacePath);
+            var @interface = JObject.Parse(jsonContent);
+            if (@interface != null)
             {
-                TryRenameExecutableToBackup(exeName, allowCurrentProcessExecutable: true);
+                @interface["github"] = MaaProcessor.Interface?.Github ?? MaaProcessor.Interface?.Url;
+                @interface["version"] = latestVersion;
+            }
+            updateTransaction.WriteAllText(newInterfacePath, @interface.ToString(Formatting.Indented));
+        }
+
+        updateTransaction.Commit();
+
+        if (containsCoreApplicationFiles && HasExecutableFileNameChanged(exeName, restartExecutablePath))
+            TryRenameExecutableToBackup(exeName, allowCurrentProcessExecutable: true);
+
+        SetProgress(progress, 100);
+        SetStatusText(textBlock, downloadSpeedTextBlock, LangKeys.UpdateCompleted.ToLocalization());
+        Instances.RootViewModel.SetUpdating(false);
+
+        if (closeDialog)
+            Dismiss(sukiToast);
+        shouldShowToast = true;
+        action?.Invoke();
+
+        if (isLocalPackage)
+            CleanupLocalPackageExtractDirectory(tempExtractDir);
+
+        // 重启前执行清理（保存配置、释放资源等）
+        Interlocked.Exchange(ref _restartPending, 1);
+        DispatcherHelper.PostOnMainThread(() => Instances.TryBeforeClosed(true, true));
+        await RestartApplicationAsync(restartExecutablePath);
+    }
+
+    private static async Task StopTaskersAndAgentsForUpdateAsync()
+    {
+        LoggerHelper.Info("程序更新前开始停止所有 MaaTasker 和 Agent 进程。");
+        await Task.Run(() =>
+        {
+            foreach (var processor in MaaProcessor.Processors.ToList())
+            {
+                try
+                {
+                    processor.SetTasker(requireAllStopped: true);
+                }
+                catch (Exception ex)
+                {
+                    LoggerHelper.Error($"程序更新前清理实例失败：实例ID={processor.InstanceId}，原因={ex.Message}", ex);
+                    throw;
+                }
+            }
+        });
+        LoggerHelper.Info("程序更新前所有 MaaTasker 和 Agent 进程已停止。");
+    }
+
+    private static void ApplyIncrementalDeletions(MirrorChangesJson? changes, UpdateFileTransaction updateTransaction)
+    {
+        DeleteIncrementalFiles(changes?.Deleted, "Deleted", updateTransaction);
+        DeleteIncrementalFiles(changes?.Modified, "Modified", updateTransaction);
+
+        var directories = (changes?.DeletedDirectories ?? [])
+            .Select(relativePath =>
+            {
+                if (!TryGetSafeUpdateTargetPath(relativePath, out var fullPath))
+                    throw new InvalidDataException($"增量更新包含越界删除目录：{relativePath}");
+                return (relativePath, fullPath);
+            })
+            .Where(item => Directory.Exists(item.fullPath))
+            .OrderByDescending(item => item.fullPath.Count(c => c == Path.DirectorySeparatorChar || c == Path.AltDirectorySeparatorChar));
+
+        foreach (var (relativePath, fullPath) in directories)
+        {
+            LoggerHelper.Info($"准备删除增量更新中标记为 deleted_dir 的目录：相对路径={relativePath}，目录={fullPath}");
+            DeleteDirectoryForUpdate(relativePath, fullPath);
+        }
+
+        foreach (var relativePath in changes?.AddedDirectories ?? [])
+        {
+            if (!TryGetSafeUpdateTargetPath(relativePath, out var fullPath))
+                throw new InvalidDataException($"增量更新包含越界新增目录：{relativePath}");
+
+            LoggerHelper.Info($"准备创建增量更新中标记为 added_dir 的目录：相对路径={relativePath}，目录={fullPath}");
+            Directory.CreateDirectory(fullPath);
+        }
+    }
+
+    private static void DeleteIncrementalFiles(IEnumerable<string>? relativePaths, string changeType, UpdateFileTransaction updateTransaction)
+    {
+        foreach (var relativePath in relativePaths ?? [])
+        {
+            if (!TryGetSafeUpdateTargetPath(relativePath, out var fullPath))
+                throw new InvalidDataException($"增量更新包含越界{changeType}路径：{relativePath}");
+            if (!File.Exists(fullPath))
+                continue;
+
+            LoggerHelper.Info($"准备删除增量更新中标记为 {changeType} 的文件：文件={fullPath}");
+            updateTransaction.DeleteFile(fullPath);
+            if (File.Exists(fullPath))
+                throw new IOException($"无法删除或备份增量更新文件：{fullPath}");
+        }
+    }
+
+    private static void DeleteDirectoryForUpdate(string relativePath, string directoryPath)
+    {
+        const int maxRetries = 5;
+        for (var attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                // deleted_dir entries are processed deepest-first after their files are removed.
+                // Refuse to recursively delete unexpected contents so an incomplete manifest
+                // cannot remove user files or files written later in the same update.
+                Directory.Delete(directoryPath, recursive: false);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt == maxRetries)
+                    break;
+                LoggerHelper.Warning($"删除增量更新目录失败，准备重试：第 {attempt}/{maxRetries} 次，目录={directoryPath}，原因={ex.Message}");
+                Thread.Sleep(500 * attempt);
             }
         }
 
-        // 重启前执行清理（保存配置、释放资源等）
-        DispatcherHelper.PostOnMainThread(() => Instances.RootView.BeforeClosed(true, true));
-        await RestartApplicationAsync(restartExecutablePath);
+        PendingUpdateDeletionHelper.EnqueueDirectory(relativePath);
+        LoggerHelper.Warning($"删除增量更新目录失败，已加入下次启动待删除清单：相对路径={relativePath}，目录={directoryPath}");
     }
 
     /// <summary>
@@ -957,6 +1300,19 @@ public static class VersionChecker
         LoggerHelper.Info($"准备重新启动应用：可执行文件={exeName}");
         LoggerHelper.Info("当前 MFA 进程即将退出。");
         LoggerHelper.DisposeLogger();
+        if (OperatingSystem.IsAndroid())
+        {
+            if (PlatformApplicationRestart.RestartAsync != null)
+            {
+                await PlatformApplicationRestart.RestartAsync();
+            }
+            else
+            {
+                Instances.ShutdownApplication(forceStop: true);
+            }
+            return;
+        }
+
         if (OperatingSystem.IsMacOS())
         {
             // ==== 仅 macOS 执行专属逻辑 ====
@@ -1106,7 +1462,7 @@ public static class VersionChecker
         DispatcherHelper.PostOnMainThread(() => progressBar?.IsVisible = false);
     }
 
-    public async static Task CopyUpdatePayload(
+    private async static Task CopyUpdatePayload(
         string sourceRoot,
         ProgressBar? progressBar = null,
         bool saveAnnouncement = false,
@@ -1115,7 +1471,8 @@ public static class VersionChecker
         bool copyInstallFiles = true,
         string? installTargetRootOverride = null,
         bool continueOnCopyFailure = false,
-        bool skipRunningExecutable = false)
+        bool skipRunningExecutable = false,
+        UpdateFileTransaction? updateTransaction = null)
     {
         if (string.IsNullOrWhiteSpace(sourceRoot) || !Directory.Exists(sourceRoot))
             return;
@@ -1162,10 +1519,13 @@ public static class VersionChecker
                     Path.GetFullPath(currentProcessPath),
                     StringComparison.OrdinalIgnoreCase))
             {
-                var replaced = await TryReplaceRunningExecutableAsync(item.SourceFile, targetFile, cancellationToken);
-                if (!replaced)
+                var replacement = await TryReplaceRunningExecutableAsync(item.SourceFile, targetFile, cancellationToken);
+                if (!replacement.replaced)
                 {
-                    LoggerHelper.Warning($"替换当前正在运行的同名主程序失败，已跳过：文件={targetFile}");
+                    if (!continueOnCopyFailure)
+                        throw new IOException($"替换当前正在运行的同名主程序失败：{targetFile}");
+
+                    LoggerHelper.Warning($"替换当前正在运行的同名主程序失败，已按继续模式跳过：文件={targetFile}");
                     progressCounter.Current++;
                     DispatcherHelper.PostOnMainThread(() =>
                     {
@@ -1177,6 +1537,9 @@ public static class VersionChecker
                     });
                     continue;
                 }
+
+                if (updateTransaction != null && replacement.backupPath != null)
+                    updateTransaction.TrackReplacement(targetFile, replacement.backupPath);
 
                 progressCounter.Current++;
                 DispatcherHelper.PostOnMainThread(() =>
@@ -1210,14 +1573,27 @@ public static class VersionChecker
                     await Task.Run(() =>
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        if (File.Exists(targetFile))
+                        if (updateTransaction != null)
                         {
-                            DeleteFileWithBackup(targetFile);
-                            if (File.Exists(targetFile))
-                                throw new IOException($"Unable to delete/backup existing file: {targetFile}");
+                            updateTransaction.ReplaceFile(item.SourceFile, targetFile, cancellationToken);
                         }
-
-                        File.Copy(item.SourceFile, targetFile, overwrite: true);
+                        else
+                        {
+                            var tempTarget = targetFile + ".pending_update";
+                            try
+                            {
+                                File.Copy(item.SourceFile, tempTarget, overwrite: true);
+                            }
+                            catch
+                            {
+                                if (File.Exists(tempTarget)) File.Delete(tempTarget);
+                                throw;
+                            }
+                            if (File.Exists(targetFile))
+                                DeleteFileWithBackup(targetFile);
+                            File.Move(tempTarget, targetFile, overwrite: true);
+                            RestoreUnixExecutablePermission(targetFile);
+                        }
                     }, cancellationToken);
 
                     File.SetAttributes(targetFile, FileAttributes.Normal);
@@ -1324,19 +1700,20 @@ public static class VersionChecker
                     await Task.Run(() =>
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-
-                        // 尝试备份/删除目标文件
-                        if (File.Exists(targetFile))
+                        var tempTarget = targetFile + ".pending_update";
+                        try
                         {
-                            DeleteFileWithBackup(targetFile);
-                            // 如果DeleteFileWithBackup失败（文件仍存在），手动抛出异常以触发重试
-                            if (File.Exists(targetFile))
-                            {
-                                throw new IOException($"Unable to delete/backup existing file: {targetFile}");
-                            }
+                            File.Copy(sourceFile, tempTarget, overwrite: true);
                         }
-
-                        File.Copy(sourceFile, targetFile, overwrite: true);
+                        catch
+                        {
+                            if (File.Exists(tempTarget)) File.Delete(tempTarget);
+                            throw;
+                        }
+                        if (File.Exists(targetFile))
+                            DeleteFileWithBackup(targetFile);
+                        File.Move(tempTarget, targetFile, overwrite: true);
+                        RestoreUnixExecutablePermission(targetFile);
                     }, cancellationToken);
 
                     // 12. 设置目标文件为普通属性（清除只读/隐藏等限制）
@@ -1420,6 +1797,185 @@ public static class VersionChecker
     {
         public int Current { get; set; } = 0;
         public int Total { get; set; } = 0;
+    }
+
+    private static void RestoreUnixExecutablePermission(string filePath)
+    {
+        if (OperatingSystem.IsWindows() || !File.Exists(filePath) || !IsLikelyExecutablePath(filePath))
+            return;
+
+        try
+        {
+            var mode = File.GetUnixFileMode(filePath);
+            File.SetUnixFileMode(filePath, mode
+                | UnixFileMode.UserExecute
+                | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherExecute);
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"恢复 Unix 执行权限失败：文件={filePath}，原因={ex.Message}");
+        }
+    }
+
+    private static bool IsLikelyExecutablePath(string filePath)
+    {
+        var normalizedPath = filePath.Replace('\\', '/');
+        if (normalizedPath.Contains("/python/bin/", StringComparison.OrdinalIgnoreCase)
+            || (normalizedPath.Contains("/runtimes/", StringComparison.OrdinalIgnoreCase)
+                && normalizedPath.Contains("/native/", StringComparison.OrdinalIgnoreCase))
+            || normalizedPath.Contains("/libs/MaaAgentBinary/", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var extension = Path.GetExtension(filePath);
+        return string.IsNullOrEmpty(extension)
+            || extension.Equals(".sh", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".command", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class UpdateFileTransaction : IDisposable
+    {
+        private sealed record FileChange(string TargetPath, string? BackupPath);
+
+        private readonly string _backupRoot;
+        private readonly List<FileChange> _changes = [];
+        private int _nextBackupId;
+        private bool _committed;
+
+        public UpdateFileTransaction(string tempRoot)
+        {
+            _backupRoot = Path.Combine(tempRoot, $"update_rollback_{Guid.NewGuid():N}");
+            Directory.CreateDirectory(_backupRoot);
+        }
+
+        public void DeleteFile(string targetPath)
+        {
+            if (!File.Exists(targetPath))
+                return;
+
+            var backupPath = NextBackupPath();
+            File.SetAttributes(targetPath, FileAttributes.Normal);
+            File.Move(targetPath, backupPath);
+            _changes.Add(new FileChange(targetPath, backupPath));
+        }
+
+        public void ReplaceFile(string sourcePath, string targetPath, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var targetDirectory = Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrWhiteSpace(targetDirectory))
+                Directory.CreateDirectory(targetDirectory);
+
+            var pendingPath = targetPath + ".pending_update";
+            try
+            {
+                File.Copy(sourcePath, pendingPath, overwrite: true);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                string? backupPath = null;
+                if (File.Exists(targetPath))
+                {
+                    backupPath = NextBackupPath();
+                    File.SetAttributes(targetPath, FileAttributes.Normal);
+                    File.Move(targetPath, backupPath);
+                }
+
+                // Record the change before publishing the new file so rollback also covers a
+                // failure between moving the old target and moving the pending file into place.
+                _changes.Add(new FileChange(targetPath, backupPath));
+                File.Move(pendingPath, targetPath, overwrite: true);
+                RestoreUnixExecutablePermission(targetPath);
+            }
+            catch
+            {
+                if (File.Exists(pendingPath))
+                    File.Delete(pendingPath);
+                throw;
+            }
+        }
+
+        public void WriteAllText(string targetPath, string content)
+        {
+            var stagedPath = Path.Combine(_backupRoot, $"staged_{Guid.NewGuid():N}.tmp");
+            File.WriteAllText(stagedPath, content);
+            ReplaceFile(stagedPath, targetPath, CancellationToken.None);
+        }
+
+        public void TrackReplacement(string targetPath, string backupPath)
+        {
+            _changes.Add(new FileChange(targetPath, backupPath));
+        }
+
+        public void Commit()
+        {
+            _committed = true;
+            TryDeleteBackupRoot();
+        }
+
+        public void Dispose()
+        {
+            if (!_committed)
+            {
+                if (Rollback())
+                    TryDeleteBackupRoot();
+                return;
+            }
+
+            TryDeleteBackupRoot();
+        }
+
+        private string NextBackupPath() =>
+            Path.Combine(_backupRoot, $"{_nextBackupId++:D8}.bak");
+
+        private bool Rollback()
+        {
+            var succeeded = true;
+            LoggerHelper.Warning($"更新未完成，开始回滚已修改文件：数量={_changes.Count}");
+            for (var index = _changes.Count - 1; index >= 0; index--)
+            {
+                var change = _changes[index];
+                try
+                {
+                    if (File.Exists(change.TargetPath))
+                    {
+                        File.SetAttributes(change.TargetPath, FileAttributes.Normal);
+                        File.Delete(change.TargetPath);
+                    }
+
+                    if (change.BackupPath != null && File.Exists(change.BackupPath))
+                    {
+                        var targetDirectory = Path.GetDirectoryName(change.TargetPath);
+                        if (!string.IsNullOrWhiteSpace(targetDirectory))
+                            Directory.CreateDirectory(targetDirectory);
+                        File.Move(change.BackupPath, change.TargetPath, overwrite: true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    succeeded = false;
+                    LoggerHelper.Error($"回滚更新文件失败：目标={change.TargetPath}，备份={change.BackupPath}，原因={ex.Message}", ex);
+                }
+            }
+
+            if (!succeeded)
+                LoggerHelper.Error($"部分更新文件回滚失败，已保留回滚目录供手动恢复：目录={_backupRoot}");
+            return succeeded;
+        }
+
+        private void TryDeleteBackupRoot()
+        {
+            try
+            {
+                if (Directory.Exists(_backupRoot))
+                    Directory.Delete(_backupRoot, recursive: true);
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Warning($"清理更新回滚目录失败：目录={_backupRoot}，原因={ex.Message}");
+            }
+        }
     }
 
     static void DeleteFileWithBackup(string filePath)
@@ -1559,7 +2115,7 @@ public static class VersionChecker
             // 下载更新包
             SetText(textBlock, LangKeys.Downloading.ToLocalization());
             SetProgress(progress, 0);
-            var tempZip = Path.Combine(tempPath, $"mfa_{latestVersion}.zip");
+            var tempZip = Path.Combine(tempPath, $"mfa_{latestVersion}{(OperatingSystem.IsAndroid() ? ".apk" : ".zip")}");
             (var downloadStatus, tempZip) = await DownloadWithRetry(downloadUrl, tempZip, progress, 3);
             if (!downloadStatus)
             {
@@ -1590,6 +2146,24 @@ public static class VersionChecker
                 Dismiss(sukiToast);
                 ToastHelper.Warn(LangKeys.Warning.ToLocalization(), LangKeys.HashVerificationFailed.ToLocalization());
                 Instances.RootViewModel.SetUpdating(false);
+                return;
+            }
+            if (OperatingSystem.IsAndroid())
+            {
+                if (!downloadUrl.EndsWith(".apk", StringComparison.OrdinalIgnoreCase) ||
+                    string.IsNullOrWhiteSpace(sha256) || !sha256Verified ||
+                    PlatformApplicationRestart.InstallApkAsync == null)
+                {
+                    Dismiss(sukiToast);
+                    ToastHelper.Warn(LangKeys.Warning.ToLocalization(), "Android Mirror 更新必须提供 APK 和有效 SHA256 校验值。", -1);
+                    Instances.RootViewModel.SetUpdating(false);
+                    return;
+                }
+                SetText(textBlock, LangKeys.ApplyingUpdate.ToLocalization());
+                SetProgress(progress, 100);
+                Instances.RootViewModel.SetUpdating(false);
+                Dismiss(sukiToast);
+                await PlatformApplicationRestart.InstallApkAsync(tempZip);
                 return;
             }
             SetText(textBlock, LangKeys.Extracting.ToLocalization());
@@ -1973,10 +2547,16 @@ public static class VersionChecker
             while (Queue.TryDequeue(out var task))
             {
                 await _queueLock.WaitAsync();
-                LoggerHelper.Info($"开始执行更新任务：名称={task.Name}");
-                await task.Action();
-                LoggerHelper.Info($"更新任务完成：名称={task.Name}");
-                _queueLock.Release();
+                try
+                {
+                    LoggerHelper.Info($"开始执行更新任务：名称={task.Name}");
+                    await task.Action();
+                    LoggerHelper.Info($"更新任务完成：名称={task.Name}");
+                }
+                finally
+                {
+                    _queueLock.Release();
+                }
             }
         }
         finally
@@ -2139,6 +2719,9 @@ public static class VersionChecker
     // 标准化操作系统标识
     private static (string os, string family) GetNormalizedOSInfo()
     {
+        if (OperatingSystem.IsAndroid())
+            return ("android", "android");
+
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             return ("win", "windows");
 
@@ -2343,7 +2926,9 @@ public static class VersionChecker
                     var orderedAssets = assets
                         .Select(asset => new
                         {
-                            Url = asset["browser_download_url"]?.ToString(),
+                            // The API asset URL supports authenticated downloads for private repositories.
+                            // Keep browser_download_url as a fallback for older/non-standard API responses.
+                            Url = asset["url"]?.ToString() ?? asset["browser_download_url"]?.ToString(),
                             Name = asset["name"]?.ToString().ToLower(),
                             Sha256 = ExtractSha256FromDigest(asset["digest"]?.ToString())
                         })
@@ -2358,7 +2943,12 @@ public static class VersionChecker
                         LoggerHelper.Info($"候选资产优先级：名称={asset.Name}，优先级={priority}");
                     }
 
-                    var bestAsset = orderedAssets.FirstOrDefault(a => a.Url != null);
+                    var bestAsset = OperatingSystem.IsAndroid()
+                        ? orderedAssets.FirstOrDefault(a =>
+                            a.Url != null
+                            && a.Name?.EndsWith(".apk", StringComparison.OrdinalIgnoreCase) == true
+                            && GetAssetPriority(a.Name, osPlatform, osFamily, cpuArch) > 0)
+                        : orderedAssets.FirstOrDefault(a => a.Url != null);
                     downloadUrl = bestAsset?.Url ?? string.Empty;
                     sha256 = bestAsset?.Sha256 ?? string.Empty;
                 }
@@ -2404,13 +2994,16 @@ public static class VersionChecker
         }
         var cdkD = onlyCheck ? string.Empty : $"cdk={cdk}&";
         var multiplatform = MaaProcessor.Interface?.Multiplatform == true;
-        var os = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win" :
+        var os = OperatingSystem.IsAndroid() ? "android" :
+            RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "windows" :
             RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "linux" :
-            RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "macos" : "unknown";
+            RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "darwin" : "unknown";
 
-        var arch = RuntimeInformation.OSArchitecture switch
+        var arch = RuntimeInformation.ProcessArchitecture switch
         {
-            Architecture.X64 => "x86_64",
+            Architecture.X86 => "386",
+            Architecture.X64 => "amd64",
+            Architecture.Arm => "arm",
             Architecture.Arm64 => "arm64",
             _ => "unknown"
         };
@@ -2455,6 +3048,10 @@ public static class VersionChecker
             sha256 = data["sha256"]?.ToString() ?? string.Empty;
             var updateType = data["update_type"]?.ToString() ?? string.Empty;
             isFull = updateType.Equals("full", StringComparison.OrdinalIgnoreCase);
+            LoggerHelper.Info($"Mirror 更新响应：rid={resId}，平台={os}，架构={arch}，版本={latestVersion}，类型={updateType}，返回平台={data["os"]}，返回架构={data["arch"]}，APK={url.EndsWith(".apk", StringComparison.OrdinalIgnoreCase)}，SHA256={(string.IsNullOrWhiteSpace(sha256) ? "缺失" : "存在")}");
+
+            if (OperatingSystem.IsAndroid() && isUI && !url.EndsWith(".apk", StringComparison.OrdinalIgnoreCase))
+                throw new Exception("Android Mirror 更新资产不是 APK，已拒绝下载。");
 
             // 解析并存储 CDK 过期时间戳
             if (data["cdk_expired_time"] != null && long.TryParse(data["cdk_expired_time"]?.ToString(), out var cdkExpiredTime))
@@ -2639,7 +3236,21 @@ public static class VersionChecker
             httpClient.DefaultRequestHeaders.Accept.Clear();
             httpClient.DefaultRequestHeaders.Accept.ParseAdd("*/*");
 
-            using var response = await httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Get, url), HttpCompletionOption.ResponseHeadersRead);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            if (IsGitHubReleaseAssetApiUrl(url))
+            {
+                request.Headers.Accept.Clear();
+                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
+                request.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
+
+                var gitHubToken = Instances.VersionUpdateSettingsUserControlModel.GitHubToken;
+                if (!string.IsNullOrWhiteSpace(gitHubToken))
+                {
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", gitHubToken);
+                }
+            }
+
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
 
             if (response.Content.Headers.ContentDisposition != null)
@@ -2742,6 +3353,13 @@ public static class VersionChecker
         }
     }
 
+    private static bool IsGitHubReleaseAssetApiUrl(string url)
+    {
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && uri.Host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase)
+            && uri.AbsolutePath.Contains("/releases/assets/", StringComparison.OrdinalIgnoreCase);
+    }
+
     async private static Task<bool> VerifyFileSha256Async(string filePath, string expectedSha256)
     {
         if (string.IsNullOrEmpty(expectedSha256) || !File.Exists(filePath))
@@ -2771,6 +3389,8 @@ public static class VersionChecker
         [JsonProperty("modified")] public List<string>? Modified;
         [JsonProperty("deleted")] public List<string>? Deleted;
         [JsonProperty("added")] public List<string>? Added;
+        [JsonProperty("deleted_dir")] public List<string>? DeletedDirectories;
+        [JsonProperty("added_dir")] public List<string>? AddedDirectories;
         [JsonExtensionData]
         public Dictionary<string, object>? AdditionalData { get; set; } = new();
     }
@@ -2783,37 +3403,22 @@ public static class VersionChecker
         out string resourceDirPath,
         out string validationMessage)
     {
-        var candidateRoots = new List<string>
-        {
-            tempExtractDir,
-            Path.Combine(tempExtractDir, "assets")
-        };
-
-        try
-        {
-            var directChildDirectories = Directory.Exists(tempExtractDir)
-                ? Directory.GetDirectories(tempExtractDir, "*", SearchOption.TopDirectoryOnly)
-                : [];
-
-            if (directChildDirectories.Length == 1)
-            {
-                candidateRoots.Add(directChildDirectories[0]);
-                candidateRoots.Add(Path.Combine(directChildDirectories[0], "assets"));
-            }
-        }
-        catch
-        {
-            // Ignore probing failures and fall back to default candidates.
-        }
+        var candidateRoots = GetResourcePackageCandidateRoots(tempExtractDir);
 
         originPath = tempExtractDir;
         interfacePath = Path.Combine(tempExtractDir, "interface.json");
         resourceDirPath = Path.Combine(tempExtractDir, "resource");
         validationMessage = string.Empty;
 
-        foreach (var candidateRoot in candidateRoots
-                     .Where(path => !string.IsNullOrWhiteSpace(path))
-                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        if (!isIncrementalPackage
+            && TryFindFullResourcePackageRoot(tempExtractDir, out var fullPackageRoot,
+                out var fullPackageInterfacePath, out var fullPackageResourcePath))
+        {
+            originPath = fullPackageRoot;
+            interfacePath = fullPackageInterfacePath;
+            resourceDirPath = fullPackageResourcePath;
+        }
+        else foreach (var candidateRoot in candidateRoots)
         {
             var candidateInterfacePath = Path.Combine(candidateRoot, "interface.json");
             var candidateResourcePath = Path.Combine(candidateRoot, "resource");
@@ -2885,6 +3490,85 @@ public static class VersionChecker
         return true;
     }
 
+    private static bool TryCompareVersions(string leftVersion, string rightVersion, out int comparison)
+    {
+        comparison = 0;
+        if (string.IsNullOrWhiteSpace(leftVersion) || string.IsNullOrWhiteSpace(rightVersion))
+            return false;
+
+        const string versionPattern = @"^[vV]?\d+(?:\.\d+)?(?:\.\d+)?(?:-[0-9a-zA-Z\-\.]+)?(?:\+[0-9a-zA-Z\-\.]+)?$";
+        if (!Regex.IsMatch(leftVersion.Trim(), versionPattern)
+            || !Regex.IsMatch(rightVersion.Trim(), versionPattern))
+            return false;
+
+        try
+        {
+            comparison = ParseAndNormalizeVersion(leftVersion).ComparePrecedenceTo(ParseAndNormalizeVersion(rightVersion));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"比较拖拽资源包版本失败：package={leftVersion}, current={rightVersion}, reason={ex.Message}");
+            return false;
+        }
+    }
+
+    private static IReadOnlyList<string> GetResourcePackageCandidateRoots(string extractDirectory)
+    {
+        var candidateRoots = new List<string>
+        {
+            extractDirectory,
+            Path.Combine(extractDirectory, "assets")
+        };
+
+        try
+        {
+            var directChildDirectories = Directory.Exists(extractDirectory)
+                ? Directory.GetDirectories(extractDirectory, "*", SearchOption.TopDirectoryOnly)
+                : [];
+
+            if (directChildDirectories.Length == 1)
+            {
+                candidateRoots.Add(directChildDirectories[0]);
+                candidateRoots.Add(Path.Combine(directChildDirectories[0], "assets"));
+            }
+        }
+        catch
+        {
+            // Ignore probing failures and fall back to the direct package roots.
+        }
+
+        return candidateRoots
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static bool TryFindFullResourcePackageRoot(
+        string extractDirectory,
+        out string packageRoot,
+        out string interfacePath,
+        out string resourceDirectory)
+    {
+        foreach (var candidateRoot in GetResourcePackageCandidateRoots(extractDirectory))
+        {
+            var candidateInterface = Path.Combine(candidateRoot, "interface.json");
+            var candidateResource = Path.Combine(candidateRoot, "resource");
+            if (!File.Exists(candidateInterface) || !Directory.Exists(candidateResource))
+                continue;
+
+            packageRoot = candidateRoot;
+            interfacePath = candidateInterface;
+            resourceDirectory = candidateResource;
+            return true;
+        }
+
+        packageRoot = extractDirectory;
+        interfacePath = Path.Combine(extractDirectory, "interface.json");
+        resourceDirectory = Path.Combine(extractDirectory, "resource");
+        return false;
+    }
+
     private static bool ContainsCoreApplicationFiles(string packageRoot)
     {
         if (string.IsNullOrWhiteSpace(packageRoot) || !Directory.Exists(packageRoot))
@@ -2933,6 +3617,7 @@ public static class VersionChecker
         if (fileName.Equals("MFAAvalonia.dll", StringComparison.OrdinalIgnoreCase)
             || fileName.Equals("MFAAvalonia.deps.json", StringComparison.OrdinalIgnoreCase)
             || fileName.Equals("MFAAvalonia.runtimeconfig.json", StringComparison.OrdinalIgnoreCase)
+            || IsCurrentProcessExecutableFileName(fileName)
             || fileName.Equals("MFAUpdater", StringComparison.OrdinalIgnoreCase)
             || fileName.Equals("MFAUpdater.exe", StringComparison.OrdinalIgnoreCase))
             return true;
@@ -2942,6 +3627,28 @@ public static class VersionChecker
             return true;
 
         return false;
+    }
+
+    private static bool IsCurrentProcessExecutableFileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return false;
+
+        try
+        {
+            var currentProcessPath = Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(currentProcessPath))
+                currentProcessPath = Environment.ProcessPath ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(currentProcessPath))
+                return false;
+
+            return fileName.Equals(Path.GetFileName(currentProcessPath), StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static bool TryGetSafeUpdateTargetPath(string baseDirectory, string relativePath, out string fullPath)
@@ -3025,9 +3732,29 @@ public static class VersionChecker
         return backupFilePath;
     }
 
-    private static async Task<bool> TryReplaceRunningExecutableAsync(string sourceFile, string targetFile, CancellationToken cancellationToken)
+    private static async Task<(bool replaced, string? backupPath)> TryReplaceRunningExecutableAsync(
+        string sourceFile,
+        string targetFile,
+        CancellationToken cancellationToken)
     {
         var maxRetries = 5;
+        string? backupPath = null;
+        void RestoreBackupAfterFailure()
+        {
+            if (backupPath == null || !File.Exists(backupPath) || File.Exists(targetFile))
+                return;
+
+            try
+            {
+                File.Move(backupPath, targetFile);
+                backupPath = null;
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Error($"恢复替换失败的主程序失败：目标={targetFile}，备份={backupPath}，原因={ex.Message}", ex);
+            }
+        }
+
         for (var i = 0; i < maxRetries; i++)
         {
             try
@@ -3036,31 +3763,58 @@ public static class VersionChecker
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    var backupPath = GetBackupMfaPath(targetFile);
-                    File.SetAttributes(targetFile, FileAttributes.Normal);
-                    File.Move(targetFile, backupPath);
-                    LoggerHelper.Info($"当前运行中的旧主程序已改名为 backupMFA：源文件={targetFile}，备份文件={backupPath}");
+                    if (backupPath == null)
+                    {
+                        backupPath = GetBackupMfaPath(targetFile);
+                        File.SetAttributes(targetFile, FileAttributes.Normal);
+                        File.Move(targetFile, backupPath);
+                        LoggerHelper.Info($"当前运行中的旧主程序已改名为 backupMFA：源文件={targetFile}，备份文件={backupPath}");
+                    }
 
                     File.Copy(sourceFile, targetFile, overwrite: false);
                     File.SetAttributes(targetFile, FileAttributes.Normal);
+                    RestoreUnixExecutablePermission(targetFile);
                     LoggerHelper.Info($"新的同名主程序已复制完成：源文件={sourceFile}，目标文件={targetFile}");
                 }, cancellationToken);
 
-                return true;
+                return (true, backupPath);
             }
             catch (IOException ex) when (!cancellationToken.IsCancellationRequested)
             {
                 LoggerHelper.Warning($"替换当前运行中的同名主程序失败，准备重试：第 {i + 1}/{maxRetries} 次，源文件={sourceFile}，目标文件={targetFile}，原因={ex.Message}");
-                await Task.Delay(1000, cancellationToken);
+                try
+                {
+                    await Task.Delay(1000, cancellationToken);
+                }
+                catch
+                {
+                    RestoreBackupAfterFailure();
+                    throw;
+                }
             }
             catch (UnauthorizedAccessException ex)
             {
                 LoggerHelper.Warning($"替换当前运行中的同名主程序被拒绝，准备重试：第 {i + 1}/{maxRetries} 次，源文件={sourceFile}，目标文件={targetFile}，原因={ex.Message}");
-                await Task.Delay(1000, cancellationToken);
+                try
+                {
+                    await Task.Delay(1000, cancellationToken);
+                }
+                catch
+                {
+                    RestoreBackupAfterFailure();
+                    throw;
+                }
+            }
+            catch
+            {
+                RestoreBackupAfterFailure();
+                throw;
             }
         }
 
-        return false;
+        RestoreBackupAfterFailure();
+
+        return (false, backupPath);
     }
 
     private static bool HasExecutableFileNameChanged(string currentExecutablePath, string nextExecutablePath)

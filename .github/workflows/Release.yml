@@ -6,7 +6,7 @@ on:
       - 'v*'
   pull_request:
     branches:
-      - main
+      - master
   workflow_dispatch:
 
 permissions:
@@ -181,11 +181,123 @@ jobs:
           path: |
             bin/AnyCPU/Release/${{ matrix.platform }}-${{ matrix.arch }}/*.zip
 
+  build-android-shell:
+    name: Build Android shell (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    needs: [ meta ]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: android-arm64
+            abi: arm64-v8a
+            arch: arm64
+          - rid: android-x64
+            abi: x86_64
+            arch: x64
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK platform
+        shell: bash
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+          config-file: NuGet.config
+
+      - name: Install .NET Android workload
+        run: dotnet workload install android --skip-manifest-update
+
+      - name: Restore Android dependencies
+        shell: bash
+        env:
+          NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+        run: |
+          dotnet restore MFAAvalonia.Android/MFAAvalonia.Android.csproj \
+            -r "${{ matrix.rid }}" \
+            -p:AndroidSdkDirectory="$ANDROID_HOME"
+
+      - name: Publish empty Android shell
+        shell: bash
+        env:
+          NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+        run: |
+          dotnet publish MFAAvalonia.Android/MFAAvalonia.Android.csproj \
+            -c Release \
+            -f net10.0-android \
+            -r "${{ matrix.rid }}" \
+            --no-restore \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" \
+            -p:AndroidEmbedResourcePackage=false \
+            -p:AndroidLauncherLabel=MFAAvalonia
+
+      - name: Collect and verify empty shell APK
+        id: android_apk
+        shell: bash
+        run: |
+          publish_dir="MFAAvalonia.Android/bin/Release/net10.0-android/${{ matrix.rid }}/publish"
+          apk_path=$(find "$publish_dir" -maxdepth 1 -type f -name '*-Signed.apk' -print -quit)
+          if [[ -z "$apk_path" ]]; then
+            echo "[ERR] Signed Android APK was not generated in $publish_dir"
+            exit 1
+          fi
+
+          # Do not pipe unzip directly into grep -q while the runner enables pipefail.
+          # grep exits after the first match, which can give unzip SIGPIPE and turn a
+          # successful presence check into a false failure.
+          apk_entries="$RUNNER_TEMP/mfa-android-shell-${{ matrix.arch }}-entries.txt"
+          unzip -Z1 "$apk_path" > "$apk_entries"
+          if grep -q '^assets/MfaPackage/' "$apk_entries"; then
+            echo "[ERR] Official Android shell unexpectedly contains an interface/resource payload"
+            exit 1
+          fi
+          if grep -Eq '^lib/[^/]+/libpython3\.[0-9]+\.so$' "$apk_entries"; then
+            echo "[ERR] Official Android shell unexpectedly contains a Python runtime"
+            exit 1
+          fi
+          if ! grep -Fxq 'assets/MfaDependencies/shizuku.apk' "$apk_entries"; then
+            echo "[ERR] Official Android shell does not contain the bundled Shizuku installer"
+            exit 1
+          fi
+          if ! grep -Fxq "lib/${{ matrix.abi }}/libMaaFramework.so" "$apk_entries"; then
+            echo "[ERR] APK does not contain MaaFramework for ${{ matrix.abi }}"
+            echo "[DBG] Native APK entries:"
+            grep -E '^lib/[^/]+/(libMaa|libmfabridge|libonnxruntime|libopencv)' "$apk_entries" || true
+            exit 1
+          fi
+
+          output_dir="artifacts/android-${{ matrix.arch }}"
+          output_name="MFAAvalonia-${{ needs.meta.outputs.tag }}-android-${{ matrix.arch }}-shell.apk"
+          mkdir -p "$output_dir"
+          cp "$apk_path" "$output_dir/$output_name"
+          echo "apk=$output_dir/$output_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Android shell APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ matrix.arch }}-shell
+          path: ${{ steps.android_apk.outputs.apk }}
+          if-no-files-found: error
+
   release:
     name: Create Release
     if: ${{ needs.meta.outputs.is_release == 'true' }}
     runs-on: ubuntu-latest
-    needs: [ changelog, meta, build ]
+    needs: [ changelog, meta, build, build-android-shell ]
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -196,7 +308,14 @@ jobs:
         run: |
           cd artifacts
           for f in *; do
-            if [[ $f == *"win"* ]]; then
+            if [[ $f == android-*-shell ]]; then
+              # Android artifacts are already installable APK files; move them unchanged.
+              echo "Processing Android artifact: $f"
+              cd "$f"
+              mv *.apk ../
+              cd ..
+              rm -rf "$f"
+            elif [[ $f == *"win"* ]]; then
               # Windows artifacts: keep original zip files as they are already in correct format
               echo "Processing Windows artifact: $f - keeping original zip format"
               # Move zip files to root directory
@@ -250,6 +369,7 @@ jobs:
           files: |
             artifacts/*.zip
             artifacts/*.tar.gz
+            artifacts/*.apk
           draft: false
           prerelease: ${{ contains(needs.meta.outputs.tag, '-') }}
           generate_release_notes: true

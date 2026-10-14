@@ -1,3 +1,34 @@
+# MaaFramework resource project release template / MaaFramework 资源项目发版模板
+#
+# 中文：资源仓库可将本文件复制到 .github/workflows/install.yml。Desktop 保留原有 install.py
+# 打包方式；Android 会检出 MFA 源码，并把 M9A 风格目录打进专用 APK。
+# English: A resource repository can copy this file to .github/workflows/install.yml. Desktop keeps
+# the existing install.py packaging flow, while Android checks out MFA and embeds an M9A-style payload.
+#
+# python-for-android resource APK example / python-for-android 资源 APK 示例
+# --------------------------------------------------------------------------
+# 中文：此资源开发者示例默认使用 python-for-android 的 service_library bootstrap 生成 AAR，并将
+# Python runtime 合入 Android APK。interface.json 和 Agent 入口仍完全由资源项目维护；可按需设置：
+# English: This resource-developer example builds a python-for-android service_library AAR by default and
+# embeds the Python runtime into the Android APK. The resource project remains responsible for interface.json
+# and the Agent entrypoint. The following repository variables are optional:
+#
+#   MFA_ANDROID_PYTHON_REQUIREMENTS=python3
+#   If this override is empty, requirements-android.txt or requirements.txt is
+#   read automatically and its dependencies are built into the APK.
+#   MFA_ANDROID_PYTHON_ENTRYPOINT=agent/main.py
+#   MFA_ANDROID_P4A_LOCAL_RECIPES=p4a-recipes
+#   MFA_ANDROID_LAUNCHER_ICON=android/icon.png
+#   The same PNG is used for both the Launcher icon and Android 12+ splash icon.
+#   MFA_ANDROID_APPLICATION_ID=io.github.example.maaxxx
+#
+# 中文：不使用 Python Agent 时，可注释掉下方标记为“Python runtime block”的三个步骤；随后
+# python_runtime 的输出为空，dotnet publish 不会合入 AAR。requirements 必须能被 p4a 编译；仅提供
+# 桌面 wheel 的包需要资源作者添加 p4a recipe 或 Android 替代实现。
+# English: If the resource does not use a Python Agent, comment out the three steps marked "Python runtime
+# block" below. The python_runtime output will then be empty and dotnet publish will not embed an AAR.
+# Every requirement must be supported by p4a; desktop-only wheels need a p4a recipe or Android replacement.
+
 name: install
 
 on:
@@ -8,16 +39,39 @@ on:
       - "**"
     paths:
       - ".github/workflows/install.yml"
-      - "assets/**"
+      - "agent/**"
+      - "android/**"
+      - "data/**"
+      - "locales/**"
+      - "python/**"
+      - "resource/**"
+      - "Resource/**"
+      - "tasks/**"
+      - "interface.json"
+      - "interface.jsonc"
+      - "requirements*.txt"
       - "**.py"
   pull_request:
     branches:
       - "**"
     paths:
       - ".github/workflows/install.yml"
-      - "assets/**"
+      - "agent/**"
+      - "android/**"
+      - "data/**"
+      - "locales/**"
+      - "python/**"
+      - "resource/**"
+      - "Resource/**"
+      - "tasks/**"
+      - "interface.json"
+      - "interface.jsonc"
+      - "requirements*.txt"
       - "**.py"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   meta:
@@ -27,9 +81,10 @@ jobs:
         with:
           fetch-depth: 0
       - id: set_tag
+        shell: bash
         run: |
           is_release=${{ startsWith(github.ref, 'refs/tags/v') }}
-          tag=$(git describe --tags --match "v*" ${{ github.ref }} || true)
+          tag=$(git describe --tags --match "v*" "${{ github.ref }}" || true)
           if [[ $tag != v* ]]; then
             tag=$(curl -sX GET "https://api.github.com/repos/${{ github.repository }}/releases/latest" --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' | awk '/tag_name/{print $4}' FS='["]')
             if [[ $tag != v* ]]; then
@@ -37,26 +92,26 @@ jobs:
             fi
             tag=$(date "+$tag-%y%m%d-$(git rev-parse --short HEAD)")
           fi
-          if ! $($is_release) ; then
+          if ! $is_release; then
             prefix=${tag%-*-*}
             suffix=${tag#$prefix-}
             tag="$prefix-ci.$suffix"
           fi
 
-          echo tag=$tag | tee -a $GITHUB_OUTPUT
-          echo is_release=$is_release | tee -a $GITHUB_OUTPUT
+          echo "tag=$tag" | tee -a "$GITHUB_OUTPUT"
+          echo "is_release=$is_release" | tee -a "$GITHUB_OUTPUT"
     outputs:
       tag: ${{ steps.set_tag.outputs.tag }}
       is_release: ${{ steps.set_tag.outputs.is_release }}
 
-  install:
+  install-desktop:
     needs: meta
     runs-on: macos-latest
     strategy:
-      matrix:
-        os: [win, macos, linux, android]
-        arch: [aarch64, x86_64]
       fail-fast: false
+      matrix:
+        os: [win, macos, linux]
+        arch: [aarch64, x86_64]
 
     steps:
       - uses: actions/checkout@v4
@@ -69,49 +124,541 @@ jobs:
           repository: MaaXYZ/MaaFramework
           fileName: "MAA-${{ matrix.os }}-${{ matrix.arch }}*"
           latest: true
-          out-file-path: "deps"
+          out-file-path: deps
           extract: true
 
       - name: Download MFAAvalonia
-        if: matrix.os != 'android'
         id: download_mfa
         uses: robinraju/release-downloader@v1
         with:
           repository: MaaXYZ/MFAAvalonia
-          fileName: "MFAAvalonia-*-${{ (matrix.os == 'win' && 'win') || (matrix.os == 'macos' && 'osx') || (matrix.os == 'linux' && 'linux') }}-${{ (matrix.arch == 'x86_64' && 'x64') || (matrix.arch == 'aarch64' && 'arm64') }}*"
+          fileName: "MFAAvalonia-*-${{ (matrix.os == 'win' && 'win') || (matrix.os == 'macos' && 'osx') || 'linux' }}-${{ (matrix.arch == 'x86_64' && 'x64') || 'arm64' }}*"
           latest: true
-          out-file-path: "MFA"
+          out-file-path: MFA
           extract: true
 
       - name: Clean up MFAAvalonia archive
-        if: matrix.os != 'android'
         shell: bash
         run: |
-          ARCHIVE_FILE_PATH="${{ fromJson(steps.download_mfa.outputs.downloaded_files)[0] }}"
-          rm -f "${ARCHIVE_FILE_PATH}"
-          echo "Archive cleanup command executed for MFAAvalonia."
+          archive_file_path="${{ fromJson(steps.download_mfa.outputs.downloaded_files)[0] }}"
+          rm -f "$archive_file_path"
 
-      - name: Install
+      - name: Install desktop package
         shell: bash
         run: |
-          python ./install.py ${{ needs.meta.outputs.tag }}
-
-          if [[ "${{ matrix.os }}" != "android" ]]; then
-            if [ -d "MFA" ]; then
-              echo "Copying MFA files to install directory..."
-              mkdir -p install
-              rsync -av --ignore-existing MFA/ install/
-            else
-              echo "MFA directory not found, skipping copy."
-            fi
-          else
-            echo "Skipping copy MFA for Android."
+          python ./install.py "${{ needs.meta.outputs.tag }}"
+          if [[ -d MFA ]]; then
+            mkdir -p install
+            rsync -av --ignore-existing MFA/ install/
           fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: MaaXXX-${{ matrix.os }}-${{ matrix.arch }}
-          path: "install"
+          path: install
+
+  build-android:
+    needs: meta
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: android-arm64
+            abi: arm64-v8a
+            arch: arm64
+          - rid: android-x64
+            abi: x86_64
+            arch: x64
+
+    env:
+      P4A_REQUIREMENTS_OVERRIDE: ${{ vars.MFA_ANDROID_PYTHON_REQUIREMENTS || '' }}
+      P4A_ENTRYPOINT: ${{ vars.MFA_ANDROID_PYTHON_ENTRYPOINT || '' }}
+      P4A_LOCAL_RECIPES: ${{ vars.MFA_ANDROID_P4A_LOCAL_RECIPES || '' }}
+      P4A_REF: ${{ vars.MFA_ANDROID_PYTHON_FOR_ANDROID_REF || 'v2026.05.09' }}
+      P4A_NDK_VERSION: 28.2.13676358
+
+    steps:
+      - name: Checkout resource project
+        uses: actions/checkout@v5
+        with:
+          path: resource-source
+          submodules: recursive
+
+      - name: Checkout MFA Android shell
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ vars.MFA_ANDROID_MFA_REPOSITORY || 'MaaXYZ/MFAAvalonia' }}
+          ref: ${{ vars.MFA_ANDROID_MFA_REF || 'main' }}
+          path: mfa-source
+
+      - name: Prepare M9A-style resource payload
+        id: payload
+        shell: bash
+        env:
+          RESOURCE_ROOT_INPUT: ${{ vars.MFA_ANDROID_RESOURCE_ROOT || '.' }}
+        run: |
+          source_checkout=$(realpath resource-source)
+          resource_root=$(realpath -m "resource-source/$RESOURCE_ROOT_INPUT")
+          case "$resource_root/" in
+            "$source_checkout/"*) ;;
+            *)
+              echo "[ERR] MFA_ANDROID_RESOURCE_ROOT must stay inside the resource repository"
+              exit 1
+              ;;
+          esac
+
+          if [[ ! -f "$resource_root/interface.json" && ! -f "$resource_root/interface.jsonc" ]]; then
+            echo "[ERR] Resource root must contain interface.json or interface.jsonc: $resource_root"
+            exit 1
+          fi
+
+          interface_path="$resource_root/interface.json"
+          [[ -f "$interface_path" ]] || interface_path="$resource_root/interface.jsonc"
+          agent_enabled=$(python - "$interface_path" <<'PY'
+          import json
+          import re
+          import sys
+
+          path = sys.argv[1]
+          text = open(path, encoding="utf-8-sig").read()
+          # interface.jsonc is intentionally supported for the common comment forms.
+          text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+          text = re.sub(r"(^|\s)//.*?$", r"\1", text, flags=re.M)
+          try:
+              value = json.loads(text)
+          except json.JSONDecodeError as exc:
+              raise SystemExit(f"[ERR] Cannot parse {path}: {exc}")
+          print("true" if isinstance(value.get("agent"), dict) else "false")
+          PY
+          )
+          echo "agent_enabled=$agent_enabled" >> "$GITHUB_OUTPUT"
+
+          payload_root="$RUNNER_TEMP/mfa-android-resource-payload-${{ matrix.arch }}"
+          mkdir -p "$payload_root"
+
+          # 中文：默认复制 M9A 类型项目运行所需目录；缺失的可选目录自动跳过。
+          # English: Copy runtime directories used by M9A-style projects; missing optional directories are skipped.
+          for directory in agent config data locales python resource Resource tasks; do
+            if [[ -d "$resource_root/$directory" ]]; then
+              cp -a "$resource_root/$directory" "$payload_root/$directory"
+            fi
+          done
+
+          # A portable Desktop release may already contain MaaFramework's pure-Python
+          # binding. Reuse only Python sources; Windows DLLs, bytecode caches and the
+          # bundled desktop native runtime are deliberately excluded.
+          maa_site_package=""
+          for candidate in \
+            "$resource_root/python/Lib/site-packages/maa" \
+            "$resource_root/python/lib/site-packages/maa" \
+            "$source_checkout/python/Lib/site-packages/maa" \
+            "$source_checkout/python/lib/site-packages/maa"; do
+            if [[ -f "$candidate/__init__.py" ]]; then
+              maa_site_package="$candidate"
+              break
+            fi
+          done
+          if [[ -n "$maa_site_package" ]]; then
+            mkdir -p "$payload_root/python/maa"
+            rsync -a --prune-empty-dirs \
+              --include='*/' --include='*.py' --include='*.pyi' --exclude='*' \
+              "$maa_site_package/" "$payload_root/python/maa/"
+            if [[ ! -f "$payload_root/python/maa/agent/agent_server.py" ]]; then
+              echo "[ERR] Desktop maa binding does not contain maa/agent/agent_server.py: $maa_site_package"
+              exit 1
+            fi
+            echo "Included pure-Python MaaFramework binding from $maa_site_package"
+          fi
+
+          # Portable Desktop releases contain bytecode compiled by their bundled
+          # CPython (for example 3.12). The Android runtime may use another version,
+          # so shipping those caches causes "Bad magic number in .pyc file".
+          find "$payload_root" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+          find "$payload_root" -type d -name '__pycache__' -prune -exec rm -rf -- {} +
+
+          # 中文：复制 interface、说明/许可、依赖清单以及 Python/uv 项目元数据。
+          # English: Copy the interface, documentation/license files, dependency lists, and Python/uv metadata.
+          shopt -s nullglob
+          root_files=(
+            "$resource_root"/interface.json
+            "$resource_root"/interface.jsonc
+            "$resource_root"/changes.json
+            "$resource_root"/CONTACT*
+            "$resource_root"/LICENSE*
+            "$resource_root"/README*
+            "$resource_root"/requirements*.txt
+            "$resource_root"/*.md
+            "$resource_root"/.python-version
+            "$resource_root"/pyproject.toml
+            "$resource_root"/uv.lock
+            "$resource_root"/maa-project.json
+          )
+          if (( ${#root_files[@]} > 0 )); then
+            cp -a "${root_files[@]}" "$payload_root/"
+          fi
+
+          echo "root=$payload_root" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve APK metadata
+        id: metadata
+        shell: bash
+        env:
+          LAUNCHER_LABEL_INPUT: ${{ vars.MFA_ANDROID_LAUNCHER_LABEL || '' }}
+          LAUNCHER_ICON_INPUT: ${{ vars.MFA_ANDROID_LAUNCHER_ICON || '' }}
+          APPLICATION_ID_INPUT: ${{ vars.MFA_ANDROID_APPLICATION_ID || '' }}
+        run: |
+          repository_name="${GITHUB_REPOSITORY##*/}"
+          repository_owner="${GITHUB_REPOSITORY%%/*}"
+          launcher_label="$LAUNCHER_LABEL_INPUT"
+          if [[ -z "$launcher_label" ]]; then
+            launcher_label="$repository_name"
+          fi
+
+          normalize_application_id_segment() {
+            local segment
+            segment=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_]+/_/g; s/^_+|_+$//g')
+            if [[ -z "$segment" ]]; then
+              segment="app"
+            elif [[ ! "$segment" =~ ^[a-z_] ]]; then
+              segment="app_$segment"
+            fi
+            printf '%s' "$segment"
+          }
+
+          application_id="$APPLICATION_ID_INPUT"
+          if [[ -z "$application_id" ]]; then
+            owner_segment=$(normalize_application_id_segment "$repository_owner")
+            repository_segment=$(normalize_application_id_segment "$repository_name")
+            application_id="io.github.$owner_segment.$repository_segment"
+          fi
+          if [[ ! "$application_id" =~ ^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$ ]]; then
+            echo "[ERR] MFA_ANDROID_APPLICATION_ID is not a valid Android application ID: $application_id"
+            exit 1
+          fi
+
+          launcher_icon=""
+          if [[ -n "$LAUNCHER_ICON_INPUT" ]]; then
+            source_checkout=$(realpath resource-source)
+            launcher_icon=$(realpath -m "resource-source/$LAUNCHER_ICON_INPUT")
+            case "$launcher_icon" in
+              "$source_checkout"/*) ;;
+              *)
+                echo "[ERR] MFA_ANDROID_LAUNCHER_ICON must stay inside the resource repository"
+                exit 1
+                ;;
+            esac
+            if [[ ! -f "$launcher_icon" ]]; then
+              echo "[ERR] Android Launcher icon does not exist: $launcher_icon"
+              exit 1
+            fi
+            case "${launcher_icon,,}" in
+              *.png) ;;
+              *)
+                echo "[ERR] MFA_ANDROID_LAUNCHER_ICON must point to a PNG file"
+                exit 1
+                ;;
+            esac
+          fi
+
+          safe_repository_name=$(printf '%s' "$repository_name" | tr -cs 'A-Za-z0-9._-' '-')
+          echo "launcher_label=$launcher_label" >> "$GITHUB_OUTPUT"
+          echo "launcher_icon=$launcher_icon" >> "$GITHUB_OUTPUT"
+          echo "application_id=$application_id" >> "$GITHUB_OUTPUT"
+          echo "[INF] Android application ID: $application_id"
+          echo "output_name=${safe_repository_name}-${{ needs.meta.outputs.tag }}-android-${{ matrix.arch }}.apk" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=${safe_repository_name}-android-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK, build tools and NDK
+        shell: bash
+        run: |
+          sdkmanager \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;$P4A_NDK_VERSION"
+
+      # Python runtime block 1/3 / Python 运行时块 1/3
+      - name: Setup build Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Python runtime block 2/3 / Python 运行时块 2/3
+      - name: Install python-for-android host dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake ccache cmake gettext libffi-dev libltdl-dev \
+            libssl-dev libtool openjdk-17-jdk patch pkg-config unzip zip
+          python -m pip install --upgrade pip wheel setuptools
+          # 中文：必须从源码目录以 editable 模式安装，确保 recipe 内的 pyproject.toml 等非 Python 文件保留。
+          # English: Install from an editable source checkout so recipe data such as pyproject.toml is preserved.
+          git clone --depth 1 --branch "$P4A_REF" \
+            https://github.com/kivy/python-for-android.git "$RUNNER_TEMP/python-for-android"
+          python -m pip install --editable "$RUNNER_TEMP/python-for-android"
+
+      # Python runtime block 3/3 / Python 运行时块 3/3
+      - name: Build python-for-android service AAR
+        id: python_runtime
+        shell: bash
+        env:
+          ANDROIDSDK: ${{ env.ANDROID_HOME }}
+          ANDROIDNDK: ${{ env.ANDROID_HOME }}/ndk/${{ env.P4A_NDK_VERSION }}
+          ANDROIDAPI: '36'
+          NDKAPI: '26'
+          PAYLOAD_ROOT: ${{ steps.payload.outputs.root }}
+        run: |
+          private_root="$RUNNER_TEMP/mfa-p4a-private-${{ matrix.arch }}"
+          mkdir -p "$private_root"
+          cp mfa-source/workflows/android/mfa_android_agent.py "$private_root/mfa_android_agent.py"
+
+          build_root="$RUNNER_TEMP/mfa-p4a-build-${{ matrix.arch }}"
+          mkdir -p "$build_root"
+          recipe_args=()
+          if [[ -n "$P4A_LOCAL_RECIPES" ]]; then
+            recipe_root=$(realpath -m "resource-source/$P4A_LOCAL_RECIPES")
+            resource_checkout=$(realpath resource-source)
+            case "$recipe_root/" in
+              "$resource_checkout/"*) ;;
+              *)
+                echo "[ERR] MFA_ANDROID_P4A_LOCAL_RECIPES must stay inside the resource repository"
+                exit 1
+                ;;
+            esac
+            if [[ ! -d "$recipe_root" ]]; then
+              echo "[ERR] p4a local recipe directory does not exist: $recipe_root"
+              exit 1
+            fi
+            recipe_args+=(--local-recipes "$recipe_root")
+          fi
+
+          cd "$build_root"
+          effective_requirements=$(python - "$PAYLOAD_ROOT" "$P4A_REQUIREMENTS_OVERRIDE" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          root = Path(sys.argv[1])
+          override = sys.argv[2].strip()
+          source = "MFA_ANDROID_PYTHON_REQUIREMENTS"
+          if override:
+              items = [item.strip() for item in override.split(",") if item.strip()]
+          else:
+              path = next(
+                  (candidate for candidate in
+                   (root / "requirements-android.txt", root / "requirements.txt")
+                   if candidate.is_file()),
+                  None,
+              )
+              source = str(path) if path else "default"
+              items = []
+              if path:
+                  for line_number, raw in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
+                      line = raw.strip()
+                      if not line or line.startswith("#"):
+                          continue
+                      if line.startswith(("-r", "--requirement", "-c", "--constraint")):
+                          raise SystemExit(
+                              f"[ERR] Nested requirement/constraint files are not supported: {path}:{line_number}"
+                          )
+                      if line.startswith("-"):
+                          raise SystemExit(f"[ERR] Unsupported requirements option: {path}:{line_number}: {line}")
+                      # P4A receives a comma-separated list. Environment markers are
+                      # evaluated by the Linux/Android build and remain intact.
+                      items.append(re.sub(r"\s+#.*$", "", line).strip())
+
+          if not any(re.match(r"^python\d*(?:[<>=!~].*)?$", item, re.I) for item in items):
+              items.insert(0, "python3")
+          print(",".join(items))
+          print(f"[INF] requirements source: {source}", file=sys.stderr)
+          PY
+          )
+          echo "[INF] python-for-android requirements: $effective_requirements"
+          p4a aar \
+            --private "$private_root" \
+            --package com.fox.mfa.python \
+            --name MFAAndroidPythonAgent \
+            --version 1.0 \
+            --bootstrap service_library \
+            --requirements "$effective_requirements" \
+            --service mfaagent:mfa_android_agent.py \
+            --arch "${{ matrix.abi }}" \
+            --android-api 36 \
+            --ndk-api 26 \
+            "${recipe_args[@]}" \
+            --release
+
+          aar_path=$(find "$build_root" -type f -name '*.aar' -print -quit)
+          if [[ -z "$aar_path" ]]; then
+            echo "[ERR] python-for-android did not generate an AAR"
+            exit 1
+          fi
+
+          # Android 14+ requires every foreground service to declare a type. MFA
+          # starts the Agent as a foreground service so it stays alive while the
+          # target game owns the foreground Activity. Patch the generated AAR
+          # manifest here because p4a's service_library template omits this field.
+          aar_manifest_dir="$RUNNER_TEMP/mfa-python-aar-manifest-${{ matrix.arch }}"
+          mkdir -p "$aar_manifest_dir"
+          unzip -q "$aar_path" AndroidManifest.xml -d "$aar_manifest_dir"
+          python - "$aar_manifest_dir/AndroidManifest.xml" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8")
+          marker = 'android:process=":service_mfaagent"'
+          replacement = marker + '\n            android:foregroundServiceType="dataSync"'
+          if 'android:foregroundServiceType=' not in text:
+              if marker not in text:
+                  raise SystemExit("[ERR] p4a Agent service was not found in the AAR manifest")
+              text = text.replace(marker, replacement, 1)
+              path.write_text(text, encoding="utf-8")
+          PY
+          (cd "$aar_manifest_dir" && zip -q -u "$aar_path" AndroidManifest.xml)
+
+          aar_entries="$RUNNER_TEMP/mfa-python-aar-${{ matrix.arch }}-entries.txt"
+          unzip -Z1 "$aar_path" > "$aar_entries"
+          if ! grep -Eq "^jni/${{ matrix.abi }}/libpython3\.[0-9]+\.so$" "$aar_entries"; then
+            echo "[ERR] AAR does not contain CPython for ${{ matrix.abi }}"
+            exit 1
+          fi
+          echo "aar=$aar_path" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+          config-file: mfa-source/NuGet.config
+
+      - name: Install .NET Android workload
+        run: dotnet workload install android --skip-manifest-update
+
+      - name: Restore MFA Android dependencies
+        shell: bash
+        env:
+          NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+        working-directory: mfa-source
+        run: |
+          dotnet restore MFAAvalonia.Android/MFAAvalonia.Android.csproj \
+            -r "${{ matrix.rid }}" \
+            -p:AndroidSdkDirectory="$ANDROID_HOME"
+
+      - name: Build APK with interface and resources
+        shell: bash
+        env:
+          NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+          PAYLOAD_ROOT: ${{ steps.payload.outputs.root }}
+          LAUNCHER_LABEL: ${{ steps.metadata.outputs.launcher_label }}
+          LAUNCHER_ICON: ${{ steps.metadata.outputs.launcher_icon }}
+          APPLICATION_ID: ${{ steps.metadata.outputs.application_id }}
+          PYTHON_AAR: ${{ steps.python_runtime.outputs.aar }}
+          AGENT_ENABLED: ${{ steps.payload.outputs.agent_enabled }}
+        working-directory: mfa-source
+        run: |
+          if [[ "$AGENT_ENABLED" == "true" && -z "$PYTHON_AAR" ]]; then
+            echo "[ERR] interface declares an Agent, but python-for-android AAR is missing"
+            exit 1
+          fi
+
+          launcher_icon_args=()
+          if [[ -n "$LAUNCHER_ICON" ]]; then
+            launcher_icon_args+=("-p:AndroidLauncherIcon=$LAUNCHER_ICON")
+          fi
+
+          dotnet publish MFAAvalonia.Android/MFAAvalonia.Android.csproj \
+            -c Release \
+            -f net10.0-android \
+            -r "${{ matrix.rid }}" \
+            --no-restore \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" \
+            -p:AndroidEmbedResourcePackage=true \
+            "-p:ApplicationId=$APPLICATION_ID" \
+            "-p:AndroidResourcePackageSource=$PAYLOAD_ROOT" \
+            "-p:AndroidLauncherLabel=$LAUNCHER_LABEL" \
+            "-p:AndroidPythonRuntimeAar=$PYTHON_AAR" \
+            "-p:AndroidPythonAgentEntryPoint=$P4A_ENTRYPOINT" \
+            "${launcher_icon_args[@]}"
+
+      - name: Verify and collect Android APK
+        id: apk
+        shell: bash
+        env:
+          OUTPUT_NAME: ${{ steps.metadata.outputs.output_name }}
+          EXPECTED_APPLICATION_ID: ${{ steps.metadata.outputs.application_id }}
+          PYTHON_AAR: ${{ steps.python_runtime.outputs.aar }}
+          AGENT_ENABLED: ${{ steps.payload.outputs.agent_enabled }}
+        run: |
+          publish_dir="mfa-source/MFAAvalonia.Android/bin/Release/net10.0-android/${{ matrix.rid }}/publish"
+          apk_path=$(find "$publish_dir" -maxdepth 1 -type f -name '*-Signed.apk' -print -quit)
+          if [[ -z "$apk_path" ]]; then
+            echo "[ERR] Signed Android APK was not generated in $publish_dir"
+            exit 1
+          fi
+
+          # Avoid `unzip | grep -q` under GitHub's `bash -o pipefail`: grep may
+          # close the pipe after a match and make unzip report SIGPIPE (141).
+          apk_entries="$RUNNER_TEMP/mfa-resource-apk-${{ matrix.arch }}-entries.txt"
+          unzip -Z1 "$apk_path" > "$apk_entries"
+          apk_badging="$RUNNER_TEMP/mfa-resource-apk-${{ matrix.arch }}-badging.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging "$apk_path" > "$apk_badging"
+          actual_application_id=$(sed -n "s/^package: name='\([^']*\)'.*/\1/p" "$apk_badging")
+          if [[ "$actual_application_id" != "$EXPECTED_APPLICATION_ID" ]]; then
+            echo "[ERR] APK application ID mismatch: expected=$EXPECTED_APPLICATION_ID actual=$actual_application_id"
+            exit 1
+          fi
+          if ! grep -Fxq 'assets/MfaPackage/package.zip' "$apk_entries"; then
+            echo "[ERR] APK does not contain the resource payload"
+            exit 1
+          fi
+          if ! grep -Fxq "lib/${{ matrix.abi }}/libMaaFramework.so" "$apk_entries"; then
+            echo "[ERR] APK does not contain MaaFramework for ${{ matrix.abi }}"
+            echo "[DBG] Native APK entries:"
+            grep -E '^lib/[^/]+/(libMaa|libmfabridge|libonnxruntime|libopencv)' "$apk_entries" || true
+            exit 1
+          fi
+          if ! grep -Fxq 'assets/MfaDependencies/shizuku.apk' "$apk_entries"; then
+            echo "[ERR] APK does not contain the verified Shizuku installer"
+            exit 1
+          fi
+          if [[ -n "$PYTHON_AAR" ]] && ! grep -Eq "^lib/${{ matrix.abi }}/libpython3\.[0-9]+\.so$" "$apk_entries"; then
+            echo "[ERR] APK does not contain the requested python-for-android runtime"
+            exit 1
+          fi
+          if [[ -n "$PYTHON_AAR" ]]; then
+            merged_manifest="$RUNNER_TEMP/mfa-resource-apk-${{ matrix.arch }}-manifest.txt"
+            "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump xmltree --file AndroidManifest.xml "$apk_path" > "$merged_manifest"
+            if ! grep -Eq 'foregroundServiceType.*(dataSync|0x0*1([^0-9a-fA-F]|$))' "$merged_manifest"; then
+              echo "[ERR] Python Agent foreground service type was not merged into the APK manifest"
+              exit 1
+            fi
+          fi
+          if [[ "$AGENT_ENABLED" == "true" && -z "$PYTHON_AAR" ]]; then
+            echo "[ERR] Agent interface was packaged without a Python runtime"
+            exit 1
+          fi
+
+          output_dir="$GITHUB_WORKSPACE/android-artifacts"
+          mkdir -p "$output_dir"
+          cp "$apk_path" "$output_dir/$OUTPUT_NAME"
+          echo "path=$output_dir/$OUTPUT_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.metadata.outputs.artifact_name }}
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
 
   changelog:
     name: Generate changelog
@@ -136,17 +683,25 @@ jobs:
 
   release:
     if: ${{ needs.meta.outputs.is_release == 'true' }}
-    needs: [meta, install, changelog]
+    needs: [meta, install-desktop, build-android, changelog]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: assets
 
-      - run: |
+      - name: Prepare release files
+        shell: bash
+        run: |
           cd assets
-          for f in *; do
-            (cd $f && zip -r ../$f-${{ needs.meta.outputs.tag }}.zip .)
+          for directory in */; do
+            directory=${directory%/}
+            if compgen -G "$directory/*.apk" > /dev/null; then
+              mv "$directory"/*.apk .
+            else
+              (cd "$directory" && zip -r "../$directory-${{ needs.meta.outputs.tag }}.zip" .)
+            fi
+            rm -rf "$directory"
           done
 
       - uses: softprops/action-gh-release@v2
@@ -155,4 +710,4 @@ jobs:
           tag_name: ${{ needs.meta.outputs.tag }}
           body: ${{ needs.changelog.outputs.release_body }}
           draft: false
-          prerelease: ${{ needs.meta.outputs.is_prerelease == 'true' }}
+          prerelease: false

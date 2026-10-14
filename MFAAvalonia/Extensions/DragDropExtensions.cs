@@ -28,7 +28,6 @@ using System.Threading.Tasks;
 
 namespace MFAAvalonia.Extensions;
 
-#pragma warning disable CS4014 // 异步方法没有等待 
 public class DragDropExtensions
 {
     // 定义附加属性：是否启用拖放功能
@@ -102,6 +101,11 @@ public class DragDropExtensions
     private static readonly AttachedProperty<DragAdorner?> DragAdornerProperty =
         AvaloniaProperty.RegisterAttached<ListBox, DragAdorner?>(
             "DragAdorner",
+            typeof(DragDropExtensions));
+
+    private static readonly AttachedProperty<bool> IsDraggingProperty =
+        AvaloniaProperty.RegisterAttached<ListBox, bool>(
+            "IsDragging",
             typeof(DragDropExtensions));
 
     public static readonly AttachedProperty<bool> EnableAnimationProperty =
@@ -195,6 +199,12 @@ public class DragDropExtensions
 
     private static void SetPressedPosition(ListBox element, Point? value) =>
         element.SetValue(PressedPositionProperty, value);
+
+    private static bool GetIsDragging(ListBox element) =>
+        element.GetValue(IsDraggingProperty);
+
+    private static void SetIsDragging(ListBox element, bool value) =>
+        element.SetValue(IsDraggingProperty, value);
 
     public static int GetDragStartThreshold(ListBox element) =>
         element.GetValue(DragStartThresholdProperty);
@@ -330,9 +340,11 @@ public class DragDropExtensions
         SetPressedPosition(listBox, null);
     }
 
-    private static void OnPointerMoved(object? sender, PointerEventArgs e)
+    private static async void OnPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (sender is not ListBox listBox || !e.GetCurrentPoint(listBox).Properties.IsLeftButtonPressed)
+        if (sender is not ListBox listBox ||
+            GetIsDragging(listBox) ||
+            !e.GetCurrentPoint(listBox).Properties.IsLeftButtonPressed)
             return;
 
         var pressedPosition = GetPressedPosition(listBox);
@@ -351,8 +363,6 @@ public class DragDropExtensions
         {
             return;
         }
-        // 清除按下位置
-        SetPressedPosition(listBox, currentPosition);
         // 获取鼠标点击位置的项目索引
         var position = e.GetPosition(listBox);
         var sourceItem = GetSourceIndex(listBox, position, -1);
@@ -372,7 +382,21 @@ public class DragDropExtensions
         item.SetText(sourceItem.ToString());
         data.Add(item);
 
-        DragDrop.DoDragDropAsync(e, data, DragDropEffects.Move);
+        // Win32 拖放会运行嵌套消息循环，必须在调用前阻止 PointerMoved 重入。
+        SetIsDragging(listBox, true);
+        ClearDragState(listBox);
+        e.Handled = true;
+
+        try
+        {
+            await DragDrop.DoDragDropAsync(e, data, DragDropEffects.Move);
+        }
+        finally
+        {
+            SetIsDragging(listBox, false);
+            ClearDragState(listBox);
+            ClearAdorner(listBox);
+        }
     }
 
     private static void OnDragOver(object? sender, DragEventArgs e)
@@ -417,7 +441,7 @@ public class DragDropExtensions
         {
             if (GetEnableAnimation(listBox))
             {
-                MoveWithAnimation(listBox, items, sourceIndex, targetIndex);
+                _ = MoveWithAnimation(listBox, items, sourceIndex, targetIndex);
             }
             else
             {
@@ -487,7 +511,7 @@ public class DragDropExtensions
                 }
             }
         };
-        animation.RunAsync(item).ContinueWith(t =>
+        _ = animation.RunAsync(item).ContinueWith(t =>
         {
             completionSource.SetResult(true);
         });

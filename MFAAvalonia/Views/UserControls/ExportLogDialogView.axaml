@@ -1,6 +1,4 @@
 <UserControl
-    MinWidth="520"
-    MinHeight="520"
     d:DesignHeight="560"
     d:DesignWidth="560"
     mc:Ignorable="d"
@@ -45,12 +43,12 @@
         </Style>
 
         <Style Selector="Button.export-action">
-            <Setter Property="MinWidth" Value="110" />
             <Setter Property="MinHeight" Value="38" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
         </Style>
     </UserControl.Styles>
 
-    <Grid Margin="14,8,14,8" RowDefinitions="Auto,*,Auto" RowSpacing="16">
+    <Grid Margin="10,8" RowDefinitions="Auto,*,Auto" RowSpacing="12">
         <StackPanel Grid.Row="0" Spacing="8">
             <TextBlock
                 Classes="export-title"
@@ -60,7 +58,10 @@
                 Text="{markup:I18n {x:Static helper:LangKeys.ExportLogDialogDescription}}" />
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer
+            Grid.Row="1"
+            HorizontalScrollBarVisibility="Disabled"
+            VerticalScrollBarVisibility="Auto">
             <StackPanel Spacing="14">
                 <Border Classes="export-section">
                     <StackPanel Spacing="12">
@@ -90,82 +91,84 @@
                             Classes="export-section-caption"
                             Text="{markup:I18n {x:Static helper:LangKeys.ExportLogDialogImagesDescription}}" />
 
-                        <Grid ColumnDefinitions="*,160" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="10">
-                            <CheckBox
-                                Grid.Row="0"
-                                Grid.Column="0"
-                                Content="{Binding OnErrorFolderLabel}"
-                                IsChecked="{Binding IncludeOnErrorImages}" />
-                            <ComboBox
-                                Grid.Row="0"
-                                Grid.Column="1"
-                                IsEnabled="{Binding IncludeOnErrorImages}"
-                                ItemsSource="{Binding ImageTimeRangeOptions}"
-                                SelectedItem="{Binding SelectedOnErrorImageTimeRange}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate x:DataType="usersControls:ExportLogTimeRangeOption">
-                                        <TextBlock Text="{Binding DisplayName}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
+                        <StackPanel Spacing="12">
+                            <StackPanel Spacing="6">
+                                <CheckBox
+                                    Content="{Binding OnErrorFolderLabel}"
+                                    IsChecked="{Binding IncludeOnErrorImages}" />
+                                <ComboBox
+                                    HorizontalAlignment="Stretch"
+                                    IsEnabled="{Binding IncludeOnErrorImages}"
+                                    ItemsSource="{Binding ImageTimeRangeOptions}"
+                                    SelectedItem="{Binding SelectedOnErrorImageTimeRange}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="usersControls:ExportLogTimeRangeOption">
+                                            <TextBlock Text="{Binding DisplayName}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
 
-                            <CheckBox
-                                Grid.Row="1"
-                                Grid.Column="0"
-                                Content="{Binding VisionFolderLabel}"
-                                IsChecked="{Binding IncludeVisionImages}" />
-                            <ComboBox
-                                Grid.Row="1"
-                                Grid.Column="1"
-                                IsEnabled="{Binding IncludeVisionImages}"
-                                ItemsSource="{Binding ImageTimeRangeOptions}"
-                                SelectedItem="{Binding SelectedVisionImageTimeRange}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate x:DataType="usersControls:ExportLogTimeRangeOption">
-                                        <TextBlock Text="{Binding DisplayName}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
+                            <StackPanel Spacing="6">
+                                <CheckBox
+                                    Content="{Binding VisionFolderLabel}"
+                                    IsChecked="{Binding IncludeVisionImages}" />
+                                <ComboBox
+                                    HorizontalAlignment="Stretch"
+                                    IsEnabled="{Binding IncludeVisionImages}"
+                                    ItemsSource="{Binding ImageTimeRangeOptions}"
+                                    SelectedItem="{Binding SelectedVisionImageTimeRange}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="usersControls:ExportLogTimeRangeOption">
+                                            <TextBlock Text="{Binding DisplayName}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
 
-                            <CheckBox
-                                Grid.Row="2"
-                                Grid.Column="0"
-                                Content="{markup:I18n {x:Static helper:LangKeys.ExportLogDialogOtherImages}}"
-                                IsChecked="{Binding IncludeOtherImages}" />
-                            <ComboBox
-                                Grid.Row="2"
-                                Grid.Column="1"
-                                IsEnabled="{Binding IncludeOtherImages}"
-                                ItemsSource="{Binding ImageTimeRangeOptions}"
-                                SelectedItem="{Binding SelectedOtherImageTimeRange}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate x:DataType="usersControls:ExportLogTimeRangeOption">
-                                        <TextBlock Text="{Binding DisplayName}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                        </Grid>
+                            <StackPanel Spacing="6">
+                                <CheckBox
+                                    Content="{markup:I18n {x:Static helper:LangKeys.ExportLogDialogOtherImages}}"
+                                    IsChecked="{Binding IncludeOtherImages}" />
+                                <ComboBox
+                                    HorizontalAlignment="Stretch"
+                                    IsEnabled="{Binding IncludeOtherImages}"
+                                    ItemsSource="{Binding ImageTimeRangeOptions}"
+                                    SelectedItem="{Binding SelectedOtherImageTimeRange}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="usersControls:ExportLogTimeRangeOption">
+                                            <TextBlock Text="{Binding DisplayName}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </StackPanel>
         </ScrollViewer>
 
-        <StackPanel
-            Grid.Row="2"
-            HorizontalAlignment="Right"
-            Orientation="Horizontal"
-            Spacing="10">
-            <Button
-                Classes="Outlined export-action"
-                Command="{Binding CloseCommand}"
-                Content="{markup:I18n {x:Static helper:LangKeys.ButtonClose}}"
-                IsEnabled="{Binding !IsExporting}" />
-            <Button
-                Classes="Flat export-action"
-                BorderThickness="0"
-                Command="{Binding StartExportCommand}"
-                Content="{markup:I18n {x:Static helper:LangKeys.ExportLogDialogStart}}"
-                IsEnabled="{Binding CanStartExport}" />
-        </StackPanel>
+        <Grid Grid.Row="2" RowDefinitions="Auto,Auto" RowSpacing="8">
+            <ProgressBar
+                Grid.Row="0"
+                HorizontalAlignment="Stretch"
+                IsIndeterminate="True"
+                IsVisible="{Binding IsExporting}" />
+            <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="10">
+                <Button
+                    Grid.Column="0"
+                    Classes="Outlined export-action"
+                    Command="{Binding CloseCommand}"
+                    Content="{markup:I18n {x:Static helper:LangKeys.ButtonClose}}"
+                    IsEnabled="{Binding !IsExporting}" />
+                <Button
+                    Grid.Column="1"
+                    Classes="Flat export-action"
+                    BorderThickness="0"
+                    Command="{Binding StartExportCommand}"
+                    Content="{Binding StartExportLabel}"
+                    IsEnabled="{Binding CanStartExport}" />
+            </Grid>
+        </Grid>
     </Grid>
 </UserControl>

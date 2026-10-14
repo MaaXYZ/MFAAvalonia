@@ -19,6 +19,9 @@ public partial class MonitorViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<MonitorItemViewModel> Items { get; } = new();
     private readonly DispatcherTimer _timer;
+    private int _liveViewOverrideCount;
+
+    public bool IsLiveViewOverrideActive => _liveViewOverrideCount > 0;
 
     [ObservableProperty]
     private int _sortIndex;
@@ -113,6 +116,52 @@ public partial class MonitorViewModel : ViewModelBase, IDisposable
             item.UpdateInfo();
     }
 
+    public void EnterLiveViewOverride()
+    {
+        _liveViewOverrideCount++;
+        if (_liveViewOverrideCount != 1)
+            return;
+
+        ResumeAllLiveViews();
+        OnPropertyChanged(nameof(IsLiveViewOverrideActive));
+    }
+
+    public void LeaveLiveViewOverride()
+    {
+        if (_liveViewOverrideCount <= 0)
+            return;
+
+        _liveViewOverrideCount--;
+        if (_liveViewOverrideCount != 0)
+            return;
+
+        RestoreActiveTabLiveViewOnly();
+        OnPropertyChanged(nameof(IsLiveViewOverrideActive));
+    }
+
+    private static void ResumeAllLiveViews()
+    {
+        foreach (var processor in MaaProcessor.Processors.ToList())
+            processor.ViewModel?.ResumeLiveView();
+    }
+
+    public static void RestoreActiveTabLiveViewOnly()
+    {
+        var activeViewModel = Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel;
+
+        foreach (var processor in MaaProcessor.Processors.ToList())
+        {
+            var viewModel = processor.ViewModel;
+            if (viewModel == null)
+                continue;
+
+            if (ReferenceEquals(viewModel, activeViewModel))
+                viewModel.ResumeLiveView();
+            else
+                viewModel.PauseLiveView();
+        }
+    }
+
     [RelayCommand]
     private void ZoomIn()
     {
@@ -129,8 +178,11 @@ public partial class MonitorViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        LeaveLiveViewOverride();
         _timer.Stop();
+        MaaProcessor.Processors.CollectionChanged -= Processors_CollectionChanged;
         foreach(var item in Items) item.Dispose();
+        Items.Clear();
         GC.SuppressFinalize(this);
     }
 }

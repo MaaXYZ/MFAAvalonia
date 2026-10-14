@@ -21,6 +21,12 @@ public partial class SettingsViewModel : ViewModelBase
     private bool _hotkeysInitialized;
     private bool _syncingCurrentConfiguration;
 
+    [ObservableProperty] private bool _helpImproveSoftware =
+        bool.TryParse(GlobalConfiguration.GetValue(ConfigurationKeys.HelpImproveSoftware, bool.TrueString), out var helpImproveSoftware)
+        && helpImproveSoftware;
+
+    partial void OnHelpImproveSoftwareChanged(bool value) => TelemetryService.SetEnabled(value);
+
     protected override void Initialize()
     {
         _hotKeyShowGui = MFAHotKey.Parse(GlobalConfiguration.GetValue(ConfigurationKeys.ShowGui, ""));

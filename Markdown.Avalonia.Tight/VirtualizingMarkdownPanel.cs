@@ -19,14 +19,19 @@ namespace Markdown.Avalonia
         private readonly List<DocumentElement> _allElements = new();
         private readonly Dictionary<int, Control> _realizedElements = new();
         private readonly Dictionary<Control, int> _controlIndexMap = new();
+        private readonly Dictionary<DocumentElement, int> _elementIndexMap = new();
         private readonly List<double> _elementHeights = new();
         private readonly List<double> _elementOffsets = new();
         private readonly HashSet<int> _measuredElements = new();
+        private readonly HeightFenwickTree _heightIndex = new();
 
         // 动态估计的元素高度（基于已测量元素的平均值）
         private double _estimatedItemHeight = 50;
         private double _totalMeasuredHeight = 0;
         private int _measuredCount = 0;
+        private int _nextEstimateRebuildSample = 1;
+
+        private readonly record struct ScrollAnchor(int Index, double OffsetWithinElement);
 
         private Size _extent;
         private Vector _offset;
@@ -91,14 +96,18 @@ namespace Markdown.Avalonia
             // 清理旧元素
             ClearRealizedElements();
             _allElements.Clear();
+            _elementIndexMap.Clear();
             _elementHeights.Clear();
             _elementOffsets.Clear();
             _measuredElements.Clear();
             _totalMeasuredHeight = 0;
             _measuredCount = 0;
+            _nextEstimateRebuildSample = 1;
 
             // 添加新元素
             _allElements.AddRange(elements);
+            for (var index = 0; index < _allElements.Count; index++)
+                _elementIndexMap[_allElements[index]] = index;
 
             // 设置 Helper
             foreach (var element in _allElements)
@@ -115,6 +124,8 @@ namespace Markdown.Avalonia
                 offset += _estimatedItemHeight;
             }
 
+            _heightIndex.Rebuild(_elementHeights);
+
             // 更新范围
             UpdateExtent();
             InvalidateMeasure();
@@ -125,20 +136,21 @@ namespace Markdown.Avalonia
         /// </summary>
         public void AppendElements(IEnumerable<DocumentElement> elements)
         {
-            double offset = _elementOffsets.Count > 0
-                ? _elementOffsets[^1] + _elementHeights[^1]
-                : 0;
+            double offset = _heightIndex.Total;
 
             foreach (var element in elements)
             {
                 // 设置 Helper
                 element.Helper = _selectionHelper;
 
+                _elementIndexMap[element] = _allElements.Count;
                 _allElements.Add(element);
                 _elementHeights.Add(_estimatedItemHeight);
                 _elementOffsets.Add(offset);
                 offset += _estimatedItemHeight;
             }
+
+            _heightIndex.Rebuild(_elementHeights);
 
             UpdateExtent();
             InvalidateMeasure();
@@ -151,11 +163,14 @@ namespace Markdown.Avalonia
         {
             ClearRealizedElements();
             _allElements.Clear();
+            _elementIndexMap.Clear();
             _elementHeights.Clear();
             _elementOffsets.Clear();
             _measuredElements.Clear();
             _totalMeasuredHeight = 0;
             _measuredCount = 0;_extent = default;
+            _nextEstimateRebuildSample = 1;
+            _heightIndex.Clear();
             _offset = default;
             InvalidateScrollable();
             InvalidateMeasure();
@@ -171,6 +186,7 @@ namespace Markdown.Avalonia
                 var control = kvp.Value;
                 control.SizeChanged -= OnElementSizeChanged;
                 Children.Remove(control);
+                _allElements[kvp.Key].ReleaseControl();
             }
             _realizedElements.Clear();
             _controlIndexMap.Clear();
@@ -181,11 +197,7 @@ namespace Markdown.Avalonia
         /// </summary>
         private void UpdateExtent()
         {
-            double totalHeight = 0;
-            if (_elementOffsets.Count > 0 && _elementHeights.Count > 0)
-            {
-                totalHeight = _elementOffsets[^1] + _elementHeights[^1];
-            }
+            double totalHeight = _heightIndex.Total;
 
             var newExtent = new Size(Bounds.Width > 0 ? Bounds.Width : 100, totalHeight);
             if (_extent != newExtent)
@@ -202,7 +214,28 @@ namespace Markdown.Avalonia
         {
             _totalMeasuredHeight += measuredHeight;
             _measuredCount++;
-            _estimatedItemHeight = _totalMeasuredHeight / _measuredCount;
+            var newEstimate = _totalMeasuredHeight / _measuredCount;
+            if (_measuredCount < _nextEstimateRebuildSample ||
+                Math.Abs(_estimatedItemHeight - newEstimate) <= 0.5)
+                return;
+
+            _estimatedItemHeight = newEstimate;
+
+            // Keep the yet-unseen part of the document in the same height
+            // model as the measured part. Otherwise a long document keeps the
+            // original 50px estimates forever and the scrollbar can map a
+            // viewport offset to a much later element than intended.
+            for (var i = 0; i < _elementHeights.Count; i++)
+            {
+                if (!_measuredElements.Contains(i))
+                    _elementHeights[i] = _estimatedItemHeight;
+            }
+
+            _heightIndex.Rebuild(_elementHeights);
+            RebuildCompatibilityOffsets();
+            _nextEstimateRebuildSample = _measuredCount >= 64
+                ? int.MaxValue
+                : Math.Min(64, _measuredCount * 4);
         }
 
         protected override Size MeasureOverride(Size availableSize)
@@ -239,7 +272,7 @@ namespace Markdown.Avalonia
                     // 更新实际高度
                     if (i < _elementHeights.Count)
                     {
-                        _elementHeights[i] = desiredSize.Height;
+                        SetElementHeight(i, desiredSize.Height);
                         _elementOffsets[i] = totalHeight;
                     }
 
@@ -259,6 +292,8 @@ namespace Markdown.Avalonia
 
         private Size MeasureVisibleElements(Size availableSize)
         {
+            var anchor = CaptureScrollAnchor();
+
             // 计算可见范围
             double viewportTop = _offset.Y;
             double viewportBottom = viewportTop + (double.IsInfinity(availableSize.Height) ? 1000 : availableSize.Height);
@@ -306,7 +341,7 @@ namespace Markdown.Avalonia
                                 UpdateEstimatedHeight(desiredSize.Height);
                             }
 
-                            _elementHeights[i] = desiredSize.Height;
+                            SetElementHeight(i, desiredSize.Height);
                             heightsChanged = true;
                         }
                     }
@@ -318,8 +353,10 @@ namespace Markdown.Avalonia
             // 如果高度发生变化，重新计算所有偏移
             if (heightsChanged)
             {
-                RecalculateOffsets();
                 UpdateExtent();
+                RestoreScrollAnchor(anchor);
+                InvalidateMeasure();
+                InvalidateArrange();
             }
 
             return new Size(
@@ -333,12 +370,67 @@ namespace Markdown.Avalonia
         /// </summary>
         private void RecalculateOffsets()
         {
+            _heightIndex.Rebuild(_elementHeights);
+            RebuildCompatibilityOffsets();
+        }
+
+        private void RebuildCompatibilityOffsets()
+        {
             double offset = 0;
             for (int i = 0; i < _elementOffsets.Count; i++)
             {
                 _elementOffsets[i] = offset;
                 offset += _elementHeights[i];
             }
+        }
+
+        private void SetElementHeight(int index, double height)
+        {
+            if (index < 0 || index >= _elementHeights.Count ||
+                double.IsNaN(height) || height < 0)
+                return;
+
+            var oldHeight = _elementHeights[index];
+            if (Math.Abs(oldHeight - height) <= 0.01)
+                return;
+
+            _elementHeights[index] = height;
+            _heightIndex.Add(index, height - oldHeight);
+        }
+
+        private double GetElementOffset(int index)
+            => _heightIndex.PrefixSum(index);
+
+        private ScrollAnchor CaptureScrollAnchor()
+        {
+            if (_elementHeights.Count == 0)
+                return new ScrollAnchor(-1, 0);
+
+            var index = FindElementIndexAtOffset(_offset.Y);
+            var withinElement = Math.Max(0, _offset.Y - GetElementOffset(index));
+            return new ScrollAnchor(index, withinElement);
+        }
+
+        private void RestoreScrollAnchor(ScrollAnchor anchor)
+        {
+            if (anchor.Index < 0 ||
+                anchor.Index >= _elementHeights.Count)
+                return;
+
+            var withinElement = Math.Min(
+                anchor.OffsetWithinElement,
+                Math.Max(0, _elementHeights[anchor.Index]));
+            var maxY = Math.Max(0, _extent.Height - _viewport.Height);
+            var anchoredY = Math.Clamp(
+                GetElementOffset(anchor.Index) + withinElement,
+                0,
+                maxY);
+
+            if (Math.Abs(_offset.Y - anchoredY) <= 0.01)
+                return;
+
+            _offset = new Vector(_offset.X, anchoredY);
+            InvalidateScrollable();
         }
 
         protected override Size ArrangeOverride(Size finalSize)
@@ -350,10 +442,13 @@ namespace Markdown.Avalonia
                 int index = kvp.Key;
                 var control = kvp.Value;
 
-                if (index < _elementOffsets.Count && index < _elementHeights.Count)
+                if (index < _elementHeights.Count)
                 {
-                    double y = _elementOffsets[index] - _offset.Y;
-                    double height = _elementHeights[index];
+                    double y = GetElementOffset(index) - _offset.Y;
+                    // Never arrange a realized element below the height it asked
+                    // for during measure.  In particular, multiline code blocks
+                    // must not be clipped to the virtualization estimate (50px).
+                    double height = Math.Max(_elementHeights[index], control.DesiredSize.Height);
                     control.Arrange(new Rect(0, y, finalSize.Width, height));
                 }
             }
@@ -416,6 +511,7 @@ namespace Markdown.Avalonia
                 Children.Remove(control);
                 _realizedElements.Remove(index);
                 _controlIndexMap.Remove(control);
+                _allElements[index].ReleaseControl();
             }
         }
 
@@ -430,7 +526,10 @@ namespace Markdown.Avalonia
             if (index < 0 || index >= _elementHeights.Count)
                 return;
 
-            var newHeight = control.Bounds.Height;
+            // Bounds may reflect the previous estimated arrangement.  Treat the
+            // measured desired height as the lower bound so SizeChanged cannot
+            // shrink multiline content back to the estimate.
+            var newHeight = Math.Max(control.Bounds.Height, control.DesiredSize.Height);
             if (double.IsNaN(newHeight) || newHeight <= 0)
                 return;
 
@@ -438,15 +537,17 @@ namespace Markdown.Avalonia
             if (Math.Abs(oldHeight - newHeight) <= 0.5)
                 return;
 
+            var anchor = CaptureScrollAnchor();
+
             if (!_measuredElements.Contains(index))
             {
                 _measuredElements.Add(index);
                 UpdateEstimatedHeight(newHeight);
             }
 
-            _elementHeights[index] = newHeight;
-            RecalculateOffsets();
+            SetElementHeight(index, newHeight);
             UpdateExtent();
+            RestoreScrollAnchor(anchor);
             InvalidateMeasure();
             InvalidateArrange();
         }
@@ -456,33 +557,17 @@ namespace Markdown.Avalonia
         /// </summary>
         private int FindElementIndexAtOffset(double offset)
         {
-            if (_elementOffsets.Count == 0)
+            if (_elementHeights.Count == 0)
                 return 0;
 
             if (offset <= 0)
                 return 0;
 
-            if (offset >= _elementOffsets[^1] + _elementHeights[^1])
-                return _elementOffsets.Count - 1;
+            if (offset >= _heightIndex.Total)
+                return _elementHeights.Count - 1;
 
             // 二分查找
-            int left = 0;
-            int right = _elementOffsets.Count - 1;
-
-            while (left < right)
-            {
-                int mid = (left + right + 1) / 2;
-                if (_elementOffsets[mid] <= offset)
-                {
-                    left = mid;
-                }
-                else
-                {
-                    right = mid - 1;
-                }
-            }
-
-            return left;
+            return _heightIndex.FindIndexAtOffset(offset);
         }
 
         /// <summary>
@@ -568,15 +653,44 @@ namespace Markdown.Avalonia
 
         public event EventHandler? ScrollInvalidated;
 
+        public bool ScrollToElement(DocumentElement target)
+        {
+            if (!_elementIndexMap.TryGetValue(target, out var index) ||
+                index >= _elementHeights.Count)
+                return false;
+
+            Offset = new Vector(_offset.X, GetElementOffset(index));
+            return true;
+        }
+
+        public bool TryGetElementBounds(DocumentElement target, out Rect bounds)
+        {
+            if (!_elementIndexMap.TryGetValue(target, out var index) ||
+                index < 0 ||
+                index >= _elementHeights.Count)
+            {
+                bounds = default;
+                return false;
+            }
+
+            bounds = new Rect(
+                0,
+                GetElementOffset(index),
+                Math.Max(Bounds.Width, _viewport.Width),
+                _elementHeights[index]);
+            return true;
+        }
+
         public bool BringIntoView(Control target, Rect targetRect)
         {
             // 查找目标元素的索引
-            for (int i = 0; i < _allElements.Count; i++)
+            var current = target;
+            while (current is not null)
             {
-                if (ReferenceEquals(_allElements[i].Control, target))
+                if (_controlIndexMap.TryGetValue(current, out var index))
                 {
-                    double elementTop = _elementOffsets[i];
-                    double elementBottom = elementTop + _elementHeights[i];
+                    double elementTop = GetElementOffset(index);
+                    double elementBottom = elementTop + _elementHeights[index];
 
                     // 计算需要滚动到的位置
                     double newOffsetY = _offset.Y;
@@ -598,6 +712,8 @@ namespace Markdown.Avalonia
 
                     return true;
                 }
+
+                current = current.Parent as Control;
             }
 
             return false;
@@ -610,13 +726,15 @@ namespace Markdown.Avalonia
 
             // 查找当前元素的索引
             int currentIndex = -1;
-            for (int i = 0; i < _allElements.Count; i++)
+            var current = from;
+            while (current is not null)
             {
-                if (ReferenceEquals(_allElements[i].Control, from))
+                if (_controlIndexMap.TryGetValue(current, out currentIndex))
                 {
-                    currentIndex = i;
                     break;
                 }
+
+                current = current.Parent as Control;
             }
 
             if (currentIndex < 0)
@@ -688,7 +806,7 @@ namespace Markdown.Avalonia
             for (int i = startIndex; i <= endIndex && i < _allElements.Count; i++)
             {
                 var element = _allElements[i];
-                var elementTop = _elementOffsets[i];
+                var elementTop = GetElementOffset(i);
                 // 计算相对于元素的坐标
                 var relativeFrom = new Point(from.X, adjustedFrom.Y - elementTop);
                 var relativeTo = new Point(to.X, adjustedTo.Y - elementTop);
@@ -722,5 +840,68 @@ namespace Markdown.Avalonia
         }
 
         #endregion
+
+        private sealed class HeightFenwickTree
+        {
+            private double[] _tree = [0d];
+
+            public double Total => PrefixSum(_tree.Length - 1);
+
+            public void Clear()
+            {
+                _tree = [0d];
+            }
+
+            public void Rebuild(IReadOnlyList<double> values)
+            {
+                _tree = new double[values.Count + 1];
+                for (var index = 0; index < values.Count; index++)
+                    Add(index, values[index]);
+            }
+
+            public void Add(int index, double delta)
+            {
+                for (var treeIndex = index + 1;
+                     treeIndex < _tree.Length;
+                     treeIndex += treeIndex & -treeIndex)
+                {
+                    _tree[treeIndex] += delta;
+                }
+            }
+
+            public double PrefixSum(int count)
+            {
+                count = Math.Clamp(count, 0, _tree.Length - 1);
+                var sum = 0d;
+                for (var treeIndex = count;
+                     treeIndex > 0;
+                     treeIndex -= treeIndex & -treeIndex)
+                {
+                    sum += _tree[treeIndex];
+                }
+                return sum;
+            }
+
+            public int FindIndexAtOffset(double offset)
+            {
+                var index = 0;
+                var accumulated = 0d;
+                var bit = 1;
+                while ((bit << 1) < _tree.Length)
+                    bit <<= 1;
+
+                for (; bit != 0; bit >>= 1)
+                {
+                    var next = index + bit;
+                    if (next < _tree.Length && accumulated + _tree[next] <= offset)
+                    {
+                        index = next;
+                        accumulated += _tree[next];
+                    }
+                }
+
+                return Math.Min(index, Math.Max(0, _tree.Length - 2));
+            }
+        }
     }
 }

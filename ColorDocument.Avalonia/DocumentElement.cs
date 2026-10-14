@@ -17,6 +17,15 @@ namespace ColorDocument.Avalonia
         public abstract IEnumerable<DocumentElement> Children { get; }
 
         /// <summary>
+        /// Releases visual state that can be recreated from the semantic model.
+        /// Most document elements keep their existing behavior; deferred elements
+        /// override this to keep virtualization memory bounded.
+        /// </summary>
+        public virtual void ReleaseControl()
+        {
+        }
+
+        /// <summary>
         /// 获取元素类型标识，用于增量更新时的类型比较
         /// </summary>
         public virtual string ElementType => GetType().Name;

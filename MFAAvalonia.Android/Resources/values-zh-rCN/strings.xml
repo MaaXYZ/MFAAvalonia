@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="shizuku_not_installed_title">未检测到 Shizuku</string>
+  <string name="shizuku_not_installed_message">MFA Android 依赖 Shizuku 服务运行，但设备上未安装 Shizuku。请安装并按指引启动服务。</string>
+  <string name="shizuku_install_bundled">快捷安装 Shizuku</string>
+  <string name="shizuku_open_official_download">前往官方下载</string>
+  <string name="shizuku_later">稍后处理</string>
+  <string name="shizuku_warning_icon_description">警告</string>
+  <string name="shizuku_not_running_title">请先启动 Shizuku</string>
+  <string name="shizuku_not_running_message">已安装 Shizuku，但服务尚未运行。请打开 Shizuku 并启动服务，然后返回 MFA。</string>
+  <string name="shizuku_open_app">打开 Shizuku</string>
+  <string name="shizuku_not_authorized_title">需要 Shizuku 授权</string>
+  <string name="shizuku_not_authorized_message">Shizuku 已运行，但尚未授权 MFA。开始任务前，请在 Shizuku 授权窗口中允许访问。</string>
+  <string name="shizuku_authorize_now">立即授权</string>
+  <string name="shizuku_authorizing">等待授权...</string>
+  <string name="shizuku_service_connecting_title">正在连接 Shizuku</string>
+  <string name="shizuku_service_connecting_message">权限已经授予，但 MFA 控制器服务尚未就绪，请重试连接。</string>
+  <string name="shizuku_retry_connection">重试连接</string>
+</resources>

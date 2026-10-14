@@ -189,62 +189,62 @@ public class MFAResxLangPlugin : ILangPlugin
     {
         lock (_resourceLock)
         {
-        if (_resourceManagers == null || _resourceManagers.Count == 0)
-        {
-            return;
-        }
-
-        IEnumerable<DictionaryEntry> GetResources(ResourceManager resourceManager)
-        {
-            var targetCulture = cultureInfo.Name.Equals("zh-CN", StringComparison.OrdinalIgnoreCase)
-                ? CultureInfo.InvariantCulture
-                : cultureInfo;
-            var resourceSet = resourceManager.GetResourceSet(targetCulture, true, false);
-            if (resourceSet == null)
+            if (_resourceManagers == null || _resourceManagers.Count == 0)
             {
-                yield break;
+                return;
             }
 
-            foreach (var entry in resourceSet.OfType<DictionaryEntry>())
+            IEnumerable<DictionaryEntry> GetResources(ResourceManager resourceManager)
             {
-                yield return entry;
-            }
-        }
-
-        var cultureName = cultureInfo.Name;
-        LocalizationLanguage? currentLanResources;
-        if (Resources.TryGetValue(cultureName, out var language))
-        {
-            currentLanResources = language;
-        }
-        else
-        {
-            currentLanResources = new LocalizationLanguage()
-            {
-                Language = cultureInfo.DisplayName,
-                Description = cultureInfo.DisplayName,
-                CultureName = cultureName
-            };
-            Resources[cultureName] = currentLanResources;
-        }
-
-        currentLanResources.Languages.Clear();
-
-        foreach (var pair in _resourceManagers)
-        {
-            pair.Key.GetProperty("Culture", BindingFlags.Public | BindingFlags.Static)?.SetValue(null, cultureInfo);
-            foreach (var entry in GetResources(pair.Value))
-            {
-                if (entry is { Key: string key, Value: string value })
+                var targetCulture = cultureInfo.Name.Equals("zh-CN", StringComparison.OrdinalIgnoreCase)
+                    ? CultureInfo.InvariantCulture
+                    : cultureInfo;
+                var resourceSet = resourceManager.GetResourceSet(targetCulture, true, false);
+                if (resourceSet == null)
                 {
-                    // 使用字符串驻留减少重复字符串的内存占用
-                    // 对于资源键和值都使用驻留,因为很多资源字符串是重复的
-                    var internedKey = string.Intern(key);
-                    var internedValue = string.Intern(value);
-                    currentLanResources.Languages[internedKey] = internedValue;
+                    yield break;
+                }
+
+                foreach (var entry in resourceSet.OfType<DictionaryEntry>())
+                {
+                    yield return entry;
                 }
             }
-        }
+
+            var cultureName = cultureInfo.Name;
+            LocalizationLanguage? currentLanResources;
+            if (Resources.TryGetValue(cultureName, out var language))
+            {
+                currentLanResources = language;
+            }
+            else
+            {
+                currentLanResources = new LocalizationLanguage()
+                {
+                    Language = cultureInfo.DisplayName,
+                    Description = cultureInfo.DisplayName,
+                    CultureName = cultureName
+                };
+                Resources[cultureName] = currentLanResources;
+            }
+
+            currentLanResources.Languages.Clear();
+
+            foreach (var pair in _resourceManagers)
+            {
+                pair.Key.GetProperty("Culture", BindingFlags.Public | BindingFlags.Static)?.SetValue(null, cultureInfo);
+                foreach (var entry in GetResources(pair.Value))
+                {
+                    if (entry is { Key: string key, Value: string value })
+                    {
+                        // 使用字符串驻留减少重复字符串的内存占用
+                        // 对于资源键和值都使用驻留,因为很多资源字符串是重复的
+                        var internedKey = string.Intern(key);
+                        var internedValue = string.Intern(value);
+                        currentLanResources.Languages[internedKey] = internedValue;
+                    }
+                }
+            }
         }
     }
 }

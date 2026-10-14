@@ -53,6 +53,35 @@
                                                             IsAnimated="False"
                                                             IsVisible="{TemplateBinding ShowTitlebarBackground}" />
                                             <DockPanel Margin="12,9" LastChildFill="True">
+                                                <StackPanel Name="PART_StandardWindowControls"
+                                                            VerticalAlignment="Center"
+                                                            DockPanel.Dock="Right"
+                                                            Orientation="Horizontal"
+                                                            Spacing="7">
+                                                    <StackPanel.Styles>
+                                                        <Style Selector="PathIcon">
+                                                            <Setter Property="Height" Value="10" />
+                                                            <Setter Property="Width" Value="10" />
+                                                        </Style>
+                                                    </StackPanel.Styles>
+                                                    <Button Name="PART_MinimizeButton"
+                                                            VerticalContentAlignment="Center"
+                                                            Classes="WindowControlsButton Minimize"
+                                                            IsVisible="{TemplateBinding CanMinimize}">
+                                                        <PathIcon VerticalAlignment="Bottom"
+                                                                  Data="{x:Static icons:Icons.WindowMinimize}" />
+                                                    </Button>
+                                                    <Button Name="PART_MaximizeButton"
+                                                            Classes="WindowControlsButton Maximize"
+                                                            IsVisible="{TemplateBinding CanMaximize}">
+                                                        <PathIcon x:Name="MaximizeIcon"
+                                                                  Data="{x:Static icons:Icons.WindowMaximize}" />
+                                                    </Button>
+                                                    <Button Name="PART_CloseButton"
+                                                            Classes="WindowControlsButton Close">
+                                                        <PathIcon Data="{x:Static icons:Icons.WindowClose}" />
+                                                    </Button>
+                                                </StackPanel>
                                                 <StackPanel VerticalAlignment="Center"
                                                             DockPanel.Dock="Right"
                                                             Orientation="Horizontal"
@@ -86,24 +115,6 @@
                                                             IsVisible="{TemplateBinding CanPin}">
                                                         <PathIcon x:Name="PinIcon"
                                                                   Data="{x:Static icons:Icons.WindowPin}" />
-                                                    </Button>
-                                                    <Button Name="PART_MinimizeButton"
-                                                            VerticalContentAlignment="Center"
-                                                            Classes="WindowControlsButton"
-                                                            IsVisible="{TemplateBinding CanMinimize}">
-                                                        <PathIcon
-                                                                  VerticalAlignment="Bottom"
-                                                                  Data="{x:Static icons:Icons.WindowMinimize}" />
-                                                    </Button>
-                                                    <Button Name="PART_MaximizeButton"
-                                                            Classes="WindowControlsButton"
-                                                            IsVisible="{TemplateBinding CanMaximize}">
-                                                        <PathIcon x:Name="MaximizeIcon"
-                                                                  Data="{x:Static icons:Icons.WindowMaximize}" />
-                                                    </Button>
-                                                    <Button Name="PART_CloseButton"
-                                                            Classes="WindowControlsButton Close">
-                                                        <PathIcon Data="{x:Static icons:Icons.WindowClose}" />
                                                     </Button>
                                                 </StackPanel>
                                                 <StackPanel VerticalAlignment="Center"
@@ -160,6 +171,33 @@
         </Style>
         <Style Selector="^[ShowTitlebarBackground=True] /template/ suki|GlassCard#AlternativeGlassMenuBackground">
             <Setter Property="IsVisible" Value="False" />
+        </Style>
+
+        <Style Selector="^:macos /template/ StackPanel#PART_StandardWindowControls">
+            <Setter Property="DockPanel.Dock" Value="Left" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+            <Setter Property="Spacing" Value="8" />
+        </Style>
+        <Style Selector="^:macos /template/ StackPanel#PART_StandardWindowControls Button.WindowControlsButton">
+            <Setter Property="Width" Value="13" />
+            <Setter Property="Height" Value="13" />
+            <Setter Property="MinWidth" Value="13" />
+            <Setter Property="MinHeight" Value="13" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="^:macos /template/ StackPanel#PART_StandardWindowControls Button.WindowControlsButton PathIcon">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="^:macos /template/ Button.WindowControlsButton.Close">
+            <Setter Property="Background" Value="#FF5F57" />
+        </Style>
+        <Style Selector="^:macos /template/ Button.WindowControlsButton.Minimize">
+            <Setter Property="Background" Value="#FEBC2E" />
+        </Style>
+        <Style Selector="^:macos /template/ Button.WindowControlsButton.Maximize">
+            <Setter Property="Background" Value="#28C840" />
         </Style>
 
         <Style Selector="^[Topmost=False] /template/ PathIcon#PinIcon">

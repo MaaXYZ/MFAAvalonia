@@ -28,7 +28,6 @@ public partial class AnnouncementView : SukiWindow
             // 显式释放 MarkdownScrollViewer 资源（调用 Dispose 会同时调用 Cleanup）
             if (Viewer != null)
             {
-                Viewer.Markdown = null;
                 Viewer.Dispose();
             }
             

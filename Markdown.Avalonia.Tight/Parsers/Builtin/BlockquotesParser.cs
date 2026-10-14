@@ -18,8 +18,10 @@ namespace Markdown.Avalonia.Parsers.Builtin
             [\n]*
             ", RegexOptions.Multiline | RegexOptions.IgnorePatternWhitespace | RegexOptions.Compiled);
 
-        // GitHub-style alert pattern: [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION]
-        private static readonly Regex _alertPattern = new(@"^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*$",
+        // GitHub alerts and Obsidian callouts. The optional suffix/title is
+        // recognized now so it never leaks into the rendered body.
+        private static readonly Regex _alertPattern = new(
+            @"^\[!(?<type>[A-Z0-9_-]+)\](?<fold>[+-])?(?:[ \t]+(?<title>.*?))?[ \t]*$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private bool _supportTextAlignment;
@@ -51,15 +53,31 @@ namespace Markdown.Avalonia.Parsers.Builtin
                 var alertMatch = _alertPattern.Match(lines[0]);
                 if (alertMatch.Success)
                 {
-                    var alertTypeStr = alertMatch.Groups[1].Value.ToUpperInvariant();
-                    var alertType = alertTypeStr switch
+                    var rawType = alertMatch.Groups["type"].Value;
+                    var alertType = rawType.ToUpperInvariant() switch
                     {
+                        "ABSTRACT" or "SUMMARY" or "TLDR" => AlertType.Abstract,
+                        "INFO" => AlertType.Info,
+                        "TODO" => AlertType.Todo,
                         "TIP" => AlertType.Tip,
+                        "HINT" => AlertType.Tip,
                         "IMPORTANT" => AlertType.Important,
+                        "SUCCESS" or "CHECK" or "DONE" => AlertType.Success,
+                        "QUESTION" or "HELP" or "FAQ" => AlertType.Question,
                         "WARNING" => AlertType.Warning,
+                        "ATTENTION" => AlertType.Warning,
                         "CAUTION" => AlertType.Caution,
+                        "FAILURE" or "FAIL" or "MISSING" => AlertType.Failure,
+                        "DANGER" or "ERROR" => AlertType.Danger,
+                        "BUG" => AlertType.Bug,
+                        "EXAMPLE" => AlertType.Example,
+                        "QUOTE" or "CITE" => AlertType.Quote,
                         _ => AlertType.Note
                     };
+                    var customTitle = alertMatch.Groups["title"].Value.Trim();
+                    var alertTitle = customTitle.Length > 0
+                        ? customTitle
+                        : char.ToUpperInvariant(rawType[0]) + rawType[1..].ToLowerInvariant();
 
                     // Get content after the alert marker (skip first line)
                     var contentLines = lines.Skip(1).ToArray();
@@ -68,7 +86,7 @@ namespace Markdown.Avalonia.Parsers.Builtin
                     var newStatus = new ParseStatus(true & _supportTextAlignment);
                     var blocks = engine.ParseGamutElement(trimmedTxt + "\n", newStatus);
 
-                    return new[] { new AlertBlockElement(blocks, alertType) };
+                    return new[] { new AlertBlockElement(blocks, alertType, alertTitle) };
                 }
             }
 

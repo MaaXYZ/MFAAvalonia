@@ -107,6 +107,7 @@ public sealed class DashboardCardGrid : Panel
     private bool _isResizing;
     private readonly Dictionary<DashboardCard, HiddenLayout> _hiddenCards = new();
     private readonly Dictionary<DashboardCard, IDisposable> _visibilitySubscriptions = new();
+    private readonly HashSet<DashboardCard> _restoringHiddenCards = new();
     private readonly List<Thumb> _columnSplitters = new();
     private readonly List<Thumb> _rowSplitters = new();
     private bool _isSyncingRowSplitters;
@@ -679,7 +680,7 @@ public sealed class DashboardCardGrid : Panel
         return occupied;
     }
 
-    private static bool HasOverlaps(IEnumerable<DashboardCardLayout> layouts, int columns, int rows)
+    private bool HasOverlaps(IEnumerable<DashboardCardLayout> layouts, int columns, int rows)
     {
         columns = Math.Max(1, columns);
         rows = Math.Max(1, rows);
@@ -689,6 +690,17 @@ public sealed class DashboardCardGrid : Panel
         foreach (var layout in layouts)
         {
             if (string.IsNullOrWhiteSpace(layout.Id))
+            {
+                continue;
+            }
+
+            // Hidden cards do not occupy dashboard cells. This is especially important for
+            // LiveView: when it is disabled, another card may intentionally be moved into its
+            // saved position. Treating the hidden card as occupied here would reject that valid
+            // layout on the next launch and silently restore the default layout.
+            var card = Children.OfType<DashboardCard>()
+                .FirstOrDefault(c => string.Equals(c.CardId, layout.Id, StringComparison.OrdinalIgnoreCase));
+            if (card is { IsVisible: false })
             {
                 continue;
             }
@@ -1413,6 +1425,13 @@ public sealed class DashboardCardGrid : Panel
     {
         if (!isVisible)
         {
+            if (_restoringHiddenCards.Contains(card))
+            {
+                InvalidateMeasure();
+                InvalidateArrange();
+                return;
+            }
+
             if (!_hiddenCards.ContainsKey(card))
             {
                 _hiddenCards[card] = HiddenLayout.FromCard(card);
@@ -1428,32 +1447,69 @@ public sealed class DashboardCardGrid : Panel
             return;
         }
 
-        _hiddenCards.Remove(card);
+        _restoringHiddenCards.Add(card);
 
-        var col = ClampIndex(layout.Col, Columns);
-        var row = ClampIndex(layout.Row, Rows);
-        var colSpan = Math.Max(1, layout.ColSpan);
-        var rowSpan = layout.IsCollapsed ? 1 : Math.Max(1, layout.RowSpan);
-
-        colSpan = Math.Clamp(colSpan, 1, Columns - col);
-        rowSpan = Math.Clamp(rowSpan, 1, Rows - row);
-
-        if (!TryPlaceCard(card, col, row, colSpan, rowSpan))
+        try
         {
-            if (!TryPlaceFirstAvailable(card, colSpan, rowSpan)
-                && !TryPlaceFirstAvailable(card, 1, 1))
+            var col = ClampIndex(layout.Col, Columns);
+            var row = ClampIndex(layout.Row, Rows);
+            var colSpan = Math.Max(1, layout.ColSpan);
+            var rowSpan = layout.IsCollapsed ? 1 : Math.Max(1, layout.RowSpan);
+
+            colSpan = Math.Clamp(colSpan, 1, Columns - col);
+            rowSpan = Math.Clamp(rowSpan, 1, Rows - row);
+
+            var placed = TryPlaceCard(card, col, row, colSpan, rowSpan)
+                         || TryPlaceFirstAvailable(card, colSpan, rowSpan);
+
+            if (!placed)
             {
-                TryPlaceCard(card, 0, 0, 1, 1);
+                if (IsLiveViewCard(card))
+                {
+                    placed = TryPlaceBestAvailableWithin(card, colSpan, rowSpan);
+                    if (!placed)
+                    {
+                        _hiddenCards[card] = layout;
+                        card.IsVisible = false;
+                        ToastHelper.Warn(
+                            LangKeys.Warning.ToLocalization(),
+                            "实时画面已开启，但当前布局没有可用空间，请调整主页面卡片布局。");
+                        return;
+                    }
+                }
+                else
+                {
+                    placed = TryPlaceFirstAvailable(card, 1, 1);
+                    if (!placed)
+                    {
+                        placed = TryPlaceCard(card, 0, 0, 1, 1);
+                    }
+                }
             }
+
+            if (!placed)
+            {
+                return;
+            }
+
+            _hiddenCards.Remove(card);
+            card.ExpandedColumnSpan = Math.Max(1, layout.ExpandedColSpan);
+            card.ExpandedRowSpan = Math.Max(1, layout.ExpandedRowSpan);
+            card.IsCollapsed = layout.IsCollapsed;
+
+            InvalidateMeasure();
+            InvalidateArrange();
+            SaveLayouts();
         }
+        finally
+        {
+            _restoringHiddenCards.Remove(card);
+        }
+    }
 
-        card.ExpandedColumnSpan = Math.Max(1, layout.ExpandedColSpan);
-        card.ExpandedRowSpan = Math.Max(1, layout.ExpandedRowSpan);
-        card.IsCollapsed = layout.IsCollapsed;
-
-        InvalidateMeasure();
-        InvalidateArrange();
-        SaveLayouts();
+    private static bool IsLiveViewCard(DashboardCard card)
+    {
+        return string.Equals(card.CardId, "live_view", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool TryPlaceCard(DashboardCard card, int col, int row, int colSpan, int rowSpan)
@@ -1496,6 +1552,38 @@ public sealed class DashboardCardGrid : Panel
                     card.GridColumnSpan = colSpan;
                     card.GridRowSpan = rowSpan;
                     return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryPlaceBestAvailableWithin(DashboardCard card, int maxColSpan, int maxRowSpan)
+    {
+        if (Columns <= 0 || Rows <= 0)
+        {
+            return false;
+        }
+
+        maxColSpan = Math.Clamp(maxColSpan, 1, Columns);
+        maxRowSpan = Math.Clamp(maxRowSpan, 1, Rows);
+
+        for (var area = maxColSpan * maxRowSpan - 1; area >= 1; area--)
+        {
+            for (var rowSpan = maxRowSpan; rowSpan >= 1; rowSpan--)
+            {
+                for (var colSpan = maxColSpan; colSpan >= 1; colSpan--)
+                {
+                    if (colSpan * rowSpan != area)
+                    {
+                        continue;
+                    }
+
+                    if (TryPlaceFirstAvailable(card, colSpan, rowSpan))
+                    {
+                        return true;
+                    }
                 }
             }
         }

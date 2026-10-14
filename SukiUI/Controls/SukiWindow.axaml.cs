@@ -12,6 +12,7 @@ using System.Runtime.InteropServices;
 using Avalonia.Controls.Metadata;
 using Avalonia.Layout;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Avalonia.Controls.Presenters;
 using SukiUI.Extensions;
 using Avalonia.Platform;
@@ -538,6 +539,7 @@ public class SukiWindow : Window, IDisposable
 
     public SukiWindow()
     {
+        PseudoClasses.Set(":macos", OperatingSystem.IsMacOS());
         Hosts = [];
         RightWindowTitleBarControls = [];
         MenuItems = [];
@@ -946,7 +948,12 @@ public class SukiWindow : Window, IDisposable
 
         nint ProcHookCallback(nint hWnd, uint msg, nint wParam, nint lParam, ref bool handled)
         {
-            if (!maximize.IsVisible) return 0;
+            // The native hook can still receive messages while a template is being
+            // replaced or the window is closing. IsVisible remains true briefly after
+            // the button has left the visual tree, where PointToScreen would throw.
+            if (!maximize.IsVisible || maximize.GetVisualRoot() is not { } buttonRoot ||
+                !ReferenceEquals(buttonRoot, this))
+                return 0;
 
             if (msg == WM_NCHITTEST)
             {

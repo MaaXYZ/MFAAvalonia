@@ -2,6 +2,7 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Reactive;
@@ -135,6 +136,8 @@ public static class ComboBoxExtensions
 
         if (args.NewValue.Value)
         {
+            // 搜索逻辑基于下拉项容器的可见性；禁用虚拟化以确保未滚动到的选项也会生成并参与匹配。
+            comboBox.ItemsPanel = new FuncTemplate<Panel>(() => new StackPanel());
             comboBox.DropDownOpened += OnSearchableDropDownOpened;
             comboBox.DropDownClosed += OnSearchableDropDownClosed;
         }

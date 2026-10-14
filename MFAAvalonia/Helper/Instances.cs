@@ -187,6 +187,28 @@ public static partial class Instances
     /// <summary>
     /// 关闭当前应用程序
     /// </summary>
+    private static class ShutdownState
+    {
+        internal static int Requested;
+        internal static int WatchdogStarted;
+    }
+
+    public static void EnsureShutdownWatchdogStarted()
+    {
+        if (Interlocked.Exchange(ref ShutdownState.WatchdogStarted, 1) != 0) return;
+
+        new Thread(() =>
+        {
+            Thread.Sleep(5000);
+            Environment.Exit(0);
+        })
+        {
+            Name = "MFAAvalonia-ShutdownWatchdog",
+            IsBackground = true,
+            Priority = ThreadPriority.BelowNormal
+        }.Start();
+    }
+
     public static void ShutdownApplication()
     {
         ShutdownApplication(false);
@@ -194,17 +216,21 @@ public static partial class Instances
 
     public static void ShutdownApplication(bool forceStop)
     {
-        PersistRuntimeState();
-        AppRuntime.ReleaseMutex();
+        var isFirstRequest = Interlocked.Exchange(ref ShutdownState.Requested, 1) == 0;
+        if (isFirstRequest)
+            PersistRuntimeState();
+
         if (forceStop)
         {
+            AppRuntime.ReleaseMutex();
             // 强制退出时，只做最基本的清理，避免卡住
             TryBeforeClosed(true, false);
             Environment.Exit(0);
             return;
         }
-        // 使用异步投递避免从后台线程同步调用UI线程导致死锁
-        // 然后使用 Environment.Exit 确保进程退出
+
+        // 关闭可能先被运行中任务的确认框取消；确认后必须允许再次投递关闭请求。
+        // 看门狗由 RootView.OnClosing 在窗口真正开始关闭时启动。
         DispatcherHelper.PostOnMainThread(() => ApplicationLifetime.Shutdown());
     }
 
@@ -530,12 +556,20 @@ public static partial class Instances
                         MaaFramework.Binding.AdbInputMethods.All,
                         MaaFramework.Binding.AdbInputMethods.Default
                     }, new Converters.UniversalEnumConverter<MaaFramework.Binding.AdbInputMethods>());
-                    connect.Win32ControlScreenCapType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Win32ControlScreenCapType, MaaFramework.Binding.Win32ScreencapMethod.FramePool, MaaFramework.Binding.Win32ScreencapMethod.None,
-                        new Converters.UniversalEnumConverter<MaaFramework.Binding.Win32ScreencapMethod>());
+                    connect.Win32ControlScreenCapType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Win32ControlScreenCapType, MaaFramework.Binding.Win32ScreencapMethods.FramePool, MaaFramework.Binding.Win32ScreencapMethods.None,
+                        new Converters.UniversalEnumConverter<MaaFramework.Binding.Win32ScreencapMethods>());
                     connect.Win32ControlMouseType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Win32ControlMouseType, MaaFramework.Binding.Win32InputMethod.SendMessage, MaaFramework.Binding.Win32InputMethod.None,
                         new Converters.UniversalEnumConverter<MaaFramework.Binding.Win32InputMethod>());
                     connect.Win32ControlKeyboardType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Win32ControlKeyboardType, MaaFramework.Binding.Win32InputMethod.SendMessage, MaaFramework.Binding.Win32InputMethod.None,
                         new Converters.UniversalEnumConverter<MaaFramework.Binding.Win32InputMethod>());
+                    connect.MacOSControlScreenCapType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.MacOSControlScreenCapType, MaaFramework.Binding.MacOSScreencapMethod.ScreenCaptureKit,
+                        default(MaaFramework.Binding.MacOSScreencapMethod), new Converters.UniversalEnumConverter<MaaFramework.Binding.MacOSScreencapMethod>());
+                    connect.MacOSControlInputType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.MacOSControlInputType, MaaFramework.Binding.MacOSInputMethod.GlobalEvent,
+                        default(MaaFramework.Binding.MacOSInputMethod), new Converters.UniversalEnumConverter<MaaFramework.Binding.MacOSInputMethod>());
+                    connect.GamepadControlScreenCapType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.GamepadControlScreenCapType, MaaFramework.Binding.Win32ScreencapMethods.FramePool,
+                        MaaFramework.Binding.Win32ScreencapMethods.None, new Converters.UniversalEnumConverter<MaaFramework.Binding.Win32ScreencapMethods>());
+                    connect.GamepadType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.GamepadType, MaaFramework.Binding.GamepadType.Xbox360,
+                        default(MaaFramework.Binding.GamepadType), new Converters.UniversalEnumConverter<MaaFramework.Binding.GamepadType>());
                     connect.RetryOnDisconnected = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.RetryOnDisconnected, false);
                     connect.RetryOnDisconnectedWin32 = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.RetryOnDisconnectedWin32, false);
                     connect.AllowAdbRestart = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AllowAdbRestart, true);
@@ -559,6 +593,10 @@ public static partial class Instances
                 start.WaitSoftwareTime = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.WaitSoftwareTime, 60.0);
                 start.BeforeTask = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.BeforeTask, "None");
                 start.AfterTask = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AfterTask, "None");
+                start.GlobalStartEnabled = GlobalConfiguration.GetValue(
+                    ConfigurationKeys.GlobalStartEnabled,
+                    bool.FalseString) == bool.TrueString;
+                start.RefreshGlobalStartInstancesCommand.Execute(null);
             }
 
             if (IsResolved<GameSettingsUserControlModel>())

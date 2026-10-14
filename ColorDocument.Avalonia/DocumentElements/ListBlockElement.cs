@@ -14,12 +14,17 @@ namespace ColorDocument.Avalonia.DocumentElements
         private Lazy<Grid> _control;
         private EnumerableEx<ListItemElement> _items;
         private SelectionList? _prevSelection;
+        private readonly int _orderedStart;
 
         public override Control Control => _control.Value;
         public override IEnumerable<DocumentElement> Children => _items;
 
-        public ListBlockElement(TextMarkerStyle marker, IEnumerable<ListItemElement> items)
+        public ListBlockElement(
+            TextMarkerStyle marker,
+            IEnumerable<ListItemElement> items,
+            int orderedStart = 1)
         {
+            _orderedStart = Math.Max(1, orderedStart);
             _control = new Lazy<Grid>(() => CreateList(marker));
             _items = items.ToEnumerable();
         }
@@ -58,23 +63,50 @@ namespace ColorDocument.Avalonia.DocumentElements
             int index = 0;
             foreach (var item in _items)
             {
-                var markerTxt = new CTextBlock(marker.CreateMakerText(index));
                 var itemCtrl = item.Control;
+                Control markerControl;
 
-                item.MarkerText = markerTxt.Text;
+                if (item.TaskChecked is bool isChecked)
+                {
+                    var taskMarker = new CheckBox
+                    {
+                        IsChecked = isChecked,
+                        IsEnabled = false,
+                        IsHitTestVisible = false,
+                        Focusable = false,
+                        Width = 14,
+                        Height = 14,
+                        MinWidth = 0,
+                        MinHeight = 0,
+                        Padding = new Thickness(0),
+                        HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Right
+                    };
+                    taskMarker.Classes.Add(ClassNames.TaskListMarkerClass);
+                    markerControl = taskMarker;
+                    item.MarkerText = isChecked ? "[x]" : "[ ]";
+                }
+                else
+                {
+                    var markerIndex = IsOrderedMarker(marker)
+                        ? index + _orderedStart - 1
+                        : index;
+                    var markerTxt = new CTextBlock(marker.CreateMakerText(markerIndex));
+                    item.MarkerText = markerTxt.Text;
 
-                // adjust baseline
-                if (FindFirstFrom(itemCtrl) is { } controlTxt)
-                    markerTxt.ObserveBaseHeightOf(controlTxt);
+                    if (FindFirstFrom(itemCtrl) is { } controlTxt)
+                        markerTxt.ObserveBaseHeightOf(controlTxt);
+
+                    markerTxt.TextAlignment = TextAlignment.Right;
+                    markerTxt.TextWrapping = TextWrapping.NoWrap;
+                    markerTxt.Classes.Add(ClassNames.ListMarkerClass);
+                    markerControl = markerTxt;
+                }
 
                 grid.RowDefinitions.Add(new RowDefinition());
 
-                markerTxt.TextAlignment = TextAlignment.Right;
-                markerTxt.TextWrapping = TextWrapping.NoWrap;
-                markerTxt.Classes.Add(ClassNames.ListMarkerClass);
-                Grid.SetRow(markerTxt, index);
-                Grid.SetColumn(markerTxt, 0);
-                grid.Children.Add(markerTxt);
+                Grid.SetRow(markerControl, index);
+                Grid.SetColumn(markerControl, 0);
+                grid.Children.Add(markerControl);
 
                 Grid.SetRow(itemCtrl, index);
                 Grid.SetColumn(itemCtrl, 1);
@@ -101,6 +133,13 @@ namespace ColorDocument.Avalonia.DocumentElements
                 }
                 return null;
             }
+
+            static bool IsOrderedMarker(TextMarkerStyle markerStyle) => markerStyle is
+                TextMarkerStyle.Decimal or
+                TextMarkerStyle.LowerLatin or
+                TextMarkerStyle.LowerRoman or
+                TextMarkerStyle.UpperLatin or
+                TextMarkerStyle.UpperRoman;
         }
 
         public override void ConstructSelectedText(StringBuilder builder)

@@ -140,8 +140,7 @@ public partial class RootViewContent : UserControl
         foreach (var card in startSettings.GetVisualDescendants().OfType<GlassCard>())
         {
             var hasPath = card.GetVisualDescendants().OfType<TextBox>()
-                .Any(tb => tb.GetValue(TextBox.TextProperty) != null || 
-                           tb.Width is 215); // SoftwarePath TextBox has Width=215 inside this card
+                .Any(tb => tb.GetValue(TextBox.TextProperty) != null || tb.Width is 215); // SoftwarePath TextBox has Width=215 inside this card
             var hasNumeric = card.GetVisualDescendants().OfType<NumericUpDown>().Any();
             if (hasPath && hasNumeric)
                 return card;
