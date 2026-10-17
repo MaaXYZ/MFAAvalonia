@@ -211,6 +211,9 @@
   <data name="GlobalOption" xml:space="preserve">
     <value>グローバルタスク設定</value>
   </data>
+  <data name="GlobalSetting" xml:space="preserve">
+    <value>グローバル</value>
+  </data>
   <data name="ControllerPresetConfig" xml:space="preserve">
     <value>コントローラープリセット設定</value>
   </data>
@@ -1294,6 +1297,9 @@
   <data name="SelectAll" xml:space="preserve">
         <value>すべて選択</value>
     </data>
+  <data name="ToggleSelectAll" xml:space="preserve">
+    <value>すべて選択／選択解除</value>
+  </data>
   <data name="SelectExecutableFile" xml:space="preserve">
         <value>実行可能ファイルの選択</value>
     </data>
@@ -2034,7 +2040,7 @@
         <value>すべて選択/すべて選択解除</value>
     </data>
   <data name="TutorialStepSelectAllDesc" xml:space="preserve">
-        <value>これら 2 つのボタンは、すべてのタスクをすばやくオンまたはオフにします。左が「すべて選択」、右が「すべて選択解除」です。</value>
+        <value>このボタンは、現在の選択状態に応じてすべてのタスクを選択または解除します。</value>
     </data>
   <data name="TutorialStepAddTaskBtnTitle" xml:space="preserve">
         <value>タスクの追加とリセット</value>

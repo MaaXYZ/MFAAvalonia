@@ -324,9 +324,10 @@ public partial class MobileTaskQueueView : UserControl
         var resourceItems = ViewModel.TaskItemViewModels
             .Where(item => item.IsResourceOptionItem && item.ResourceItem?.SelectOptions != null)
             .ToList();
-        var global = resourceItems.FirstOrDefault(item => item.ResourceItem?.Name == "__GlobalOption__");
-        if (global?.ResourceItem?.SelectOptions != null)
-            config.SetValue(ConfigurationKeys.GlobalOptionItems, global.ResourceItem.SelectOptions);
+        var globalOptions = resourceItems.FirstOrDefault(item => item.ResourceItem?.Name == "__GlobalOption__")
+            ?.ResourceItem?.SelectOptions ?? MaaProcessor.Interface?.GlobalSelectOptions;
+        if (globalOptions != null)
+            config.SetValue(ConfigurationKeys.GlobalOptionItems, globalOptions);
 
         const string controllerPrefix = "__ControllerOption__";
         var controllerOptions = resourceItems

@@ -837,6 +837,9 @@
     <data name="GlobalOption" xml:space="preserve">
         <value>全域任務配置</value>
     </data>
+    <data name="GlobalSetting" xml:space="preserve">
+        <value>全域</value>
+    </data>
     <data name="ControllerPresetConfig" xml:space="preserve">
         <value>控制器預設配置</value>
     </data>
@@ -911,6 +914,9 @@
     </data>
     <data name="SelectAll" xml:space="preserve">
         <value>全選</value>
+    </data>
+    <data name="ToggleSelectAll" xml:space="preserve">
+        <value>全選/取消全選</value>
     </data>
     <data name="SelectExecutableFile" xml:space="preserve">
         <value>選擇可執行檔案</value>
@@ -1847,10 +1853,10 @@
         <value>任務執行過程中的日誌訊息會顯示在這裡，方便即時查看執行狀態和排查問題。</value>
     </data>
     <data name="TutorialStepSelectAllTitle" xml:space="preserve">
-        <value>全選與全不選</value>
+        <value>全選與取消全選</value>
     </data>
     <data name="TutorialStepSelectAllDesc" xml:space="preserve">
-        <value>這兩個按鈕可以快速勾選或取消勾選所有任務。左側為「全選」，右側為「全不選」。</value>
+        <value>這個按鈕會根據目前任務勾選情況，在全選和取消全選之間切換。</value>
     </data>
     <data name="TutorialStepAddTaskBtnTitle" xml:space="preserve">
         <value>新增與重置任務</value>

@@ -286,6 +286,7 @@ public static class LangKeys
 	public static readonly string ResourceDownloadSource = "ResourceDownloadSource";
 	public static readonly string ResourceLink = "ResourceLink";
 	public static readonly string GlobalOption = "GlobalOption";
+	public static readonly string GlobalSetting = "GlobalSetting";
 	public static readonly string ControllerPresetConfig = "ControllerPresetConfig";
 	public static readonly string ResourceName = "ResourceName";
 	public static readonly string ResourceOption = "ResourceOption";
@@ -312,6 +313,7 @@ public static class LangKeys
 	public static readonly string ScreencapTimeoutDisconnected = "ScreencapTimeoutDisconnected";
 	public static readonly string Select = "Select";
 	public static readonly string SelectAll = "SelectAll";
+	public static readonly string ToggleSelectAll = "ToggleSelectAll";
 	public static readonly string SelectExecutableFile = "SelectExecutableFile";
 	public static readonly string SelectExistingImage = "SelectExistingImage";
 	public static readonly string Settings = "Settings";

@@ -23,8 +23,10 @@ using Newtonsoft.Json.Linq;
 using SukiUI.Dialogs;
 using System;
 using System.Buffers;
+using System.Collections.Specialized;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -643,13 +645,63 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isCommon = true;
     [ObservableProperty] private bool _showSettings;
     [ObservableProperty] private bool _toggleEnable = true;
+    [ObservableProperty] private bool _areAllTasksSelected;
 
     [ObservableProperty] private ObservableCollection<DragItemViewModel> _taskItemViewModels = [];
 
+    private ObservableCollection<DragItemViewModel>? _observedTaskItemViewModels;
+    private readonly HashSet<DragItemViewModel> _observedTaskItems = [];
+
     partial void OnTaskItemViewModelsChanged(ObservableCollection<DragItemViewModel> value)
     {
+        if (_observedTaskItemViewModels != null)
+            _observedTaskItemViewModels.CollectionChanged -= OnTaskItemsCollectionChanged;
+
+        foreach (var item in _observedTaskItems)
+            item.PropertyChanged -= OnTaskItemPropertyChanged;
+        _observedTaskItems.Clear();
+
+        _observedTaskItemViewModels = value;
+        _observedTaskItemViewModels.CollectionChanged += OnTaskItemsCollectionChanged;
+        SyncObservedTaskItems();
+
         if (ConfigurationManager.IsSwitching) return;
         Processor.InstanceConfiguration.SetValue(ConfigurationKeys.TaskItems, value.Where(model => !model.IsResourceOptionItem).Select(model => model.InterfaceItem).ToList());
+    }
+
+    private void OnTaskItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        SyncObservedTaskItems();
+    }
+
+    private void SyncObservedTaskItems()
+    {
+        var currentItems = TaskItemViewModels.ToHashSet();
+        foreach (var item in _observedTaskItems.Where(item => !currentItems.Contains(item)).ToList())
+        {
+            item.PropertyChanged -= OnTaskItemPropertyChanged;
+            _observedTaskItems.Remove(item);
+        }
+
+        foreach (var item in currentItems.Where(item => !_observedTaskItems.Contains(item)))
+        {
+            item.PropertyChanged += OnTaskItemPropertyChanged;
+            _observedTaskItems.Add(item);
+        }
+
+        UpdateAreAllTasksSelected();
+    }
+
+    private void OnTaskItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(DragItemViewModel.IsCheckedWithNull) or nameof(DragItemViewModel.IsChecked))
+            UpdateAreAllTasksSelected();
+    }
+
+    private void UpdateAreAllTasksSelected()
+    {
+        var tasks = TaskItemViewModels.Where(item => !item.IsResourceOptionItem).ToList();
+        AreAllTasksSelected = tasks.Count > 0 && tasks.All(item => item.IsChecked);
     }
 
     [RelayCommand]
@@ -828,6 +880,15 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             task.IsChecked = false;
         LoggerHelper.UserAction("取消全选任务", $"taskCount={TaskItemViewModels.Count}",
             operation: "SelectNoneTasks", instanceId: Processor.InstanceId, instanceName: InstanceName);
+    }
+
+    [RelayCommand]
+    private void ToggleSelectAll()
+    {
+        if (AreAllTasksSelected)
+            SelectNone();
+        else
+            SelectAll();
     }
 
     [RelayCommand]
@@ -2933,12 +2994,13 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             .Where(m => m.IsResourceOptionItem && m.ResourceItem?.SelectOptions != null)
             .ToList();
 
-        var globalItem = allItems.FirstOrDefault(m => m.ResourceItem?.Name == "__GlobalOption__");
-        if (globalItem?.ResourceItem?.SelectOptions != null)
+        var globalOptions = allItems.FirstOrDefault(m => m.ResourceItem?.Name == "__GlobalOption__")
+            ?.ResourceItem?.SelectOptions ?? MaaProcessor.Interface?.GlobalSelectOptions;
+        if (globalOptions != null)
         {
             instanceConfig.SetValue(
                 ConfigurationKeys.GlobalOptionItems,
-                globalItem.ResourceItem.SelectOptions);
+                globalOptions);
         }
 
         const string controllerPrefix = "__ControllerOption__";
@@ -3080,13 +3142,18 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// 计算资源选项项的插入位置（在全局选项项之后）
+    /// 计算资源选项项的插入位置（在全局设置项或独立设置项之后）
     /// </summary>
     private int FindResourceOptionInsertIndex()
     {
         var globalItem = TaskItemViewModels.FirstOrDefault(t =>
             t.IsResourceOptionItem && t.ResourceItem?.Name == "__GlobalOption__");
-        return globalItem != null ? TaskItemViewModels.IndexOf(globalItem) + 1 : 0;
+        if (globalItem != null)
+            return TaskItemViewModels.IndexOf(globalItem) + 1;
+
+        var lastSettingItem = TaskItemViewModels.LastOrDefault(t =>
+            t.IsResourceOptionItem && t.ResourceItem?.Name?.StartsWith("__Setting__") == true);
+        return lastSettingItem != null ? TaskItemViewModels.IndexOf(lastSettingItem) + 1 : 0;
     }
 
     /// <summary>
@@ -3172,10 +3239,8 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         if (resourceItem != null)
             return TaskItemViewModels.IndexOf(resourceItem) + 1;
 
-        // 没有资源选项项，插入到全局选项项之后
-        var globalItem = TaskItemViewModels.FirstOrDefault(t =>
-            t.IsResourceOptionItem && t.ResourceItem?.Name == "__GlobalOption__");
-        return globalItem != null ? TaskItemViewModels.IndexOf(globalItem) + 1 : 0;
+        // 没有资源选项项时，沿用资源选项的插入位置。
+        return FindResourceOptionInsertIndex();
     }
 
     /// <summary>

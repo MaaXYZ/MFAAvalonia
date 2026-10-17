@@ -697,8 +697,9 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
             if (settingItem != null) finalItems.Add(settingItem);
         }
 
-        // 如果有 global_option，置顶显示一个全局设置项（包含所有全局选项）
-        if (maaInterface?.GlobalOption is { Count: > 0 } && maaInterface.GlobalSelectOptions is { Count: > 0 })
+        // Android 移动界面仍通过任务列表中的全局设置项编辑全局选项。
+        if (OperatingSystem.IsAndroid() &&
+            maaInterface?.GlobalOption is { Count: > 0 } && maaInterface.GlobalSelectOptions is { Count: > 0 })
         {
             var globalOptionItem = CreateGlobalOptionItem(drags);
             if (globalOptionItem != null)

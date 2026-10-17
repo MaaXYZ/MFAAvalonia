@@ -837,6 +837,9 @@
     <data name="GlobalOption" xml:space="preserve">
         <value>Global Task Config</value>
     </data>
+    <data name="GlobalSetting" xml:space="preserve">
+        <value>Global</value>
+    </data>
     <data name="ControllerPresetConfig" xml:space="preserve">
         <value>Controller Preset Config</value>
     </data>
@@ -911,6 +914,9 @@
     </data>
     <data name="SelectAll" xml:space="preserve">
         <value>Select All</value>
+    </data>
+    <data name="ToggleSelectAll" xml:space="preserve">
+        <value>Select All / Deselect All</value>
     </data>
     <data name="SelectExecutableFile" xml:space="preserve">
         <value>Select Executable File</value>
@@ -1850,7 +1856,7 @@ Please do not copy only the main executable by itself.</value>
         <value>Select All / Deselect All</value>
     </data>
     <data name="TutorialStepSelectAllDesc" xml:space="preserve">
-        <value>These two buttons quickly check or uncheck all tasks. The left one is "Select All" and the right one is "Deselect All".</value>
+        <value>This button switches between selecting and deselecting all tasks based on their current selection.</value>
     </data>
     <data name="TutorialStepAddTaskBtnTitle" xml:space="preserve">
         <value>Add &amp; Reset Tasks</value>

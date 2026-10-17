@@ -592,18 +592,18 @@ public partial class TaskQueueView : UserControl
     #region 任务选项
 
     private readonly ConcurrentDictionary<string, Control> CommonPanelCache = new();
-    private readonly ConcurrentDictionary<string, Control> AdvancedPanelCache = new();
+    private readonly ConcurrentDictionary<string, Control> GlobalPanelCache = new();
     private readonly ConcurrentDictionary<string, string> IntroductionsCache = new();
     private readonly ConcurrentDictionary<string, bool> ShowCache = new();
 
     public void ResetOptionPanels()
     {
         CommonPanelCache.Clear();
-        AdvancedPanelCache.Clear();
+        GlobalPanelCache.Clear();
         IntroductionsCache.Clear();
         ShowCache.Clear();
         CommonOptionSettings?.Children.Clear();
-        AdvancedOptionSettings?.Children.Clear();
+        GlobalOptionSettings?.Children.Clear();
         Introduction.Markdown = "";
         SetHiddenMode();
     }
@@ -678,8 +678,21 @@ public partial class TaskQueueView : UserControl
 
         HideAllPanels();
         InvalidatePanelCache(cacheKey);
-        var juggle = dragItem.InterfaceItem is { Advanced: { Count: > 0 }, Option: { Count: > 0 } };
-        vm.ShowSettings = juggle;
+        var hasGlobalOptions = MaaProcessor.Interface?.GlobalSelectOptions is { Count: > 0 };
+        vm.ShowSettings = hasGlobalOptions;
+
+        if (hasGlobalOptions)
+        {
+            var globalPanel = GlobalPanelCache.GetOrAdd("GlobalOption", _ =>
+            {
+                var panel = new StackPanel();
+                new TaskOptionGenerator(vm, SaveConfiguration).GenerateGlobalPanelContent(panel);
+                GlobalOptionSettings.Children.Add(panel);
+                return panel;
+            });
+            globalPanel.IsVisible = true;
+        }
+
         // 处理资源设置项的选项
         if (dragItem.IsResourceOptionItem)
         {
@@ -699,45 +712,16 @@ public partial class TaskQueueView : UserControl
         }
         else
         {
-
-            if (juggle)
+            if (!init)
             {
                 var newPanel = CommonPanelCache.GetOrAdd(cacheKey, key =>
                 {
                     var p = new StackPanel();
                     new TaskOptionGenerator(vm, SaveConfiguration).GeneratePanelContent(p, dragItem);
-                    // GeneratePanelContent(p, dragItem);
                     CommonOptionSettings.Children.Add(p);
                     return p;
                 });
                 newPanel.IsVisible = true;
-            }
-            else
-            {
-                if (!init)
-                {
-                    var commonPanel = CommonPanelCache.GetOrAdd(cacheKey, key =>
-                    {
-                        var p = new StackPanel();
-                        new TaskOptionGenerator(vm, SaveConfiguration).GenerateCommonPanelContent(p, dragItem);
-                        // GenerateCommonPanelContent(p, dragItem);
-                        CommonOptionSettings.Children.Add(p);
-                        return p;
-                    });
-                    commonPanel.IsVisible = true;
-                }
-                var advancedPanel = AdvancedPanelCache.GetOrAdd(cacheKey, key =>
-                {
-                    var p = new StackPanel();
-                    new TaskOptionGenerator(vm, SaveConfiguration).GenerateAdvancedPanelContent(p, dragItem);
-                    // GenerateAdvancedPanelContent(p, dragItem);
-                    AdvancedOptionSettings.Children.Add(p);
-                    return p;
-                });
-                if (!init)
-                {
-                    advancedPanel.IsVisible = true;
-                }
             }
         }
         if (!init)
@@ -761,6 +745,10 @@ public partial class TaskQueueView : UserControl
             if (CommonPanelCache.TryGetValue(cacheKey, out var panel))
             {
                 hasSettings = panel.IsVisible && ((Panel)panel).Children.Count > 0;
+            }
+            if (GlobalPanelCache.TryGetValue("GlobalOption", out var globalPanel))
+            {
+                hasSettings = hasSettings || globalPanel.IsVisible && ((Panel)globalPanel).Children.Count > 0;
             }
 
             var hasIntroduction = !string.IsNullOrWhiteSpace(newIntroduction);
@@ -878,11 +866,6 @@ public partial class TaskQueueView : UserControl
         {
             oldPanel.IsVisible = false;
         }
-        if (AdvancedPanelCache.TryGetValue(key, out var oldaPanel))
-        {
-            oldaPanel.IsVisible = false;
-        }
-
         Introduction.Markdown = "";
         SetHiddenMode();
     }
@@ -894,17 +877,17 @@ public partial class TaskQueueView : UserControl
             CommonOptionSettings.Children.Remove(commonPanel);
         }
 
-        if (AdvancedPanelCache.TryRemove(key, out var advancedPanel))
-        {
-            AdvancedOptionSettings.Children.Remove(advancedPanel);
-        }
-
         IntroductionsCache.TryRemove(key, out _);
     }
 
     private void HideAllPanels()
     {
         foreach (var panel in CommonPanelCache.Values)
+        {
+            panel.IsVisible = false;
+        }
+
+        foreach (var panel in GlobalPanelCache.Values)
         {
             panel.IsVisible = false;
         }
@@ -2511,12 +2494,13 @@ public partial class TaskQueueView : UserControl
             .ToList();
 
         // 保存全局选项到 GlobalOptionItems
-        var globalItem = allItems.FirstOrDefault(m => m.ResourceItem?.Name == "__GlobalOption__");
-        if (globalItem?.ResourceItem?.SelectOptions != null)
+        var globalOptions = allItems.FirstOrDefault(m => m.ResourceItem?.Name == "__GlobalOption__")
+            ?.ResourceItem?.SelectOptions ?? MaaProcessor.Interface?.GlobalSelectOptions;
+        if (globalOptions != null)
         {
             vm.Processor.InstanceConfiguration.SetValue(
                 ConfigurationKeys.GlobalOptionItems,
-                globalItem.ResourceItem.SelectOptions);
+                globalOptions);
         }
 
         // 保存控制器选项到 ControllerOptionItems（Name 以 "__ControllerOption__" 开头）
@@ -2802,10 +2786,10 @@ public partial class TaskQueueView : UserControl
     private void ClearOptionPanelCaches()
     {
         CommonPanelCache.Clear();
-        AdvancedPanelCache.Clear();
+        GlobalPanelCache.Clear();
         IntroductionsCache.Clear();
         CommonOptionSettings?.Children.Clear();
-        AdvancedOptionSettings?.Children.Clear();
+        GlobalOptionSettings?.Children.Clear();
         Introduction.Markdown = "";
     }
 

@@ -974,7 +974,7 @@
                                      Classes="Inner"
                                      GroupName="SettingA"
                                      IsChecked="{calcBinding:Binding '!IsCommon'}">
-                            <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.AdvancedSetting}}" />
+                            <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.GlobalSetting}}" />
                         </RadioButton>
                     </StackPanel>
                 </dashboard:DashboardCard.HeaderActions>
@@ -989,7 +989,7 @@
                                     x:Name="CommonOptionSettings"
                                     Orientation="Vertical" />
                         <StackPanel IsVisible="{calcBinding:Binding '!IsCommon'}"
-                                    x:Name="AdvancedOptionSettings"
+                                    x:Name="GlobalOptionSettings"
                                     Orientation="Vertical" />
                     </Grid>
                 </ScrollViewer>
@@ -1020,25 +1020,19 @@
                                 Spacing="8">
                         <Button Classes="BasicTight TaskQueueBasicTight"
                                 ClipToBounds="False"
-                                Command="{Binding SelectAllCommand}"
+                                Command="{Binding ToggleSelectAllCommand}"
                                 Height="16"
                                 IsEnabled="{Binding CurrentInstanceIdle, Source={x:Static helper:Instances.RootViewModel}}"
                                 Margin="7,0,0,0"
                                 Padding="0"
-                                ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.SelectAll}}"
+                                ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.ToggleSelectAll}}"
                                 Width="16">
-                            <avalonia1:FluentIcon Icon="SelectAllOn" IconSize="Size16" IconVariant="Regular" />
-                        </Button>
-                        <Button Classes="BasicTight TaskQueueBasicTight"
-                                ClipToBounds="False"
-                                Command="{Binding SelectNoneCommand}"
-                                Height="16"
-                                IsEnabled="{Binding CurrentInstanceIdle, Source={x:Static helper:Instances.RootViewModel}}"
-                                Margin="7,0,0,0"
-                                Padding="0"
-                                ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.DeselectAll}}"
-                                Width="16">
-                            <avalonia1:FluentIcon Icon="SelectAllOff" IconSize="Size16" IconVariant="Regular" />
+                            <Grid>
+                                <avalonia1:FluentIcon Icon="SelectAllOn" IconSize="Size16" IconVariant="Regular"
+                                                     IsVisible="{calcBinding:Binding '!AreAllTasksSelected'}" />
+                                <avalonia1:FluentIcon Icon="SelectAllOff" IconSize="Size16" IconVariant="Regular"
+                                                     IsVisible="{Binding AreAllTasksSelected}" />
+                            </Grid>
                         </Button>
                         <Button Classes="BasicTight TaskQueueBasicTight"
                                 ClipToBounds="False"
