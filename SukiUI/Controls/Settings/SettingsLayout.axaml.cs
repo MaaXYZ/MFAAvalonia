@@ -60,6 +60,19 @@ public partial class SettingsLayout : ItemsControl, ISukiStackPageTitleProvider
     private Button? _stackSummaryTopScrollRightButton;
     private Control? _stackSummaryTopContainer;
 
+    /// <summary>
+    /// 顶部分类导航横向拖动的启动阈值，单位为逻辑像素。
+    /// 位移小于该值时仍按点击处理，保证分类跳转不受影响。
+    /// </summary>
+    private const double TopSummaryDragThreshold = 4.0;
+
+    private IPointer? _topSummaryDragPointer;
+    private bool _topSummaryPointerCaptured;
+    private bool _isTopSummaryDragging;
+    private bool _suppressTopSummaryClick;
+    private Point _topSummaryDragStartPoint;
+    private double _topSummaryDragStartOffsetX;
+
     public SettingsLayout()
     {
         InitializeComponent();
@@ -133,6 +146,11 @@ public partial class SettingsLayout : ItemsControl, ISukiStackPageTitleProvider
         {
             _stackSummaryScrollTop.PointerWheelChanged -= OnTopSummaryWheelChanged;
             _stackSummaryScrollTop.ScrollChanged -= OnTopSummaryScrollChanged;
+            _stackSummaryScrollTop.RemoveHandler(InputElement.PointerPressedEvent, OnTopSummaryPointerPressed);
+            _stackSummaryScrollTop.RemoveHandler(InputElement.PointerMovedEvent, OnTopSummaryPointerMoved);
+            _stackSummaryScrollTop.RemoveHandler(InputElement.PointerReleasedEvent, OnTopSummaryPointerReleased);
+            _stackSummaryScrollTop.RemoveHandler(InputElement.PointerCaptureLostEvent, OnTopSummaryPointerCaptureLost);
+            EndTopSummaryDrag();
         }
 
         if (_stackSummaryTopScrollLeftButton != null)
@@ -154,6 +172,15 @@ public partial class SettingsLayout : ItemsControl, ISukiStackPageTitleProvider
         {
             _stackSummaryScrollTop.PointerWheelChanged += OnTopSummaryWheelChanged;
             _stackSummaryScrollTop.ScrollChanged += OnTopSummaryScrollChanged;
+            // 分类按钮会处理指针事件，因此需接收已处理事件，确保拖动逻辑能观察完整手势
+            _stackSummaryScrollTop.AddHandler(InputElement.PointerPressedEvent, OnTopSummaryPointerPressed,
+                Avalonia.Interactivity.RoutingStrategies.Bubble, true);
+            _stackSummaryScrollTop.AddHandler(InputElement.PointerMovedEvent, OnTopSummaryPointerMoved,
+                Avalonia.Interactivity.RoutingStrategies.Bubble, true);
+            _stackSummaryScrollTop.AddHandler(InputElement.PointerReleasedEvent, OnTopSummaryPointerReleased,
+                Avalonia.Interactivity.RoutingStrategies.Bubble, true);
+            _stackSummaryScrollTop.AddHandler(InputElement.PointerCaptureLostEvent, OnTopSummaryPointerCaptureLost,
+                Avalonia.Interactivity.RoutingStrategies.Bubble, true);
         }
 
         if (_stackSummaryTopScrollLeftButton != null)
@@ -207,7 +234,7 @@ public partial class SettingsLayout : ItemsControl, ISukiStackPageTitleProvider
             };
             var contentTop = new TextBlock
             {
-                FontSize = 14
+                FontSize = 18
             };
             header.Bind(TextBlock.TextProperty, new Binding(nameof(SettingsLayoutItem.Header))
             {
@@ -268,6 +295,12 @@ public partial class SettingsLayout : ItemsControl, ISukiStackPageTitleProvider
 
             summaryButtonTop.Click += async (sender, args) =>
             {
+                if (_suppressTopSummaryClick)
+                {
+                    _suppressTopSummaryClick = false;
+                    return;
+                }
+
                 if (isAnimatingScroll)
                     return;
                 var x = border.TranslatePoint(new Point(), stackItems);
@@ -306,6 +339,7 @@ public partial class SettingsLayout : ItemsControl, ISukiStackPageTitleProvider
                 if (stackSummaryTop.Children.Count > minIndex && stackSummaryTop.Children[minIndex] is RadioButton topRadio)
                 {
                     topRadio.IsChecked = true;
+                    topRadio.BringIntoView();
                 }
             }
         };
@@ -355,6 +389,90 @@ public partial class SettingsLayout : ItemsControl, ISukiStackPageTitleProvider
         var nextX = Math.Clamp(offset.X + delta, 0, maxX);
         _stackSummaryScrollTop.Offset = offset.WithX(nextX);
         UpdateTopSummaryFade();
+    }
+
+    private void OnTopSummaryPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_stackSummaryScrollTop == null)
+        {
+            return;
+        }
+
+        _suppressTopSummaryClick = false;
+        _isTopSummaryDragging = false;
+
+        if (!e.GetCurrentPoint(_stackSummaryScrollTop).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        _topSummaryDragStartPoint = e.GetPosition(_stackSummaryScrollTop);
+        _topSummaryDragStartOffsetX = _stackSummaryScrollTop.Offset.X;
+    }
+
+    private void OnTopSummaryPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var scrollTop = _stackSummaryScrollTop;
+        if (scrollTop == null || !e.GetCurrentPoint(scrollTop).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(scrollTop);
+        var horizontalDelta = position.X - _topSummaryDragStartPoint.X;
+
+        if (!_isTopSummaryDragging)
+        {
+            if (Math.Abs(horizontalDelta) < TopSummaryDragThreshold
+                || Math.Abs(horizontalDelta) <= Math.Abs(position.Y - _topSummaryDragStartPoint.Y)
+                || scrollTop.ScrollBarMaximum.X <= 0.5)
+            {
+                return;
+            }
+
+            _topSummaryDragPointer = e.Pointer;
+            e.Pointer.Capture(scrollTop);
+            _topSummaryPointerCaptured = e.Pointer.Captured == scrollTop;
+            _isTopSummaryDragging = true;
+            _suppressTopSummaryClick = true;
+        }
+
+        if (!_topSummaryPointerCaptured)
+        {
+            return;
+        }
+
+        var maxX = scrollTop.ScrollBarMaximum.X;
+        var nextX = Math.Clamp(_topSummaryDragStartOffsetX - horizontalDelta, 0, maxX);
+        scrollTop.Offset = scrollTop.Offset.WithX(nextX);
+        UpdateTopSummaryFade();
+        e.Handled = true;
+    }
+
+    private void OnTopSummaryPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        var wasDragging = _isTopSummaryDragging;
+        EndTopSummaryDrag();
+
+        if (wasDragging)
+        {
+            e.Handled = true;
+        }
+    }
+
+    private void OnTopSummaryPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        _topSummaryDragPointer = null;
+        _topSummaryPointerCaptured = false;
+        _isTopSummaryDragging = false;
+    }
+
+    private void EndTopSummaryDrag()
+    {
+        _topSummaryDragPointer?.Capture(null);
+        _topSummaryDragPointer = null;
+        _topSummaryPointerCaptured = false;
+        _isTopSummaryDragging = false;
     }
 
     private void UpdateTopSummaryFade()

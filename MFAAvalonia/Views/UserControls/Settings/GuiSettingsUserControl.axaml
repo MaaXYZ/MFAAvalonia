@@ -190,29 +190,31 @@
                             Text="{markup:I18n {x:Static helper:LangKeys.CreateCustomTheme}}" />
                         <TextBlock
                             Foreground="{DynamicResource SukiLowText}"
-                            Margin="0,12,70,0"
+                            Margin="0,12,0,0"
                             Text="{markup:I18n {x:Static helper:LangKeys.ConfigurePrimaryAccent}}"
                             TextWrapping="Wrap" />
                     </StackPanel>
                 </DockPanel>
-                <DockPanel>
-                    <ComboBox extensions:ComboBoxExtensions.DisableNavigationOnLostFocus="True"
-                              DockPanel.Dock="Right"
-                              ItemsSource="{Binding AvailableBackgroundStyles}"
-                              SelectedValue="{Binding BackgroundStyle}"
-                              Width="215" />
-                    <StackPanel HorizontalAlignment="Left">
+                <Grid Classes="ResponsiveSettingsField" ColumnDefinitions="1.8*,1*" ColumnSpacing="20">
+                    <StackPanel Grid.Column="0" HorizontalAlignment="Left">
                         <TextBlock
                             FontSize="16"
                             FontWeight="SemiBold"
                             Text="{markup:I18n {x:Static helper:LangKeys.BackgroundStyleTitle}}" />
                         <TextBlock
                             Foreground="{DynamicResource SukiLowText}"
-                            Margin="0,12,70,0"
+                            Margin="0,12,0,0"
                             Text="{markup:I18n {x:Static helper:LangKeys.BackgroundStyleDescription}}"
                             TextWrapping="Wrap" />
                     </StackPanel>
-                </DockPanel>
+                    <ComboBox extensions:ComboBoxExtensions.DisableNavigationOnLostFocus="True"
+                              Grid.Column="1"
+                              HorizontalAlignment="Stretch"
+                              ItemsSource="{Binding AvailableBackgroundStyles}"
+                              MaxWidth="215"
+                              MinWidth="160"
+                              SelectedValue="{Binding BackgroundStyle}" />
+                </Grid>
 
                 <DockPanel>
                     <ToggleSwitch
@@ -227,7 +229,7 @@
                             Text="{markup:I18n {x:Static helper:LangKeys.AnimatedBackgroundTitle}}" />
                         <TextBlock
                             Foreground="{DynamicResource SukiLowText}"
-                            Margin="0,12,70,0"
+                            Margin="0,12,0,0"
                             Text="{markup:I18n {x:Static helper:LangKeys.AnimatedBackgroundDescription}}"
                             TextWrapping="Wrap" />
                     </StackPanel>
@@ -245,7 +247,7 @@
                             Text="{markup:I18n {x:Static helper:LangKeys.BackgroundTransitionsTitle}}" />
                         <TextBlock
                             Foreground="{DynamicResource SukiLowText}"
-                            Margin="0,12,70,0"
+                            Margin="0,12,0,0"
                             Text="{markup:I18n {x:Static helper:LangKeys.BackgroundTransitionsDescription}}"
                             TextWrapping="Wrap" />
                     </StackPanel>
@@ -277,7 +279,7 @@
                             Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImageTitle}}" />
                         <TextBlock
                             Foreground="{DynamicResource SukiLowText}"
-                            Margin="0,12,70,0"
+                            Margin="0,12,12,0"
                             Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImageDescription}}"
                             TextWrapping="Wrap" />
                     </StackPanel>
@@ -300,7 +302,7 @@
                             Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImageOpacityTitle}}" />
                         <TextBlock
                             Foreground="{DynamicResource SukiLowText}"
-                            Margin="0,12,70,0"
+                            Margin="0,12,0,0"
                             Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImageOpacityDescription}}"
                             TextWrapping="Wrap" />
                     </StackPanel>
@@ -308,26 +310,28 @@
             </StackPanel>
         </suki:GlassCard>
         <suki:GlassCard Margin="0,25,0,0" Padding="25">
-            <DockPanel>
-                <ComboBox extensions:ComboBoxExtensions.DisableNavigationOnLostFocus="True"
-                          DisplayMemberBinding="{Binding Name}"
-                          DockPanel.Dock="Right"
-                          ItemsSource="{Binding SupportedLanguages}"
-                          SelectedValue="{Binding CurrentLanguage}"
-                          SelectedValueBinding="{Binding Key}"
-                          Width="215" />
-                <StackPanel HorizontalAlignment="Left">
+            <Grid Classes="ResponsiveSettingsField" ColumnDefinitions="1.8*,1*" ColumnSpacing="20">
+                <StackPanel Grid.Column="0" HorizontalAlignment="Left">
                     <TextBlock
                         FontSize="16"
                         FontWeight="DemiBold"
                         Text="{markup:I18n {x:Static helper:LangKeys.LanguageOption}}" />
                     <TextBlock
                         Foreground="{DynamicResource SukiLowText}"
-                        Margin="0,12,70,0"
+                        Margin="0,12,0,0"
                         Text="{markup:I18n {x:Static helper:LangKeys.LanguageOptionDescription}}"
                         TextWrapping="Wrap" />
                 </StackPanel>
-            </DockPanel>
+                <ComboBox extensions:ComboBoxExtensions.DisableNavigationOnLostFocus="True"
+                          DisplayMemberBinding="{Binding Name}"
+                          Grid.Column="1"
+                          HorizontalAlignment="Stretch"
+                          ItemsSource="{Binding SupportedLanguages}"
+                          MaxWidth="215"
+                          MinWidth="160"
+                          SelectedValue="{Binding CurrentLanguage}"
+                          SelectedValueBinding="{Binding Key}" />
+            </Grid>
         </suki:GlassCard>
         <!-- Font Scale Settings -->
         <suki:GlassCard Margin="0,25,0,0" Padding="25">
@@ -347,7 +351,7 @@
                             Text="{markup:I18n {x:Static helper:LangKeys.FontScaleTitle}}" />
                         <TextBlock
                             Foreground="{DynamicResource SukiLowText}"
-                            Margin="0,12,70,0"
+                            Margin="0,12,0,0"
                             Text="{markup:I18n {x:Static helper:LangKeys.FontScaleDescription}}"
                             TextWrapping="Wrap" />
                     </StackPanel>
@@ -375,7 +379,7 @@
                         Text="{markup:I18n {x:Static helper:LangKeys.MinimizeToTray}}" />
                     <TextBlock
                         Foreground="{DynamicResource SukiLowText}"
-                        Margin="0,12,70,0"
+                        Margin="0,12,0,0"
                         Text="{markup:I18n {x:Static helper:LangKeys.MinimizeToTrayDescription}}"
                         TextWrapping="Wrap" />
                 </StackPanel>
@@ -395,7 +399,7 @@
                         Text="{markup:I18n {x:Static helper:LangKeys.Notification}}" />
                     <TextBlock
                         Foreground="{DynamicResource SukiLowText}"
-                        Margin="0,12,70,0"
+                        Margin="0,12,0,0"
                         Text="{markup:I18n {x:Static helper:LangKeys.NotificationDescription}}"
                         TextWrapping="Wrap" />
                 </StackPanel>

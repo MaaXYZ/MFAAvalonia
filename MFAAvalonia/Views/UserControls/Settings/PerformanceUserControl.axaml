@@ -18,26 +18,26 @@
     </Design.DataContext>
     <suki:GlassCard Margin="0,15,0,0" Padding="25,10,25,10">
         <StackPanel Orientation="Vertical" Spacing="10">
-            <DockPanel>
-
-                <ComboBox extensions:ComboBoxExtensions.DisableNavigationOnLostFocus="True" DockPanel.Dock="Right"
-                          DisplayMemberBinding="{Binding Name}"
-
-                          Focusable="False"
-                          HorizontalAlignment="Center"
-                          IsEnabled="{Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
-                          ItemsSource="{Binding GpuOptions}" SelectedIndex="{Binding GpuIndex}"
-                          VerticalAlignment="Center"
-                          Width="215" />
-
-                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center">
+            <Grid ColumnDefinitions="1.8*,1*" ColumnSpacing="20">
+                <StackPanel Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Center">
                     <TextBlock
                         FontSize="16"
                         FontWeight="DemiBold"
                         Text="{markup:I18n {x:Static helper:LangKeys.UseGpuForInference}}"
                         VerticalAlignment="Center" />
                 </StackPanel>
-            </DockPanel>
+                <ComboBox extensions:ComboBoxExtensions.DisableNavigationOnLostFocus="True"
+                          DisplayMemberBinding="{Binding Name}"
+                          Focusable="False"
+                          Grid.Column="1"
+                          HorizontalAlignment="Stretch"
+                          IsEnabled="{Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
+                          ItemsSource="{Binding GpuOptions}"
+                          MaxWidth="215"
+                          MinWidth="160"
+                          SelectedIndex="{Binding GpuIndex}"
+                          VerticalAlignment="Center" />
+            </Grid>
             <CheckBox Margin="0 0 0 8" IsChecked="{Binding UseDirectML}" IsVisible="{Binding  IsDirectMLSupported}" HorizontalAlignment="Center"
                       Content="{markup:I18n {x:Static helper:LangKeys.UseDirectMLSupportedDevice}}" VerticalAlignment="Center"> 
             </CheckBox>
