@@ -93,7 +93,6 @@ public partial class TaskQueueView : UserControl
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         UpdateViewModelSubscription(DataContext as TaskQueueViewModel);
-        ApplyLiveViewCardState();
     }
 
     private TaskQueueViewModel? _subscribedViewModel;
@@ -115,7 +114,6 @@ public partial class TaskQueueView : UserControl
             _subscribedViewModel.SetOptionRequested += OnSetOptionRequested;
             _subscribedViewModel.TaskItemViewModels.CollectionChanged += OnTaskItemsCollectionChanged;
             Dispatcher.UIThread.Post(ClearUnsupportedSelection, DispatcherPriority.Background);
-            Dispatcher.UIThread.Post(ApplyLiveViewCardState, DispatcherPriority.Background);
         }
     }
 
@@ -2776,16 +2774,10 @@ public partial class TaskQueueView : UserControl
         }
     }
 
-    #region 实时图像
+    #region 视图生命周期
 
     private void OnTaskQueueViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(TaskQueueViewModel.EnableLiveView))
-        {
-            ApplyLiveViewCardState();
-            return;
-        }
-
         if (e.PropertyName == nameof(TaskQueueViewModel.CurrentController))
         {
             UpdateDeviceColumns();
@@ -2855,17 +2847,6 @@ public partial class TaskQueueView : UserControl
         LanguageHelper.LanguageChanged += OnLanguageChanged;
 
         UpdateViewModelSubscription(DataContext as TaskQueueViewModel);
-        ApplyLiveViewCardState();
-    }
-
-    private void ApplyLiveViewCardState()
-    {
-        if (DataContext is not TaskQueueViewModel vm || LiveViewCard == null)
-        {
-            return;
-        }
-
-        LiveViewCard.IsVisible = vm.EnableLiveView;
     }
 
     private void OnSetOptionRequested(DragItemViewModel item, bool value)

@@ -11,8 +11,8 @@ namespace MFAAvalonia.ViewModels.Pages;
 
 public partial class MonitorViewModel : ViewModelBase, IDisposable
 {
-    private const double BaseCardWidth = 360;
-    private const double BaseCardHeight = 240;
+    private const double BaseCardWidth = 240;
+    private const double BaseCardHeight = 420;
     private const double MinCardScale = 0.6;
     private const double MaxCardScale = 1.8;
     private const double CardScaleStep = 0.1;

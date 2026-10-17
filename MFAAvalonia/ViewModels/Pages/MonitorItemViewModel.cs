@@ -37,8 +37,8 @@ public partial class MonitorItemViewModel : ViewModelBase
 
     [ObservableProperty] private bool _hasImage;
 
-    public double CardWidth => _owner?.CardWidth ?? 360;
-    public double CardHeight => _owner?.CardHeight ?? 240;
+    public double CardWidth => _owner?.CardWidth ?? 240;
+    public double CardHeight => _owner?.CardHeight ?? 420;
 
     public MonitorItemViewModel(MaaProcessor processor, MonitorViewModel? owner = null)
     {
