@@ -134,8 +134,16 @@ public partial class AboutUserControl : UserControl
 
     private void StartTutorial_Click(object? sender, RoutedEventArgs e)
     {
-        var rootContent = this.GetVisualAncestors().OfType<RootViewContent>().FirstOrDefault();
-        rootContent?.TryStartTutorial();
+        var rootContent = this.GetVisualAncestors().OfType<RootViewContent>().FirstOrDefault()
+            ?? (this.GetVisualRoot() as Visual)?.FindDescendantOfType<RootViewContent>();
+        if (rootContent == null)
+        {
+            LoggerHelper.Warning("未找到根视图，无法启动使用教程");
+            ToastHelper.Warn("暂时无法启动教程，请回到任务页后重试。");
+            return;
+        }
+
+        rootContent.TryStartTutorial();
     }
 }
 
