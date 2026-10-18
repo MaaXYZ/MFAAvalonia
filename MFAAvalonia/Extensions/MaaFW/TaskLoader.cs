@@ -20,6 +20,7 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
 {
     public const string NEW_SEPARATOR = "<|||>";
     public const string OLD_SEPARATOR = ":";
+    public const string LightweightRecognitionOptionName = "轻量识别";
 
 
     /// <summary>
@@ -131,24 +132,36 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
     /// </summary>
     private void InitializeGlobalSelectOptions()
     {
-        if (maaInterface == null || maaInterface.GlobalOption == null || maaInterface.GlobalOption.Count == 0)
+        var savedGlobalOptions = taskQueueViewModel.Processor.InstanceConfiguration.GetValue(
+            ConfigurationKeys.GlobalOptionItems,
+            new List<MaaInterface.MaaInterfaceSelectOption>());
+        InitializeGlobalSelectOptions(maaInterface, savedGlobalOptions);
+    }
+
+    public static void InitializeGlobalSelectOptions(
+        MaaInterface? maaInterface,
+        List<MaaInterface.MaaInterfaceSelectOption>? savedGlobalOptions)
+    {
+        if (maaInterface == null)
+            return;
+
+        var optionNames = maaInterface.GlobalOption?.ToList() ?? new List<string>();
+        if (maaInterface.Option?.ContainsKey(LightweightRecognitionOptionName) == true &&
+            !optionNames.Contains(LightweightRecognitionOptionName))
         {
-            if (maaInterface != null)
-                maaInterface.GlobalSelectOptions = null;
+            optionNames.Add(LightweightRecognitionOptionName);
+        }
+
+        if (optionNames.Count == 0)
+        {
+            maaInterface.GlobalSelectOptions = null;
             return;
         }
 
-        var config = taskQueueViewModel.Processor.InstanceConfiguration;
-        var savedGlobalOptions = config.GetValue(
-            ConfigurationKeys.GlobalOptionItems,
-            new List<MaaInterface.MaaInterfaceSelectOption>());
         var savedDict = savedGlobalOptions?.ToDictionary(o => o.Name ?? string.Empty)
             ?? new Dictionary<string, MaaInterface.MaaInterfaceSelectOption>();
 
-        var existingDict = maaInterface.GlobalSelectOptions?.ToDictionary(o => o.Name ?? string.Empty)
-            ?? new Dictionary<string, MaaInterface.MaaInterfaceSelectOption>();
-
-        maaInterface.GlobalSelectOptions = maaInterface.GlobalOption.Select(optionName =>
+        maaInterface.GlobalSelectOptions = optionNames.Select(optionName =>
         {
             if (savedDict.TryGetValue(optionName, out var saved))
             {
@@ -163,14 +176,10 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
                 SetDefaultOptionValue(maaInterface, savedOption);
                 return savedOption;
             }
-            if (existingDict.TryGetValue(optionName, out var existing))
-            {
-                SetDefaultOptionValue(maaInterface, existing);
-                return existing;
-            }
-            var opt = new MaaInterface.MaaInterfaceSelectOption { Name = optionName };
-            SetDefaultOptionValue(maaInterface, opt);
-            return opt;
+
+            var option = new MaaInterface.MaaInterfaceSelectOption { Name = optionName };
+            SetDefaultOptionValue(maaInterface, option);
+            return option;
         }).ToList();
     }
 

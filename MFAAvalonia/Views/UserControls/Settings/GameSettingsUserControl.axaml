@@ -140,6 +140,22 @@
                             Text="{markup:I18n {x:Static helper:LangKeys.ShowHitDraw}}" />
                     </StackPanel>
                 </DockPanel>
+                <StackPanel
+                    x:Name="LightweightRecognitionSettingsPanel"
+                    IsVisible="False"
+                    Spacing="5" />
+            </StackPanel>
+        </suki:GlassCard>
+        <suki:GlassCard
+            x:Name="GlobalOptionCard"
+            IsVisible="False"
+            Padding="25">
+            <StackPanel Spacing="15">
+                <TextBlock
+                    FontSize="16"
+                    FontWeight="SemiBold"
+                    Text="{markup:I18n {x:Static helper:LangKeys.GlobalOption}}" />
+                <StackPanel x:Name="GlobalOptionSettingsPanel" Spacing="5" />
             </StackPanel>
         </suki:GlassCard>
         <!-- Live View Settings -->
