@@ -24,23 +24,7 @@ public static class IconHelper
             var dataDirectory = AppPaths.DataRoot;
             var installDirectory = AppPaths.InstallRoot;
 
-            // 尝试从 interface.json 同目录读取 icon 字段
-            var interfacePath = AppPaths.InterfaceJsonPath;
-            if (File.Exists(interfacePath))
-            {
-                var interfaceIcon = TryGetInterfaceIcon(interfacePath);
-                if (!string.IsNullOrWhiteSpace(interfaceIcon))
-                {
-                    var interfaceIconPath = Path.Combine(dataDirectory, interfaceIcon);
-                    if (File.Exists(interfaceIconPath))
-                    {
-                        using var fileStream = File.OpenRead(interfaceIconPath);
-                        return new Bitmap(fileStream);
-                    }
-                }
-            }
-
-            // 尝试从执行目录加载
+            // 优先使用应用自带图标
             var iconPath = Path.Combine(installDirectory, "Assets", "logo.ico");
             if (!File.Exists(iconPath))
                 iconPath = Path.Combine(installDirectory, "assets", "logo.ico");
@@ -56,6 +40,22 @@ public static class IconHelper
             {
                 var assets = AssetLoader.Open(uri);
                 return new Bitmap(assets);
+            }
+
+            // 仅在应用图标资源不可用时尝试读取 interface.json 图标
+            var interfacePath = AppPaths.InterfaceJsonPath;
+            if (File.Exists(interfacePath))
+            {
+                var interfaceIcon = TryGetInterfaceIcon(interfacePath);
+                if (!string.IsNullOrWhiteSpace(interfaceIcon))
+                {
+                    var interfaceIconPath = Path.Combine(dataDirectory, interfaceIcon);
+                    if (File.Exists(interfaceIconPath))
+                    {
+                        using var fileStream = File.OpenRead(interfaceIconPath);
+                        return new Bitmap(fileStream);
+                    }
+                }
             }
 
             LoggerHelper.Warning("未找到内嵌图标资源");
