@@ -172,6 +172,10 @@ public partial class MaaInterface
         [JsonProperty("type")]
         public string? Type { get; set; }
 
+        /// <summary>是否为下拉框启用搜索功能。</summary>
+        [JsonProperty("is_searchable")]
+        public bool IsSearchable { get; set; }
+
         /// <summary>
         /// 可选。指定该配置项适用的控制器类型列表。
         /// 数组元素应与 controller 配置中的 name 字段对应。

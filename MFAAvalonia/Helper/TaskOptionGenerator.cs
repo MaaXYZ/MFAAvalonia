@@ -760,7 +760,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         
         UpdateSubOptions(option.Index ?? 0);
         ComboBoxExtensions.SetDisableNavigationOnLostFocus(comboBox, true);
-        ComboBoxExtensions.SetCanSearch(comboBox, true);
+        ComboBoxExtensions.SetCanSearch(comboBox, interfaceOption.IsSearchable);
         ComboBoxExtensions.SetSearchMemberPath(comboBox, "DisplayName");
         comboBox.Bind(ComboBoxExtensions.SearchWatermarkProperty, new I18nBinding(LangKeys.Search));
         // Header
