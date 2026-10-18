@@ -1044,6 +1044,9 @@
     <data name="TaskStart" xml:space="preserve">
         <value>开始任务: {0}</value>
     </data>
+    <data name="TaskRoundComplete" xml:space="preserve">
+        <value>任务完成: {0} 进度 {1}/{2}</value>
+    </data>
     <data name="TaskStopped" xml:space="preserve">
         <value>任务已中止</value>
     </data>

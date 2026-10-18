@@ -784,6 +784,16 @@ public static class AgentHelper
             {
                 LoggerHelper.Warning($"检查 AgentClient LinkStop 状态失败：{e.Message}");
             }
+
+            try
+            {
+                agentClient.Dispose();
+                LoggerHelper.Info("AgentClient 已释放。");
+            }
+            catch (Exception e)
+            {
+                LoggerHelper.Warning($"释放 AgentClient 失败：{e.Message}");
+            }
         }
 
         // 步骤 2: 终止进程
