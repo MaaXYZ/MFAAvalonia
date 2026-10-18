@@ -222,6 +222,11 @@ MFAAvalonia 命令行参数
             {
                 if (connected) return false;
             }
+            catch (UnauthorizedAccessException)
+            {
+                // 既有实例可能以不同权限级别运行，无法转发时由新进程安静退出。
+                return true;
+            }
 
             Thread.Sleep(50);
         }

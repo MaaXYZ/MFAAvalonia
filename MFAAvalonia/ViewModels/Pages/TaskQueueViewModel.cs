@@ -1525,6 +1525,10 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     public void SetConnected(bool connected)
     {
         IsConnected = connected;
+        if (!connected) return;
+
+        _lastConnectedAtUtc = DateTime.UtcNow;
+        _liveViewLastFrameAtUtc = null;
     }
 
     private DateTime? _lastExecutionTime;
@@ -3413,6 +3417,13 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     private int _liveViewTickInProgress;
     private int _isDisposed;
     private bool _liveViewNoImageLogged;
+    private DateTime? _lastConnectedAtUtc;
+    private DateTime? _liveViewLastFrameAtUtc;
+    private DateTime? _liveViewChannelRebuildAtUtc;
+
+    private static readonly TimeSpan LiveViewFrameGrace = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan LiveViewFrameStaleLimit = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan LiveViewChannelRebuildCooldown = TimeSpan.FromSeconds(10);
 
     private void UpdateLiveViewTimerInterval()
     {
@@ -3461,6 +3472,13 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             }
             if (!IsLiveViewExpanded)
                 return;
+
+            if (!IsConnected && IsRunning && Processor.IsMainControllerConnected())
+            {
+                LoggerHelper.Info("主任务控制器已恢复连接，重新启用实时画面。");
+                SetConnected(true);
+            }
+
             if (EnableLiveView && IsConnected)
             {
                 // 流水线：非阻塞提交下一帧截图（若上一帧仍在执行则复用，避免任务堆积），
@@ -3494,6 +3512,9 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 var buffer = Processor.GetLiveViewBuffer(false);
                 if (buffer == null)
                 {
+                    if (ShouldRebuildStaleLiveViewChannel())
+                        return;
+
                     if (!_liveViewNoImageLogged)
                     {
                         _liveViewNoImageLogged = true;
@@ -3508,6 +3529,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 }
                 else
                 {
+                    _liveViewLastFrameAtUtc = DateTime.UtcNow;
                     _liveViewNoImageLogged = false;
                     _ = UpdateLiveViewImageAsync(buffer);
                 }
@@ -3525,6 +3547,26 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         {
             Interlocked.Exchange(ref _liveViewTickInProgress, 0);
         }
+    }
+
+    private bool ShouldRebuildStaleLiveViewChannel()
+    {
+        var now = DateTime.UtcNow;
+        if (_lastConnectedAtUtc is { } connectedAt && now - connectedAt < LiveViewFrameGrace)
+            return false;
+
+        var lastFrameAt = _liveViewLastFrameAtUtc ?? _lastConnectedAtUtc;
+        if (lastFrameAt is null || now - lastFrameAt.Value < LiveViewFrameStaleLimit)
+            return false;
+
+        if (_liveViewChannelRebuildAtUtc is { } lastRebuildAt
+            && now - lastRebuildAt < LiveViewChannelRebuildCooldown)
+            return false;
+
+        _liveViewChannelRebuildAtUtc = now;
+        LoggerHelper.Warning($"实时画面超过 {LiveViewFrameStaleLimit.TotalSeconds:0} 秒没有新帧，准备重建截图任务执行器。");
+        Processor.ResetLiveViewTasker();
+        return true;
     }
 
     /// <summary>

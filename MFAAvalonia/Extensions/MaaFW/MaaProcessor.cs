@@ -399,17 +399,14 @@ public class MaaProcessor
     public void AddLogByKey(string key, IBrush? brush = null, bool changeColor = true, bool transformKey = true, params string[] formatArgsKeys)
     {
         brush ??= Brushes.Black;
-        Task.Run(() =>
+        DispatcherHelper.PostOnMainThread(() =>
         {
-            DispatcherHelper.PostOnMainThread(() =>
-            {
-                var log = new LogItemViewModel(key, brush, "Regular", true, "HH':'mm':'ss", changeColor: changeColor, showTime: true, transformKey: transformKey, formatArgsKeys);
-                LogItemViewModels.Add(log);
-                PublishPlatformLog(log);
-                using var logScope = BeginInstanceLogScope("MonitorLog", "Monitor");
-                LoggerHelper.Info(log.Content);
-                TrimExcessLogs();
-            });
+            var log = new LogItemViewModel(key, brush, "Regular", true, "HH':'mm':'ss", changeColor: changeColor, showTime: true, transformKey: transformKey, formatArgsKeys);
+            LogItemViewModels.Add(log);
+            PublishPlatformLog(log);
+            using var logScope = BeginInstanceLogScope("MonitorLog", "Monitor");
+            LoggerHelper.Info(log.Content);
+            TrimExcessLogs();
         });
     }
 
@@ -422,20 +419,17 @@ public class MaaProcessor
     public void AddMarkdown(string key, IBrush? brush = null, bool changeColor = true, bool transformKey = true, params string[] formatArgsKeys)
     {
         brush ??= Brushes.Black;
-        Task.Run(() =>
+        DispatcherHelper.PostOnMainThread(() =>
         {
-            DispatcherHelper.PostOnMainThread(() =>
+            var log = new LogItemViewModel(key, brush, "Regular", true, "HH':'mm':'ss", changeColor: changeColor, showTime: true, transformKey: transformKey, formatArgsKeys)
             {
-                var log = new LogItemViewModel(key, brush, "Regular", true, "HH':'mm':'ss", changeColor: changeColor, showTime: true, transformKey: transformKey, formatArgsKeys)
-                {
-                    UseMarkdown = true
-                };
-                LogItemViewModels.Add(log);
-                PublishPlatformLog(log);
-                using var logScope = BeginInstanceLogScope("MonitorMarkdown", "Monitor");
-                LoggerHelper.Info(log.Content);
-                TrimExcessLogs();
-            });
+                UseMarkdown = true
+            };
+            LogItemViewModels.Add(log);
+            PublishPlatformLog(log);
+            using var logScope = BeginInstanceLogScope("MonitorMarkdown", "Monitor");
+            LoggerHelper.Info(log.Content);
+            TrimExcessLogs();
         });
     }
 
