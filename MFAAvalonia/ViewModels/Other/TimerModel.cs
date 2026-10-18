@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.ValueType;
+using MFAAvalonia.Services;
 using MFAAvalonia.ViewModels.Pages;
 using System;
 using System.Collections.ObjectModel;
@@ -294,10 +295,14 @@ public partial class TimerModel : ViewModelBase
         }
         else
         {
-            if (ForceScheduledStart && vm.IsRunning)
-                vm.StopTask(vm.StartTask);
-            else
-                vm.StartTask();
+            _ = ScheduledTaskHandoffService.ExecuteAsync(
+                vm,
+                ForceScheduledStart,
+                () =>
+                {
+                    vm.StartTask();
+                    return Task.CompletedTask;
+                });
         }
     }
 
