@@ -943,11 +943,11 @@
                                      CellSpacing="10">
             <dashboard:DashboardCard x:Name="SettingCard"
                                      CardId="settings"
-                                     GridColumn="4"
+                                     GridColumn="3"
                                      GridRow="0"
-                                     GridColumnSpan="4"
+                                     GridColumnSpan="5"
                                      GridRowSpan="5"
-                                     ExpandedColumnSpan="4"
+                                     ExpandedColumnSpan="5"
                                      ExpandedRowSpan="5">
                 <dashboard:DashboardCard.TitleContent>
                     <TextBlock FontSize="11"
@@ -999,9 +999,9 @@
                                      CardId="task_list"
                                      GridColumn="0"
                                      GridRow="0"
-                                     GridColumnSpan="4"
+                                     GridColumnSpan="3"
                                      GridRowSpan="8"
-                                     ExpandedColumnSpan="4"
+                                     ExpandedColumnSpan="3"
                                      ExpandedRowSpan="8">
                 <dashboard:DashboardCard.TitleContent>
                     <TextBlock FontSize="11"
@@ -1147,13 +1147,15 @@
                                 <Grid ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.TooltipDragLabel}}"
                                       Background="Transparent"
                                       extensions:DragDropExtensions.LimitDragDrop="True"
-                                      ColumnDefinitions="Auto,*,36,20,3,18"
+                                      ColumnDefinitions="Auto,*,24"
+                                      RowDefinitions="Auto,Auto"
                                       ContextMenu="{StaticResource TaskMenu}"
                                       PointerPressed="TaskItem_OnPointerPressed"
                                       ContextRequested="TaskItem_OnContextRequested"
                                       x:Name="ListGrid">
                                     <CheckBox IsThreeState="True"
                                               Grid.Column="0"
+                                              Grid.RowSpan="2"
                                               MinWidth="0"
                                               Margin="0,0,8,0"
                                               extensions:CheckBoxExtensions.EnableRightClickNull="{Binding !IsResourceOptionItem}"
@@ -1179,12 +1181,12 @@
                                                    TextWrapping="NoWrap"
                                                    VerticalAlignment="Center" />
                                     </Grid>
-                                    <TextBlock Grid.Column="2"
-                                               Width="36"
+                                    <TextBlock Grid.Row="1"
+                                               Grid.Column="1"
                                                Text="{Binding RunElapsedText}"
                                                Foreground="{DynamicResource SukiLowText}"
                                                FontSize="11"
-                                               TextAlignment="Right"
+                                               Margin="0,1,0,0"
                                                IsVisible="{Binding IsRunElapsedVisible}"
                                                VerticalAlignment="Center" />
                                     <RadioButton Classes="Icon"
@@ -1192,7 +1194,7 @@
                                                  IsHitTestVisible="False"
                                                  BorderThickness="0"
                                                  IsChecked="{Binding EnableSetting}"
-                                                 Grid.Column="3"
+                                                 Grid.Column="2"
                                                  Width="24"
                                                  MinWidth="0"
                                                  Padding="0"
@@ -1202,9 +1204,13 @@
                                                  GroupName="TaskSettings"
                                                  IsVisible="{Binding IsVisible}"
                                                  HorizontalContentAlignment="Center" />
-                                    <Grid Grid.Column="5" Width="18" Height="20"
+                                    <Grid Grid.Row="1" Grid.Column="2" Width="24" Height="24"
                                           IsVisible="{Binding IsRunStatusVisible}"
+                                          HorizontalAlignment="Center"
                                           VerticalAlignment="Center">
+                                        <Grid.RenderTransform>
+                                            <TranslateTransform X="3" />
+                                        </Grid.RenderTransform>
                                         <Path Width="15" Height="15" Stretch="Uniform"
                                               Classes="TaskRunSpinner"
                                               Data="{x:Static suki:Icons.Refresh}"
