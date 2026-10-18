@@ -308,8 +308,8 @@ public static class FileLogExporter
         var namedMaaLogs = allFiles.Where(file =>
         {
             var fileName = Path.GetFileName(file);
-            return fileName.StartsWith("maa.log", StringComparison.OrdinalIgnoreCase)
-                   || fileName.StartsWith("maafw.log", StringComparison.OrdinalIgnoreCase);
+            return fileName.StartsWith("maa", StringComparison.OrdinalIgnoreCase)
+                   && fileName.EndsWith(".log", StringComparison.OrdinalIgnoreCase);
         });
 
         if (namedMaaLogs.Any())
@@ -454,9 +454,13 @@ public static class FileLogExporter
     // 尝试以共享方式读取文件快照，降低“文件占用导致复制失败”的概率
     private static void CopyFileSnapshot(string sourcePath, string destPath)
     {
-        using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using var destination = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None);
-        source.CopyTo(destination);
+        using (var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        using (var destination = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            source.CopyTo(destination);
+        }
+
+        File.SetLastWriteTimeUtc(destPath, File.GetLastWriteTimeUtc(sourcePath));
     }
 
     private static List<string> CreateArchiveVolumes(string sourceDirectory, bool allowSplitArchives)
