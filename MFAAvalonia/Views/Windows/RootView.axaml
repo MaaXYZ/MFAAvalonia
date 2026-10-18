@@ -217,7 +217,7 @@
     <suki:SukiWindow.LogoContent>
         <Image
             Height="25"
-            Source="{x:Static helper:IconHelper.Icon}"
+            Source="{x:Static helper:IconHelper.Logo}"
             Stretch="Uniform"
             Width="28" />
 

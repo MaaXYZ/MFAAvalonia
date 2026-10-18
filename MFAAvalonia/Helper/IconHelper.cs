@@ -14,8 +14,39 @@ namespace MFAAvalonia.Helper;
 public static class IconHelper
 {
     private static readonly Lazy<Bitmap> LazyIcon = new(LoadIconWithFallback);
+    private static readonly Lazy<Bitmap> LazyLogo = new(LoadLogoWithFallback);
     public static Bitmap Icon => LazyIcon.Value;
+    public static Bitmap Logo => LazyLogo.Value;
     public static WindowIcon WindowIcon => new (Icon);
+
+    private static Bitmap LoadLogoWithFallback()
+    {
+        try
+        {
+            var installDirectory = AppPaths.InstallRoot;
+            var logoPath = Path.Combine(installDirectory, "Assets", "logo.png");
+            if (!File.Exists(logoPath))
+                logoPath = Path.Combine(installDirectory, "assets", "logo.png");
+            if (File.Exists(logoPath))
+            {
+                using var fileStream = File.OpenRead(logoPath);
+                return new Bitmap(fileStream);
+            }
+
+            var uri = new Uri("avares://MFAAvalonia.Core/Assets/logo.png");
+            if (AssetLoader.Exists(uri))
+            {
+                var assets = AssetLoader.Open(uri);
+                return new Bitmap(assets);
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Error("加载高清应用 Logo 失败", ex);
+        }
+
+        return Icon;
+    }
 
     private static Bitmap LoadIconWithFallback()
     {

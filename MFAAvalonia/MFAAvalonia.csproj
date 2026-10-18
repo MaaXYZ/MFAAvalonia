@@ -17,6 +17,7 @@
     <ItemGroup>
         <Folder Include="Assets\Sound\" />
         <AvaloniaResource Include="Assets\logo.ico" />
+        <AvaloniaResource Include="Assets\logo.png" />
         <AvaloniaResource Include="Assets\Sound\**" />
         <Folder Include="resource\base\pipeline\" />
         <AvaloniaResource Remove="%(_MaaFrameworkRuntime.DestinationFolder)AnyCPU\**" />

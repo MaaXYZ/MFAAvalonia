@@ -66,7 +66,7 @@
                 </Grid.RowDefinitions>
                 <Image Grid.Row="1" Grid.Column="0"
                        Height="45"
-                       Source="{x:Static helper:IconHelper.Icon}"
+                       Source="{x:Static helper:IconHelper.Logo}"
                        Stretch="Uniform" VerticalAlignment="Top" Margin="0 0 10 0"
                        Width="45" />
 
