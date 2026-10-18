@@ -722,7 +722,8 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
     private Control CreateComboBoxControl(
         MaaInterface.MaaInterfaceSelectOption option, 
         MaaInterface.MaaInterfaceOption interfaceOption,
-        DragItemViewModel source)
+        DragItemViewModel source,
+        bool keepLabelInline = false)
     {
         var wrapper = new StackPanel();
         var grid = CreateBaseGrid();
@@ -793,8 +794,20 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
 
         Grid.SetColumn(labelPanel, 0);
         Grid.SetColumn(comboBox, 1);
-        
-        AddResponsiveBehavior(grid, labelPanel, comboBox);
+
+        if (keepLabelInline)
+        {
+            grid.ColumnDefinitions.Clear();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            labelPanel.MinWidth = 0;
+            labelPanel.Margin = new Thickness(0, 0, 8, 0);
+            comboBox.MinWidth = 0;
+        }
+        else
+        {
+            AddResponsiveBehavior(grid, labelPanel, comboBox);
+        }
         
         grid.Children.Add(labelPanel);
         grid.Children.Add(comboBox);
@@ -904,7 +917,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
                   subInterfaceOption.Cases.ShouldSwitchButton(out yes, out no))
             control = CreateToggleControl(subOption, yes, no, subInterfaceOption, source);
          else
-            control = CreateComboBoxControl(subOption, subInterfaceOption, source);
+            control = CreateComboBoxControl(subOption, subInterfaceOption, source, keepLabelInline: true);
 
          container.Children.Add(control);
     }
