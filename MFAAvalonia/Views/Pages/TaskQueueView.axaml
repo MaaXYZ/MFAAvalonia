@@ -1259,11 +1259,11 @@
 
             <dashboard:DashboardCard x:Name="IntroductionCard"
                                      CardId="task_desc"
-                                     GridColumn="4"
+                                     GridColumn="3"
                                      GridRow="5"
-                                     GridColumnSpan="4"
+                                     GridColumnSpan="5"
                                      GridRowSpan="3"
-                                     ExpandedColumnSpan="4"
+                                     ExpandedColumnSpan="5"
                                      ExpandedRowSpan="3">
                 <dashboard:DashboardCard.TitleContent>
                     <TextBlock FontSize="11"

@@ -867,9 +867,30 @@ public sealed class DashboardCardGrid : Panel
             card.GridRowSpan = layout.IsCollapsed ? 1 : Math.Max(1, layout.RowSpan);
         }
 
+        MigrateLegacyTaskDescriptionDefaultWidth();
+
         _suppressLayoutSave = false;
         InvalidateMeasure();
         InvalidateArrange();
+    }
+
+    private void MigrateLegacyTaskDescriptionDefaultWidth()
+    {
+        var card = Children.OfType<DashboardCard>()
+            .FirstOrDefault(c => string.Equals(c.CardId, "task_desc", StringComparison.OrdinalIgnoreCase));
+
+        if (card == null
+            || card.GridColumn != 4
+            || card.GridRow != 5
+            || card.GridColumnSpan != 4
+            || card.ExpandedColumnSpan != 4)
+        {
+            return;
+        }
+
+        card.GridColumn = 3;
+        card.GridColumnSpan = 5;
+        card.ExpandedColumnSpan = 5;
     }
 
     private void SaveLayouts()
@@ -1116,6 +1137,8 @@ public sealed class DashboardCardGrid : Panel
             card.ExpandedColumnSpan = colSpan;
             card.ExpandedRowSpan = rowSpan;
         }
+
+        MigrateLegacyTaskDescriptionDefaultWidth();
 
         _suppressLayoutSave = false;
         InvalidateMeasure();
