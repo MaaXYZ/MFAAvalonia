@@ -88,14 +88,14 @@ public class HeiLiuAction : IMaaCustomAction
                 }
                 if (context.TemplateMatch("开始探索.png", image, out detail, 0.84, 1006, 470, 264, 250) && detail?.HitBox != null)
                 {
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     return true;
                 }
                 if (context.TemplateMatch("继续探索.png", image, out detail, 0.9, 1006, 470, 264, 250) && detail?.HitBox != null)
                 {
                     if (!context.TemplateMatch("放弃本次探索.png", image, out var de1, 0.75, 1002, 184, 274, 250))
                     {
-                        context.Click(detail.HitBox.X, detail.HitBox.Y);
+                        context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                         Leave(context, args, hasBacked: true);
                     }
                 }
@@ -112,14 +112,14 @@ public class HeiLiuAction : IMaaCustomAction
                 if (context.TemplateMatch("特勤任务影像确认.png", image, out detail, 0.9, 598, 621, 79, 66) && detail?.HitBox != null)
                 {
                     Thread.Sleep(100);
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     Thread.Sleep(1000);
                     return true;
                 }
                 if (context.TemplateMatch("获得藏品或零件.png", image, out detail, 0.8, 592, 497, 110, 103) && detail?.HitBox != null)
                 {
                     Thread.Sleep(100);
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     Thread.Sleep(1000);
                     return true;
                 }
@@ -130,11 +130,11 @@ public class HeiLiuAction : IMaaCustomAction
                 context.GetImage(ref image);
                 if (context.TemplateMatch("特勤.png", image, out detail, 0.9, 142, 192, 1107, 389) && detail?.HitBox != null)
                 {
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     return true;
                 }
-                context.Swipe(885, 406, 599, 406, 200);
-                context.Swipe(599, 406, 599, 806, 200);
+                context.SwipeWithProgress(885, 406, 599, 406, 200);
+                context.SwipeWithProgress(599, 406, 599, 806, 200);
                 return false;
             })).Until(context);
             Thread.Sleep(500);
@@ -143,11 +143,11 @@ public class HeiLiuAction : IMaaCustomAction
                 context.GetImage(ref image);
                 if (context.TemplateMatch("特勤.png", image, out detail, 0.9, 142, 192, 1107, 389) && detail?.HitBox != null)
                 {
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                 }
                 if (context.TemplateMatch("确定.png", image, out detail, 0.9, 22, 569, 1251, 51) && detail?.HitBox != null)
                 {
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     return true;
                 }
                 return false;
@@ -162,33 +162,33 @@ public class HeiLiuAction : IMaaCustomAction
                 if (context.TemplateMatch("稳扎稳打.png", image, out detail, 0.9, 294, 160, 330, 456) && detail?.HitBox != null)
                 {
                     Thread.Sleep(200);
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     return true;
                 }
                 if (cz != 1 && context.TemplateMatch("调查预付款.png", image, out detail, 0.9, 214, 205, 840, 292) && detail?.HitBox != null)
                 {
                     Thread.Sleep(200);
                     cz = 1;
-                    context.Click(detail.HitBox.X + 30, detail.HitBox.Y + 30);
+                    context.ClickWithProgress(detail.HitBox.X + 30, detail.HitBox.Y + 30);
                 }
                 if (cz != 1 && context.TemplateMatch("林间代步.png", image, out detail, 0.9, 214, 205, 840, 292) && detail?.HitBox != null)
                 {
                     Thread.Sleep(200);
                     cz = 1;
-                    context.Click(detail.HitBox.X + 30, detail.HitBox.Y + 30);
+                    context.ClickWithProgress(detail.HitBox.X + 30, detail.HitBox.Y + 30);
                 }
                 if (cz != 1 && context.TemplateMatch("退行补偿.png", image, out detail, 0.9, 214, 205, 840, 292) && detail?.HitBox != null)
                 {
                     Thread.Sleep(200);
                     cz = 1;
-                    context.Click(detail.HitBox.X + 30, detail.HitBox.Y + 30);
+                    context.ClickWithProgress(detail.HitBox.X + 30, detail.HitBox.Y + 30);
                 }
 
                 if (cz != 1 && context.TemplateMatch("空间租凭.png", image, out detail, 0.9, 214, 205, 840, 292) && detail?.HitBox != null)
                 {
                     Thread.Sleep(200);
                     cz = 1;
-                    context.Click(detail.HitBox.X + 30, detail.HitBox.Y + 30);
+                    context.ClickWithProgress(detail.HitBox.X + 30, detail.HitBox.Y + 30);
                 }
 
                 // if (cz != 1 && context.TemplateMatch("巢寄生.png", image, out detail, 0.9, 214, 205, 840, 292) && detail?.HitBox != null)
@@ -207,12 +207,12 @@ public class HeiLiuAction : IMaaCustomAction
                 if (cz == 1 && context.TemplateMatch("确定.png", image, out detail, 0.8, 263, 564, 747, 61) && detail?.HitBox != null)
                 {
                     Thread.Sleep(1200);
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                 }
                 if (cz == 1 && context.TemplateMatch("获得藏品或零件.png", image, out detail, 0.8, 592, 497, 110, 103) && detail?.HitBox != null)
                 {
                     Thread.Sleep(500);
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                 }
                 return false;
             })).Until(context, sleepMilliseconds: 500);
@@ -222,12 +222,12 @@ public class HeiLiuAction : IMaaCustomAction
                 context.GetImage(ref image);
                 if (context.TemplateMatch("稳扎稳打.png", image, out detail, 0.9, 294, 160, 330, 456) && detail?.HitBox != null)
                 {
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                 }
 
                 if (context.TemplateMatch("确定.png", image, out detail, 0.9, 352, 536, 205, 113) && detail?.HitBox != null)
                 {
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     return true;
                 }
                 return false;
@@ -241,7 +241,7 @@ public class HeiLiuAction : IMaaCustomAction
                     if (context.TemplateMatch("招募.png", image, out detail, 0.9, 222, 374, 261, 256) && detail?.HitBox != null)
                     {
                         Thread.Sleep(200);
-                        context.Click(detail.HitBox.X, detail.HitBox.Y);
+                        context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                         return true;
                     }
                     return false;
@@ -253,7 +253,7 @@ public class HeiLiuAction : IMaaCustomAction
                     if (context.TemplateMatch("招募.png", image, out detail, 0.9, 222, 374, 261, 256) && detail?.HitBox != null)
                     {
                         Thread.Sleep(600);
-                        context.Click(detail.HitBox.X, detail.HitBox.Y);
+                        context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     }
                     if (context.TemplateMatch("机械师.png", image, out detail, 0.85, 383, 45, 897, 599) && detail?.HitBox != null)
                     {
@@ -278,7 +278,7 @@ public class HeiLiuAction : IMaaCustomAction
                     if (context.TemplateMatch("机械师.png", image, out detail, 0.85, 383, 45, 897, 599) && detail?.HitBox != null)
                     {
                         Thread.Sleep(100);
-                        context.Click(detail.HitBox.X, detail.HitBox.Y);
+                        context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     }
                     return false;
                 })).Until(context);
@@ -300,7 +300,7 @@ public class HeiLiuAction : IMaaCustomAction
                     if (context.TemplateMatch("确认招募.png", image, out detail, 0.9, 1036, 623, 242, 97) && detail?.HitBox != null)
                     {
                         Thread.Sleep(100);
-                        context.Click(detail.HitBox.X, detail.HitBox.Y);
+                        context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                         return true;
                     }
                     return false;
@@ -313,7 +313,7 @@ public class HeiLiuAction : IMaaCustomAction
                         Thread.Sleep(100);
                         return true;
                     }
-                    context.Click(1233, 13);
+                    context.ClickWithProgress(1233, 13);
                     return false;
                 })).Until(context);
             }
@@ -326,7 +326,7 @@ public class HeiLiuAction : IMaaCustomAction
                     if (context.TemplateMatch("招募.png", image, out detail, 0.9, 188, 471, 1030, 158) && detail?.HitBox != null)
                     {
                         Thread.Sleep(200);
-                        context.Click(detail.HitBox.X, detail.HitBox.Y);
+                        context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                         return true;
                     }
                     return false;
@@ -338,13 +338,13 @@ public class HeiLiuAction : IMaaCustomAction
                     if (context.TemplateMatch("招募.png", image, out detail, 0.9, 188, 471, 1030, 158) && detail?.HitBox != null)
                     {
                         Thread.Sleep(600);
-                        context.Click(detail.HitBox.X, detail.HitBox.Y);
+                        context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     }
                     if (context.TemplateMatch("放弃招募.png", image, out detail, 0.9, 817, 600, 260, 120) && detail?.HitBox != null)
                     {
 
                         Thread.Sleep(100);
-                        context.Click(detail.HitBox.X, detail.HitBox.Y);
+                        context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                         return true;
                     }
                     return false;
@@ -357,12 +357,12 @@ public class HeiLiuAction : IMaaCustomAction
                     {
 
                         Thread.Sleep(100);
-                        context.Click(detail.HitBox.X, detail.HitBox.Y);
+                        context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     }
                     if (context.TemplateMatch("确认放弃.png", image, out detail, 0.9, 594, 410, 533, 168) && detail?.HitBox != null)
                     {
                         Thread.Sleep(100);
-                        context.Click(detail.HitBox.X + 70, detail.HitBox.Y + 20);
+                        context.ClickWithProgress(detail.HitBox.X + 70, detail.HitBox.Y + 20);
                         return true;
                     }
                     return false;
@@ -374,7 +374,7 @@ public class HeiLiuAction : IMaaCustomAction
                 context.GetImage(ref image);
                 if (context.TemplateMatch("沉沦于树海.png", image, out detail, 0.9, 1030, 223, 250, 352) && detail?.HitBox != null)
                 {
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     return true;
                 }
                 return false;
@@ -409,7 +409,7 @@ public class HeiLiuAction : IMaaCustomAction
                 if (context.TemplateMatch("行动力.png", image, out detail, 0.9, 1149, 71, 118, 116) && detail?.HitBox != null)
                 {
                     Thread.Sleep(100);
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     return true;
                 }
                 return false;
@@ -421,15 +421,15 @@ public class HeiLiuAction : IMaaCustomAction
                 if (context.TemplateMatch("结构性原理1.png", image, out detail, 0.9, 845, 155, 435, 565) && detail?.HitBox != null)
                 {
                     Thread.Sleep(100);
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                     return true;
                 }
                 return false;
             })).Until(context);
             Thread.Sleep(1000);
-            context.Click(845, 155);
+            context.ClickWithProgress(845, 155);
             Thread.Sleep(200);
-            context.Click(845, 155);
+            context.ClickWithProgress(845, 155);
             // Thread.Sleep(200);
             // ((Func<bool>)(() =>
             // {
@@ -507,13 +507,13 @@ public class HeiLiuAction : IMaaCustomAction
                     {
                         Thread.Sleep(100);
                         IsTrade = true;
-                        context.Click(detail.HitBox.X + 30, detail.HitBox.Y + 30);
+                        context.ClickWithProgress(detail.HitBox.X + 30, detail.HitBox.Y + 30);
                         return true;
                     }
                     if (context.TemplateMatch("未知.png", image, out detail, 0.8, 194, 81, 898, 552, order: "Horizontal", index: -1) && detail?.HitBox != null)
                     {
                         Thread.Sleep(100);
-                        context.Click(detail.HitBox.X + 30, detail.HitBox.Y + 30);
+                        context.ClickWithProgress(detail.HitBox.X + 30, detail.HitBox.Y + 30);
                         return true;
                     }
                     return false;
@@ -525,7 +525,7 @@ public class HeiLiuAction : IMaaCustomAction
                     if (context.TemplateMatch("出发前往.png", image, out detail, 0.8, 913, 460, 367, 180) && detail?.HitBox != null)
                     {
                         Thread.Sleep(100);
-                        context.Click(detail.HitBox.X + 30, detail.HitBox.Y + 30);
+                        context.ClickWithProgress(detail.HitBox.X + 30, detail.HitBox.Y + 30);
                         return true;
                     }
                     return false;
@@ -663,7 +663,7 @@ public class HeiLiuAction : IMaaCustomAction
             var image = context.GetImage();
             if (context.TemplateMatch("Roguelike@StageTraderInvestSystem.png", image, out detail, 0.75, 400, 172, 230, 150))
             {
-                context.Click(detail.HitBox.X, detail.HitBox.Y);
+                context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                 return true;
             }
             return false;
@@ -676,12 +676,12 @@ public class HeiLiuAction : IMaaCustomAction
 
             if (context.TemplateMatch("Roguelike@StageTraderInvestSystem.png", image, out detail, 0.75, 400, 172, 230, 150))
             {
-                context.Click(detail.HitBox.X, detail.HitBox.Y);
+                context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
             }
             if (context.TemplateMatch("Roguelike@StageTraderInvestSystemEnter.png", image, out detail, 0.9, 460, 273, 420, 200))
             {
                 LoggerHelper.Info($"{detail.HitBox.X}, {detail.HitBox.Y}");
-                context.Click(640, 360);
+                context.ClickWithProgress(640, 360);
                 return true;
             }
             return false;
@@ -701,7 +701,7 @@ public class HeiLiuAction : IMaaCustomAction
             var image = context.GetImage();
             if (context.TemplateMatch("Roguelike@StageTraderInvestSystemEnter.png", image, out detail, 0.9, 460, 273, 420, 200))
             {
-                context.Click(640, 360);
+                context.ClickWithProgress(640, 360);
             }
             if (context.TemplateMatch("Roguelike@StageTraderInvestSystemError.png", image, out detail, 0.9, 454,
                     191,
@@ -734,11 +734,11 @@ public class HeiLiuAction : IMaaCustomAction
                 result = 0;
                 return true;
             }
-            context.Click(980, 495);
+            context.ClickWithProgress(980, 495);
             Thread.Sleep(70);
-            context.Click(980, 495);
+            context.ClickWithProgress(980, 495);
             Thread.Sleep(70);
-            context.Click(980, 495);
+            context.ClickWithProgress(980, 495);
             error++;
             if (error >= 50)
             {
@@ -817,7 +817,7 @@ public class HeiLiuAction : IMaaCustomAction
         Thread.Sleep(1000);
         for (int i = 0; i < 3; i++)
         {
-            context.Click(624, 355);
+            context.ClickWithProgress(624, 355);
             Thread.Sleep(150);
         }
         var xh = () =>
@@ -828,7 +828,7 @@ public class HeiLiuAction : IMaaCustomAction
                 Thread.Sleep(1000);
                 return true;
             }
-            context.Click(624, 355);
+            context.ClickWithProgress(624, 355);
             return false;
         };
         xh.Until(context);
@@ -836,7 +836,7 @@ public class HeiLiuAction : IMaaCustomAction
 
         SelectOne(context, 1, 1);
         Thread.Sleep(1000);
-        context.Click(624, 355);
+        context.ClickWithProgress(624, 355);
         Thread.Sleep(1000);
         SelectOne(context, 1, 3);
         var leaving = () =>
@@ -846,7 +846,7 @@ public class HeiLiuAction : IMaaCustomAction
             {
                 return true;
             }
-            context.Click(628, 621);
+            context.ClickWithProgress(628, 621);
             return false;
         };
         leaving.Until(context);
@@ -863,7 +863,7 @@ public class HeiLiuAction : IMaaCustomAction
     {
         return true;
     }
-    context.Click(628, 621);
+    context.ClickWithProgress(628, 621);
     return false;
 };
         leaving.Until(context);
@@ -874,7 +874,7 @@ public class HeiLiuAction : IMaaCustomAction
     {
         return true;
     }
-    context.Click(628, 621);
+    context.ClickWithProgress(628, 621);
     return false;
 };
         confirmleaving.Until(context);
@@ -885,7 +885,7 @@ public class HeiLiuAction : IMaaCustomAction
         Thread.Sleep(1000);
         for (int i = 0; i < 3; i++)
         {
-            context.Click(624, 355);
+            context.ClickWithProgress(624, 355);
             Thread.Sleep(150);
         }
         var image = context.GetImage();
@@ -959,7 +959,7 @@ public class HeiLiuAction : IMaaCustomAction
             {
                 return true;
             }
-            context.Click(628, 621);
+            context.ClickWithProgress(628, 621);
             return false;
         };
         leaving.Until(context);
@@ -1005,7 +1005,7 @@ public class HeiLiuAction : IMaaCustomAction
             if (context.TemplateMatch("进入作战.png", image, out detail, 0.9, 973, 421, 307, 256) && detail?.HitBox != null)
             {
                 Thread.Sleep(800);
-                context.Click(detail.HitBox.X + 100, detail.HitBox.Y + 50);
+                context.ClickWithProgress(detail.HitBox.X + 100, detail.HitBox.Y + 50);
                 return true;
             }
             return false;
@@ -1016,7 +1016,7 @@ public class HeiLiuAction : IMaaCustomAction
             if (context.TemplateMatch("开始作战.png", image, out detail, 0.9, 894, 571, 386, 149) && detail?.HitBox != null)
             {
                 Thread.Sleep(800);
-                context.Click(detail.HitBox.X + 100, detail.HitBox.Y + 50);
+                context.ClickWithProgress(detail.HitBox.X + 100, detail.HitBox.Y + 50);
                 return true;
             }
             return false;
@@ -1027,7 +1027,7 @@ public class HeiLiuAction : IMaaCustomAction
             if (context.TemplateMatch("确认放弃.png", image, out detail, 0.9, 594, 410, 533, 168) && detail?.HitBox != null)
             {
                 Thread.Sleep(800);
-                context.Click(detail.HitBox.X + 100, detail.HitBox.Y + 30);
+                context.ClickWithProgress(detail.HitBox.X + 100, detail.HitBox.Y + 30);
                 return true;
             }
             return false;
@@ -1040,7 +1040,7 @@ public class HeiLiuAction : IMaaCustomAction
             if (context.TemplateMatch("局内设置.png", image, out detail, 0.9, 0, 0, 169, 162) && detail?.HitBox != null)
             {
                 Thread.Sleep(1000);
-                context.Click(detail.HitBox.X + 30, detail.HitBox.Y + 30);
+                context.ClickWithProgress(detail.HitBox.X + 30, detail.HitBox.Y + 30);
                 return true;
             }
             return false;
@@ -1050,12 +1050,12 @@ public class HeiLiuAction : IMaaCustomAction
             context.GetImage(ref image);
             if (context.TemplateMatch("局内设置.png", image, out detail, 0.9, 0, 0, 169, 162) && detail?.HitBox != null)
             {
-                context.Click(detail.HitBox.X + 30, detail.HitBox.Y + 30);
+                context.ClickWithProgress(detail.HitBox.X + 30, detail.HitBox.Y + 30);
             }
             if (context.TemplateMatch("局内放弃行动.png", image, out detail, 0.9, 633, 214, 249, 271) && detail?.HitBox != null)
             {
                 Thread.Sleep(800);
-                context.Click(detail.HitBox.X + 100, detail.HitBox.Y + 50);
+                context.ClickWithProgress(detail.HitBox.X + 100, detail.HitBox.Y + 50);
                 return true;
             }
             return false;
@@ -1066,12 +1066,12 @@ public class HeiLiuAction : IMaaCustomAction
             if (context.TemplateMatch("局内放弃行动.png", image, out detail, 0.9, 633, 214, 249, 271) && detail?.HitBox != null)
             {
                 Thread.Sleep(800);
-                context.Click(detail.HitBox.X + 100, detail.HitBox.Y + 50);
+                context.ClickWithProgress(detail.HitBox.X + 100, detail.HitBox.Y + 50);
             }
             if (context.TemplateMatch("确认放弃行动.png", image, out detail, 0.9, 682, 411, 319, 164) && detail?.HitBox != null)
             {
                 Thread.Sleep(800);
-                context.Click(detail.HitBox.X + 70, detail.HitBox.Y + 50);
+                context.ClickWithProgress(detail.HitBox.X + 70, detail.HitBox.Y + 50);
                 return true;
             }
             return false;
@@ -1083,7 +1083,7 @@ public class HeiLiuAction : IMaaCustomAction
             if (context.TemplateMatch("一败涂地.png", image, out detail, 0.9, 418, 47, 450, 401) && detail?.HitBox != null)
             {
                 Thread.Sleep(800);
-                context.Click(detail.HitBox.X, detail.HitBox.Y);
+                context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                 return true;
             }
             return false;
@@ -1097,7 +1097,7 @@ public class HeiLiuAction : IMaaCustomAction
             {
                 return true;
             }
-            context.Click(628, 621);
+            context.ClickWithProgress(628, 621);
             return false;
         })).Until(context);
     }
@@ -1127,11 +1127,11 @@ public class HeiLiuAction : IMaaCustomAction
             context.GetImage(ref image);
             if (context.TemplateMatch("确认这么做.png", image, out var detail, 0.8, 1032, 0, 247, 720) && detail?.HitBox != null)
             {
-                context.Click(detail.HitBox.X, detail.HitBox.Y);
+                context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                 return true;
             }
             LoggerHelper.Info($"{clickX}, {(int)clickY}");
-            context.Click(clickX, (int)clickY);
+            context.ClickWithProgress(clickX, (int)clickY);
             return false;
         };
         select.Until(context);
@@ -1219,7 +1219,7 @@ public class HeiLiuAction : IMaaCustomAction
                     var image = context.GetImage();
                     if (context.TemplateMatch("Roguelike@ExitThenAbandon.png", image, out var detail, 0.75, 0, 0, 130, 60) && detail?.HitBox != null)
                     {
-                        context.Click(detail.HitBox.X, detail.HitBox.Y);
+                        context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                         return true;
                     }
                     return false;
@@ -1231,11 +1231,11 @@ public class HeiLiuAction : IMaaCustomAction
                 var image = context.GetImage();
                 if (context.TemplateMatch("Roguelike@ExitThenAbandon.png", image, out var detail, 0.75, 0, 0, 130, 60) && detail?.HitBox != null)
                 {
-                    context.Click(detail.HitBox.X, detail.HitBox.Y);
+                    context.ClickWithProgress(detail.HitBox.X, detail.HitBox.Y);
                 }
                 if (context.TemplateMatch("放弃本次探索.png", image, out detail, 0.75, 1002, 184, 274, 250) && detail?.HitBox != null)
                 {
-                    context.Click(detail.HitBox.X + 50, detail.HitBox.Y + 50);
+                    context.ClickWithProgress(detail.HitBox.X + 50, detail.HitBox.Y + 50);
                     return true;
                 }
                 return false;
@@ -1246,12 +1246,12 @@ public class HeiLiuAction : IMaaCustomAction
                 var image = context.GetImage();
                 if (context.TemplateMatch("放弃本次探索.png", image, out var detail, 0.75, 1002, 184, 274, 250) && detail?.HitBox != null)
                 {
-                    context.Click(detail.HitBox.X + 50, detail.HitBox.Y + 50);
+                    context.ClickWithProgress(detail.HitBox.X + 50, detail.HitBox.Y + 50);
                 }
                 if (context.TemplateMatch("确认放弃.png", image, out detail, 0.9, 594, 410, 533, 168) && detail?.HitBox != null)
                 {
                     Thread.Sleep(100);
-                    context.Click(detail.HitBox.X + 70, detail.HitBox.Y + 20);
+                    context.ClickWithProgress(detail.HitBox.X + 70, detail.HitBox.Y + 20);
                     return true;
                 }
                 return false;
@@ -1265,7 +1265,7 @@ public class HeiLiuAction : IMaaCustomAction
                 Thread.Sleep(1400);
                 return true;
             }
-            context.Click(631, 610);
+            context.ClickWithProgress(631, 610);
             return false;
         })).Until(context, sleepMilliseconds: 500, maxCount: 300);
         Thread.Sleep(1400);
@@ -1276,7 +1276,7 @@ public class HeiLiuAction : IMaaCustomAction
             {
                 return true;
             }
-            context.Click(631, 610);
+            context.ClickWithProgress(631, 610);
             return false;
         })).Until(context, sleepMilliseconds: 500, maxCount: 300);
         Thread.Sleep(1400);
@@ -1287,7 +1287,7 @@ public class HeiLiuAction : IMaaCustomAction
             {
                 return true;
             }
-            context.Click(631, 610);
+            context.ClickWithProgress(631, 610);
             return false;
         })).Until(context, sleepMilliseconds: 500, maxCount: 300);
         return true;

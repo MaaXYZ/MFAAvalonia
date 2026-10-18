@@ -2,6 +2,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using MaaFramework.Binding;
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +16,41 @@ namespace MFAAvalonia.Extensions.MaaFW.Custom;
 /// </summary>
 public static class ActionParamHelper
 {
+    public static void ClickWithProgress<T>(this T context, int x, int y) where T : IMaaContext
+    {
+        context.Click(x, y);
+        ResolveOwnerProcessor(context)?.RecordCustomActionActivity();
+    }
+
+    public static void SwipeWithProgress<T>(this T context, int x1, int y1, int x2, int y2, int duration) where T : IMaaContext
+    {
+        context.Swipe(x1, y1, x2, y2, duration);
+        ResolveOwnerProcessor(context)?.RecordCustomActionActivity();
+    }
+
+    public static void TouchDownWithProgress<T>(this T context, int contact, int x, int y, int pressure) where T : IMaaContext
+    {
+        context.TouchDown(contact, x, y, pressure);
+        ResolveOwnerProcessor(context)?.RecordCustomActionActivity();
+    }
+
+    public static void TouchMoveWithProgress<T>(this T context, int contact, int x, int y, int pressure) where T : IMaaContext
+    {
+        context.TouchMove(contact, x, y, pressure);
+        ResolveOwnerProcessor(context)?.RecordCustomActionActivity();
+    }
+
+    public static void TouchUpWithProgress<T>(this T context, int contact) where T : IMaaContext
+    {
+        context.TouchUp(contact);
+        ResolveOwnerProcessor(context)?.RecordCustomActionActivity();
+    }
+
+    /// <summary>根据任务执行器定位所属实例，避免多实例时把进度记到当前选中的其它实例。</summary>
+    public static MaaProcessor? ResolveOwnerProcessor(IMaaContext? context)
+        => MaaProcessorManager.Instance.Instances.FirstOrDefault(processor => ReferenceEquals(processor.MaaTasker, context?.Tasker))
+           ?? MaaProcessorManager.Instance.Current;
+
     public static JObject Parse(string actionParam)
     {
         if (string.IsNullOrWhiteSpace(actionParam))

@@ -506,11 +506,30 @@ public class MaaProcessor
     /// modal 弹窗等待标志：FocusHandler 触发 modal 时设为 true，用户确认后设为 false
     /// </summary>
     private volatile bool _isWaitingForModal = false;
+    private readonly Stopwatch _recoveryClock = Stopwatch.StartNew();
+    private readonly TaskRecoveryMonitor _recoveryMonitor = new();
+    private int _isGameRecoveryRunning;
 
     /// <summary>
     /// 设置 modal 等待状态（由 FocusHandler 调用）
     /// </summary>
     public void SetWaitingForModal(bool waiting) => _isWaitingForModal = waiting;
+
+    public void RecordCustomActionActivity()
+    {
+        _recoveryMonitor.RecordActivity(_recoveryClock.Elapsed);
+    }
+
+    public void LogRestartEvent(string eventName, string message, bool isError)
+    {
+        var content = $"卡死恢复：{eventName}：{message}";
+        if (isError)
+            LoggerHelper.Warning(content);
+        else
+            LoggerHelper.Info(content);
+        var prefix = isError ? "warn:" : "info:";
+        AddLog($"{prefix} {content}", (IBrush?)null);
+    }
 
     public void Dispose()
     {
@@ -1201,6 +1220,11 @@ public class MaaProcessor
     private bool _suppressConnectionAttemptErrorToast;
     public bool IsConnecting => _isConnecting != 0;
     public bool IsTaskRunActive => Volatile.Read(ref _isTaskRunActive) != 0;
+    public bool IsGameRecoveryRunning
+    {
+        get => Volatile.Read(ref _isGameRecoveryRunning) != 0;
+        set => Volatile.Write(ref _isGameRecoveryRunning, value ? 1 : 0);
+    }
 
     private MaaController? GetScreenshotController(bool test)
     {
@@ -1997,6 +2021,7 @@ public class MaaProcessor
 
     public void HandleCallBack(object? sender, MaaCallbackEventArgs args)
     {
+        _recoveryMonitor.RecordCallback(_recoveryClock.Elapsed);
         if (OperatingSystem.IsAndroid())
         {
             // MaaFramework invokes callbacks synchronously while some native action
@@ -2036,6 +2061,18 @@ public class MaaProcessor
         }
 
         var callbackName = jObject["name"]?.ToString() ?? string.Empty;
+        if (args.Message.StartsWith(MaaMsg.Node.Action.Succeeded, StringComparison.Ordinal))
+        {
+            var actionDetails = jObject["action_details"];
+            var action = actionDetails?["action"]?.ToString() ?? string.Empty;
+            if (action == "Click")
+            {
+                var box = actionDetails?["box"] as JArray;
+                var x = box is { Count: >= 2 } ? (int)Math.Round(box[0].Value<double>()) : 0;
+                var y = box is { Count: >= 2 } ? (int)Math.Round(box[1].Value<double>()) : 0;
+                _recoveryMonitor.FeedAction(callbackName, action, x, y, _recoveryClock.Elapsed);
+            }
+        }
         var shouldTraceNodeEvent = ShouldTraceNodeEvent(jObject, args.Message);
         if (CancellationTokenSource?.IsCancellationRequested != true
             && (shouldTraceNodeEvent || args.Message.Equals("Node.PipelineNode.Starting", StringComparison.Ordinal)))
@@ -4436,12 +4473,78 @@ public class MaaProcessor
 
     async private Task<MaaJobStatus> TryRunTasksAsync(MaaTasker? maa, string? task, string? param, CancellationToken token)
     {
-        if (maa == null || task == null) return MaaJobStatus.Invalid;
+        if (maa == null || task == null)
+            return MaaJobStatus.Invalid;
 
-        var job = maa.AppendTask(task, param ?? "{}");
-        TelemetryService.SetActiveTaskId(InstanceId, job.Id);
-        return await TaskManager.RunTaskAsync(() => job.Wait(), token, (ex) => throw ex,
-            name: "队列任务", catchException: true, shouldLog: false);
+        while (true)
+        {
+            token.ThrowIfCancellationRequested();
+            _recoveryMonitor.Start(_recoveryClock.Elapsed);
+            try
+            {
+                var job = maa.AppendTask(task, param ?? "{}");
+                TelemetryService.SetActiveTaskId(InstanceId, job.Id);
+                var completion = TaskManager.RunTaskAsync(() => job.Wait(), token, (ex) => throw ex,
+                    name: "队列任务", catchException: true, shouldLog: false);
+                string? reason = null;
+                while (!completion.IsCompleted)
+                {
+                    await Task.WhenAny(completion, Task.Delay(TimeSpan.FromSeconds(5), token));
+                    token.ThrowIfCancellationRequested();
+                    if (completion.IsCompleted)
+                        break;
+
+                    var shouldMonitor = TaskRecoverySettings.IsEnabled(Interface)
+                        && !OperatingSystem.IsAndroid()
+                        && ViewModel?.CurrentController == MaaControllerTypes.Adb
+                        && !PlatformControllerFactory.CanInitializeWithoutDevice
+                        && !ViewModels.UsersControls.Settings.AddTaskDialogViewModel.SpecialActionNames.Contains(task);
+                    reason = _recoveryMonitor.GetReason(_recoveryClock.Elapsed, TimeSpan.FromSeconds(120),
+                        shouldMonitor, _isWaitingForModal || IsGameRecoveryRunning);
+                    if (reason != null)
+                        break;
+                }
+
+                if (reason == null)
+                    return await completion;
+
+                _recoveryMonitor.Stop();
+                token.ThrowIfCancellationRequested();
+                LogRestartEvent("重启游戏", $"检测到任务疑似卡死：{TaskRecoveryMonitor.GetDisplayReason(reason)}", true);
+                var stopping = Task.Run(() => maa.Stop().Wait());
+                try
+                {
+                    var emulatorUnresponsive = TaskRecoveryMonitor.IsEmulatorUnresponsiveReason(reason);
+                    await Task.Run(() => Custom.RestartGameAction.RestartAndReloadGame(
+                        logAutoRecovery: false, processor: this, token: token,
+                        emulatorUnresponsive: emulatorUnresponsive), token);
+                    if (await stopping.WaitAsync(TimeSpan.FromSeconds(30), token) != MaaJobStatus.Succeeded)
+                        throw new InvalidOperationException("卡死恢复时底层执行器未能停止。");
+                    await completion.WaitAsync(TimeSpan.FromSeconds(30), token);
+                    token.ThrowIfCancellationRequested();
+                    SetTasker();
+                    await ReconnectAsync(token);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    LogRestartEvent("重启游戏", $"恢复失败，停止任务：{ex.Message}", true);
+                    CancelOperations();
+                    Stop(MFATask.MFATaskStatus.FAILED);
+                    throw;
+                }
+
+                maa = MaaTasker ?? throw new InvalidOperationException("卡死恢复后未能重建任务执行器。");
+                LogRestartEvent("重启游戏", $"重连完成，继续中断任务 {task}", false);
+            }
+            finally
+            {
+                _recoveryMonitor.Stop();
+            }
+        }
     }
 
     async private Task RunScript(string str = "Prescript")
