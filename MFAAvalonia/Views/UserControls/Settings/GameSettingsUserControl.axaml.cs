@@ -78,7 +78,10 @@ public partial class GameSettingsUserControl : UserControl
                 IsVisible = true,
             };
             new TaskOptionGenerator(taskQueueViewModel, SaveGlobalOptions)
-                .GenerateResourceOptionPanelContent(LightweightRecognitionSettingsPanel, lightweightDragItem);
+                .GenerateResourceOptionPanelContent(
+                    LightweightRecognitionSettingsPanel,
+                    lightweightDragItem,
+                    useSettingsPresentation: true);
         }
         LightweightRecognitionSettingsPanel.IsVisible = LightweightRecognitionSettingsPanel.Children.Count > 0;
 

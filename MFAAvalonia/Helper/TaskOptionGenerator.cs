@@ -96,7 +96,10 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         }
     }
 
-    public void GenerateResourceOptionPanelContent(StackPanel panel, DragItemViewModel dragItem)
+    public void GenerateResourceOptionPanelContent(
+        StackPanel panel,
+        DragItemViewModel dragItem,
+        bool useSettingsPresentation = false)
     {
         if (dragItem.ResourceItem?.SelectOptions == null)
             return;
@@ -128,7 +131,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
             if (subOptionNames.Contains(selectOption.Name ?? string.Empty))
                 continue;
 
-            AddOption(panel, selectOption, dragItem);
+            AddOption(panel, selectOption, dragItem, useSettingsPresentation);
         }
     }
 
@@ -169,7 +172,11 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         panel.Children.Add(grid);
     }
 
-    private void AddOption(Panel panel, MaaInterface.MaaInterfaceSelectOption option, DragItemViewModel source)
+    private void AddOption(
+        Panel panel,
+        MaaInterface.MaaInterfaceSelectOption option,
+        DragItemViewModel source,
+        bool useSettingsPresentation = false)
     {
         if (MaaProcessor.Interface?.Option?.TryGetValue(option.Name ?? string.Empty, out var interfaceOption) != true) return;
 
@@ -194,7 +201,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         else if ((interfaceOption.IsSwitch && interfaceOption.Cases.ShouldSwitchButton(out var yes, out var no)) ||
                  interfaceOption.Cases.ShouldSwitchButton(out yes, out no)) // Try both conditions with/without type checking logic
         {
-            control = CreateToggleControl(option, yes, no, interfaceOption, source);
+            control = CreateToggleControl(option, yes, no, interfaceOption, source, useSettingsPresentation);
         }
         else
         {
@@ -610,20 +617,27 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         int yesValue,
         int noValue,
         MaaInterface.MaaInterfaceOption interfaceOption,
-        DragItemViewModel source)
+        DragItemViewModel source,
+        bool useSettingsPresentation = false)
     {
         var wrapper = new StackPanel();
 
         var grid = new Grid
         {
-            ColumnDefinitions =
-            {
-                new ColumnDefinition { Width = GridLength.Auto },
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                new ColumnDefinition { Width = GridLength.Auto }
-            },
-            Margin = OptionRowMargin
+            ColumnSpacing = useSettingsPresentation ? 16 : 0,
+            Margin = useSettingsPresentation ? new Thickness(0, 3, 0, 3) : OptionRowMargin
         };
+        if (useSettingsPresentation)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        }
+        else
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        }
         
         interfaceOption.InitializeIcon();
 
@@ -679,13 +693,21 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         UpdateSubOptions(option.Index ?? 0);
 
         // Label with Icon
-        var labelPanel = CreateLabelPanel(option.DisplayName, option.Name, interfaceOption.Description, interfaceOption.Document);
-        var icon = CreateIcon(interfaceOption);
-        icon.Margin = new Thickness(0, 0, 6, 0);
-        labelPanel.Children.Insert(0, icon);
+        StackPanel labelPanel;
+        if (useSettingsPresentation)
+        {
+            labelPanel = CreateSettingsOptionLabelPanel(option.DisplayName, option.Name, interfaceOption);
+        }
+        else
+        {
+            labelPanel = CreateLabelPanel(option.DisplayName, option.Name, interfaceOption.Description, interfaceOption.Document);
+            var icon = CreateIcon(interfaceOption);
+            icon.Margin = new Thickness(0, 0, 6, 0);
+            labelPanel.Children.Insert(0, icon);
+        }
 
         Grid.SetColumn(labelPanel, 0);
-        Grid.SetColumn(toggleSwitch, 2);
+        Grid.SetColumn(toggleSwitch, useSettingsPresentation ? 1 : 2);
         
         grid.Children.Add(labelPanel);
         grid.Children.Add(toggleSwitch);
@@ -963,6 +985,54 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
             stackPanel.Children.Add(docBlock);
         }
         
+        return stackPanel;
+    }
+
+    private StackPanel CreateSettingsOptionLabelPanel(
+        string displayName,
+        string? name,
+        MaaInterface.MaaInterfaceOption interfaceOption)
+    {
+        var stackPanel = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Spacing = 4
+        };
+        var headerPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var icon = CreateIcon(interfaceOption);
+        icon.Margin = new Thickness(0, 0, 6, 0);
+        headerPanel.Children.Add(icon);
+
+        var headerText = new TextBlock
+        {
+            FontSize = 16,
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap
+        };
+        headerText.Bind(TextBlock.TextProperty, new ResourceBindingWithFallback(displayName, name));
+        headerPanel.Children.Add(headerText);
+        stackPanel.Children.Add(headerPanel);
+
+        var description = GetTooltipText(interfaceOption.Description, interfaceOption.Document);
+        if (!string.IsNullOrWhiteSpace(description))
+        {
+            var descriptionText = new TextBlock
+            {
+                Margin = new Thickness(0, 2, 0, 0),
+                TextWrapping = TextWrapping.Wrap
+            };
+            descriptionText.Bind(TextBlock.TextProperty, new ResourceBinding(description));
+            descriptionText.Bind(TextBlock.ForegroundProperty, new DynamicResourceExtension("SukiLowText"));
+            stackPanel.Children.Add(descriptionText);
+        }
+
         return stackPanel;
     }
 
