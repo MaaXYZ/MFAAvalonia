@@ -43,11 +43,17 @@ public class FocusHandler
 
     private AutoInitDictionary autoInitDictionary;
     private readonly TaskQueueViewModel _viewModel;
+    private readonly Func<string, Task> _externalNotificationSender;
 
-    public FocusHandler(AutoInitDictionary autoInitDictionary, TaskQueueViewModel viewModel)
+    public FocusHandler(
+        AutoInitDictionary autoInitDictionary,
+        TaskQueueViewModel viewModel,
+        Func<string, Task>? externalNotificationSender = null)
     {
         this.autoInitDictionary = autoInitDictionary;
         _viewModel = viewModel;
+        _externalNotificationSender = externalNotificationSender
+                                      ?? (message => ExternalNotificationHelper.ExternalNotificationAsync(message));
     }
 
     public void UpdateDictionary(AutoInitDictionary dictionary)
@@ -238,6 +244,9 @@ public class FocusHandler
                         LangKeys.Tip.ToLocalization(),
                         CreateFocusMarkdownContent(displayText, NotificationMarkdownMaxHeight));
                     break;
+                case "external_notification":
+                    _ = SendExternalNotificationAsync(displayText);
+                    break;
                 case "dialog":
                     // 非阻塞式弹窗：fire-and-forget，任务继续执行
                     Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
@@ -280,6 +289,18 @@ public class FocusHandler
                     modalProcessor?.SetWaitingForModal(false);
                     break;
             }
+        }
+    }
+
+    private async Task SendExternalNotificationAsync(string displayText)
+    {
+        try
+        {
+            await _externalNotificationSender(displayText);
+        }
+        catch (Exception e)
+        {
+            LoggerHelper.Error($"发送 Focus 外部通知失败：原因={e.Message}", e);
         }
     }
 
