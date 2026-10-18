@@ -4494,11 +4494,11 @@ public class MaaProcessor
                     if (completion.IsCompleted)
                         break;
 
-                    var shouldMonitor = TaskRecoverySettings.IsEnabled(Interface)
-                        && !OperatingSystem.IsAndroid()
-                        && ViewModel?.CurrentController == MaaControllerTypes.Adb
-                        && !PlatformControllerFactory.CanInitializeWithoutDevice
-                        && !ViewModels.UsersControls.Settings.AddTaskDialogViewModel.SpecialActionNames.Contains(task);
+                    var shouldMonitor = TaskRecoveryPolicy.ShouldMonitor(
+                        OperatingSystem.IsAndroid(),
+                        ViewModel?.CurrentController == MaaControllerTypes.Adb,
+                        PlatformControllerFactory.CanInitializeWithoutDevice,
+                        ViewModels.UsersControls.Settings.AddTaskDialogViewModel.SpecialActionNames.Contains(task));
                     reason = _recoveryMonitor.GetReason(_recoveryClock.Elapsed, TimeSpan.FromSeconds(120),
                         shouldMonitor, _isWaitingForModal || IsGameRecoveryRunning);
                     if (reason != null)

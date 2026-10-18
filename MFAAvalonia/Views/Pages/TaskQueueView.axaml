@@ -974,7 +974,7 @@
                                      Classes="Inner"
                                      GroupName="SettingA"
                                      IsChecked="{calcBinding:Binding '!IsCommon'}">
-                            <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.GlobalSetting}}" />
+                            <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.AdvancedSetting}}" />
                         </RadioButton>
                     </StackPanel>
                 </dashboard:DashboardCard.HeaderActions>
@@ -989,7 +989,7 @@
                                     x:Name="CommonOptionSettings"
                                     Orientation="Vertical" />
                         <StackPanel IsVisible="{calcBinding:Binding '!IsCommon'}"
-                                    x:Name="GlobalOptionSettings"
+                                    x:Name="AdvancedOptionSettings"
                                     Orientation="Vertical" />
                     </Grid>
                 </ScrollViewer>

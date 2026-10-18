@@ -131,7 +131,6 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
     /// </summary>
     private void InitializeGlobalSelectOptions()
     {
-        TaskRecoverySettings.EnsureBuiltInOption(maaInterface);
         if (maaInterface == null || maaInterface.GlobalOption == null || maaInterface.GlobalOption.Count == 0)
         {
             if (maaInterface != null)

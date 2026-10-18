@@ -96,17 +96,6 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         }
     }
 
-    /// <summary>
-    /// 生成全局选项面板内容。
-    /// </summary>
-    public void GenerateGlobalPanelContent(StackPanel panel)
-    {
-        foreach (var option in MaaProcessor.Interface?.GlobalSelectOptions ?? [])
-        {
-            AddOption(panel, option, null);
-        }
-    }
-    
     public void GenerateResourceOptionPanelContent(StackPanel panel, DragItemViewModel dragItem)
     {
         if (dragItem.ResourceItem?.SelectOptions == null)
@@ -180,7 +169,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         panel.Children.Add(grid);
     }
 
-    private void AddOption(Panel panel, MaaInterface.MaaInterfaceSelectOption option, DragItemViewModel? source)
+    private void AddOption(Panel panel, MaaInterface.MaaInterfaceSelectOption option, DragItemViewModel source)
     {
         if (MaaProcessor.Interface?.Option?.TryGetValue(option.Name ?? string.Empty, out var interfaceOption) != true) return;
 
@@ -234,7 +223,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
     /// <summary>
     /// 创建 checkbox 类型的多选 ToggleButton 控件（任务 8）
     /// </summary>
-    private Control CreateCheckboxControl(MaaInterface.MaaInterfaceSelectOption option, MaaInterface.MaaInterfaceOption interfaceOption, DragItemViewModel? source)
+    private Control CreateCheckboxControl(MaaInterface.MaaInterfaceSelectOption option, MaaInterface.MaaInterfaceOption interfaceOption, DragItemViewModel source)
     {
         var container = new StackPanel { Margin = new Thickness(10, 10, 10, 6), Spacing = 4 };
 
@@ -621,7 +610,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         int yesValue,
         int noValue,
         MaaInterface.MaaInterfaceOption interfaceOption,
-        DragItemViewModel? source)
+        DragItemViewModel source)
     {
         var wrapper = new StackPanel();
 
@@ -711,7 +700,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
     private Control CreateComboBoxControl(
         MaaInterface.MaaInterfaceSelectOption option, 
         MaaInterface.MaaInterfaceOption interfaceOption,
-        DragItemViewModel? source)
+        DragItemViewModel source)
     {
         var wrapper = new StackPanel();
         var grid = CreateBaseGrid();
@@ -878,7 +867,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         }
     }
 
-    private void AddSubOption(StackPanel container, MaaInterface.MaaInterfaceSelectOption subOption, DragItemViewModel? source)
+    private void AddSubOption(StackPanel container, MaaInterface.MaaInterfaceSelectOption subOption, DragItemViewModel source)
     {
          if (MaaProcessor.Interface?.Option?.TryGetValue(subOption.Name ?? string.Empty, out var subInterfaceOption) != true) return;
          

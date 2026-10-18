@@ -211,10 +211,7 @@ public class RestartGameAction : IMaaCustomAction
 
     private static string GetPackageName()
     {
-        var packageName = TaskRecoverySettings.GetTargetPackageName(MaaProcessor.Interface);
-        if (string.IsNullOrWhiteSpace(packageName))
-            throw new InvalidOperationException("请在全局选项“卡死重启”中填写目标应用包名。");
-        return packageName;
+        return TaskRecoveryPolicy.TargetPackageName;
     }
 
     /// <summary>
