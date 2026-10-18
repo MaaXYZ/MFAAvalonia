@@ -1837,9 +1837,48 @@ public class MaaProcessor
             }
             catch (Exception ex)
             {
-                TelemetryService.RecordTaskFailure(InstanceId, "controller_link_start_failed", "controller", ex);
-                throw;
+                var fallbackScreenCap = MaaAdbConnectionFallback.GetFallbackScreenCap(Config.AdbDevice.ScreenCap);
+                if (controller is not MaaAdbController || fallbackScreenCap == Config.AdbDevice.ScreenCap)
+                {
+                    TelemetryService.RecordTaskFailure(InstanceId, "controller_link_start_failed", "controller", ex);
+                    throw;
+                }
+
+                LoggerHelper.Warning($"截图方式 {Config.AdbDevice.ScreenCap} 连接失败，回退到 {fallbackScreenCap} 后重试：{ex.Message}");
+                tasker.Dispose();
+                Config.AdbDevice.ScreenCap = fallbackScreenCap;
+                controller = InitializeController(MaaControllerTypes.Adb, logConfig: true);
+                tasker = new MaaTasker
+                {
+                    Controller = controller,
+                    Resource = maaResource,
+                    Toolkit = Toolkit,
+                    Global = Global,
+                    DisposeOptions = DisposeOptions.All,
+                };
+                linkStatus = tasker.Controller?.LinkStart().Wait();
             }
+            if (linkStatus != MaaJobStatus.Succeeded)
+            {
+                var fallbackScreenCap = MaaAdbConnectionFallback.GetFallbackScreenCap(Config.AdbDevice.ScreenCap);
+                if (controller is MaaAdbController && fallbackScreenCap != Config.AdbDevice.ScreenCap)
+                {
+                    LoggerHelper.Warning($"截图方式 {Config.AdbDevice.ScreenCap} 连接返回失败，回退到 {fallbackScreenCap} 后重试。");
+                    tasker.Dispose();
+                    Config.AdbDevice.ScreenCap = fallbackScreenCap;
+                    controller = InitializeController(MaaControllerTypes.Adb, logConfig: true);
+                    tasker = new MaaTasker
+                    {
+                        Controller = controller,
+                        Resource = maaResource,
+                        Toolkit = Toolkit,
+                        Global = Global,
+                        DisposeOptions = DisposeOptions.All,
+                    };
+                    linkStatus = tasker.Controller?.LinkStart().Wait();
+                }
+            }
+
             if (linkStatus != MaaJobStatus.Succeeded)
             {
                 LoggerHelper.Warning($"控制器 LinkStart 失败：状态={linkStatus}");
@@ -2299,13 +2338,31 @@ public class MaaProcessor
                     LoggerHelper.Info($"控制器配置：{Config.AdbDevice.Config}");
                 }
 
-                return new MaaAdbController(
-                    Config.AdbDevice.AdbPath,
-                    Config.AdbDevice.AdbSerial,
-                    Config.AdbDevice.ScreenCap, Config.AdbDevice.Input,
-                    !string.IsNullOrWhiteSpace(Config.AdbDevice.Config) ? Config.AdbDevice.Config : "{}",
-                    Path.Combine(AppPaths.InstallRoot, "libs", "MaaAgentBinary")
-                );
+                var screenCap = Config.AdbDevice.ScreenCap;
+                var agentPath = Path.Combine(AppPaths.InstallRoot, "libs", "MaaAgentBinary");
+                try
+                {
+                    return new MaaAdbController(
+                        Config.AdbDevice.AdbPath,
+                        Config.AdbDevice.AdbSerial,
+                        screenCap, Config.AdbDevice.Input,
+                        !string.IsNullOrWhiteSpace(Config.AdbDevice.Config) ? Config.AdbDevice.Config : "{}",
+                        agentPath);
+                }
+                catch (Exception ex) when (MaaAdbConnectionFallback.GetFallbackScreenCap(screenCap) != screenCap)
+                {
+                    var fallbackScreenCap = MaaAdbConnectionFallback.GetFallbackScreenCap(screenCap);
+                    LoggerHelper.Warning($"截图方式 {screenCap} 初始化失败，回退到 {fallbackScreenCap} 后重试：{ex.Message}");
+                    if (logConfig)
+                        Config.AdbDevice.ScreenCap = fallbackScreenCap;
+
+                    return new MaaAdbController(
+                        Config.AdbDevice.AdbPath,
+                        Config.AdbDevice.AdbSerial,
+                        fallbackScreenCap, Config.AdbDevice.Input,
+                        !string.IsNullOrWhiteSpace(Config.AdbDevice.Config) ? Config.AdbDevice.Config : "{}",
+                        agentPath);
+                }
 
             case MaaControllerTypes.PlayCover:
                 if (logConfig)
@@ -3028,9 +3085,17 @@ public class MaaProcessor
             new UniversalEnumConverter<AdbInputMethods>());
         return inputType switch
         {
-            AdbInputMethods.None => Config.AdbDevice.Info?.InputMethods ?? AdbInputMethods.Default,
+            AdbInputMethods.None => GetEffectiveAdbInputMethods(),
             _ => inputType
         };
+    }
+
+    private AdbInputMethods GetEffectiveAdbInputMethods()
+    {
+        var detected = Config.AdbDevice.Info?.InputMethods ?? AdbInputMethods.Default;
+        return Config.AdbDevice.Name?.Contains("MuMu", StringComparison.OrdinalIgnoreCase) == true
+            ? detected | AdbInputMethods.EmulatorExtras
+            : detected;
     }
 
     private AdbScreencapMethods ConfigureAdbScreenCapTypes()
@@ -4044,9 +4109,49 @@ public class MaaProcessor
             await MeasureExecutionTimeAsync(async () =>
             {
                 token.ThrowIfCancellationRequested();
-                MaaTasker?.Controller.Screencap().Wait();
+                var controller = MaaTasker?.Controller;
+                if (controller == null)
+                    throw new InvalidOperationException("截图测试失败：控制器未初始化。");
+
+                var status = controller.Screencap().Wait();
+                if (status == MaaJobStatus.Succeeded)
+                    return;
+
+                if (await FallbackToDefaultScreencapAsync(status, token))
+                    return;
+
+                throw new InvalidOperationException($"截图测试失败：状态={status}。");
             });
         }, token: token, name: "截图测试");
+    }
+
+    private async Task<bool> FallbackToDefaultScreencapAsync(MaaJobStatus failedStatus, CancellationToken token)
+    {
+        var currentScreenCap = Config.AdbDevice.ScreenCap;
+        var fallbackScreenCap = MaaAdbConnectionFallback.GetFallbackScreenCap(currentScreenCap);
+        if (fallbackScreenCap == currentScreenCap)
+            return false;
+
+        LoggerHelper.Warning($"截图方式 {currentScreenCap} 截图失败：状态={failedStatus}；回退到 {fallbackScreenCap} 并重新连接。");
+        Config.AdbDevice.ScreenCap = fallbackScreenCap;
+        SetTasker();
+
+        var tasker = await GetTaskerAsync(token);
+        if (tasker?.Controller == null)
+        {
+            LoggerHelper.Error($"截图方式回退到 {fallbackScreenCap} 后，控制器重新初始化失败。");
+            return false;
+        }
+
+        var fallbackStatus = tasker.Controller.Screencap().Wait();
+        if (fallbackStatus == MaaJobStatus.Succeeded)
+        {
+            LoggerHelper.Info($"截图方式已回退到 {fallbackScreenCap}，截图测试通过。");
+            return true;
+        }
+
+        LoggerHelper.Error($"截图方式回退到 {fallbackScreenCap} 后截图仍失败：状态={fallbackStatus}。");
+        return false;
     }
 
     async private Task HandleDeviceConnectionAsync(CancellationToken token, bool showMessage = true)
