@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "id": "11111111111111111111111111111111",
+  "name": "奥义依赖示例",
+  "initial_stage_id": "22222222222222222222222222222222",
+  "stages": [{
+    "id": "22222222222222222222222222222222",
+    "name": "全程作战",
+    "actions": {
+      "priority": ["ultimate", "bomb"],
+      "bomb_levels": [3],
+      "ultimates": [
+        {"slot": 2, "enabled": true, "condition": {
+          "type": "group", "match": "all", "children": [
+            {"type": "predicate", "metric": "ultimate_ready", "slots": [3], "slot_match": "all", "expected": true}
+          ]
+        }},
+        {"slot": 1, "enabled": true},
+        {"slot": 3, "enabled": true, "condition": {
+          "type": "group", "match": "all", "children": [
+            {"type": "predicate", "metric": "stage_normal_links", "comparison": "greater_or_equal", "value": 2},
+            {"type": "group", "match": "any", "children": [
+              {"type": "predicate", "metric": "ultimate_released", "slots": [1], "slot_match": "all", "expected": true},
+              {"type": "predicate", "metric": "ultimate_released", "slots": [2], "slot_match": "all", "expected": true}
+            ]}
+          ]
+        }}
+      ],
+      "normal_link": {"prioritize_colors": true, "long_link_threshold": 7, "color_priority": ["red", "blue", "green", "yellow"]}
+    },
+    "frenzy": {"allow_ultimates": false, "allow_bombs": false, "reserved_color": "red"},
+    "transitions": []
+  }]
+}

@@ -393,6 +393,7 @@ public partial class App : Application
             .AddView<ResourcesView, ResourcesViewModel>(services)
             .AddView<SettingsView, SettingsViewModel>(services)
             .AddView<ScreenshotView, ScreenshotViewModel>(services)
+            .AddView<CombatStrategyView, CombatStrategyViewModel>(services)
 
             // Add additional views
             .AddView<AddTaskDialogView, AddTaskDialogViewModel>(services)

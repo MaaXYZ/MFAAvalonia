@@ -440,6 +440,8 @@ public static partial class Instances
     private static MonitorViewModel _monitorViewModel;
     private static ScreenshotView _screenshotView;
     private static ScreenshotViewModel _screenshotViewModel;
+    private static CombatStrategyView _combatStrategyView;
+    private static CombatStrategyViewModel _combatStrategyViewModel;
     
     private static ConnectSettingsUserControl _connectSettingsUserControl;
     private static ConnectSettingsUserControlModel _connectSettingsUserControlModel;

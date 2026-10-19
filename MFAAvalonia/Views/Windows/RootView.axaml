@@ -176,16 +176,12 @@
                 <!--     </MultiBinding> -->
                 <!-- </TextBlock.Text> -->
             </TextBlock>
-            <TextBlock VerticalAlignment="Center" IsVisible="{calcBinding:Binding '!IsCustomTitleVisible' }"
-                       FontSize="13" Text="{markup:I18n {x:Static helper:LangKeys.AppTitle}}" IsHitTestVisible="False"
-                       FontWeight="Bold" />
-
+            <TextBlock VerticalAlignment="Center" IsVisible="{Binding IsResourceNameVisible}"
+                       IsHitTestVisible="False" FontSize="13" FontWeight="Bold"
+                       Text="{Binding ResourceName}" />
             <TextBlock VerticalAlignment="Center" Margin="5 0 0 0" IsVisible="{Binding IsResourceNameVisible}"
-                       Foreground="{DynamicResource SukiLowText}" IsHitTestVisible="False"
-                       FontSize="13" Text="{Binding ResourceName}" />
-            <TextBlock VerticalAlignment="Center" Margin="1 0 0 0" IsVisible="{Binding IsResourceNameVisible}"
-                       Foreground="{DynamicResource SukiLowText}" IsHitTestVisible="False"
-                       FontSize="13" Text="{Binding ResourceVersion}" />
+                       IsHitTestVisible="False" FontSize="13" FontWeight="Bold"
+                       Text="{Binding ResourceVersion}" />
         </StackPanel>
     </suki:SukiWindow.NonClientAreaContent>
     <suki:SukiWindow.Title>

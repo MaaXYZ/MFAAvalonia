@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MFAAvalonia.Views.Pages.CombatStrategyView"
+             x:CompileBindings="False">
+    <UserControl.Styles>
+        <Style Selector="Border.strategy-card">
+            <Setter Property="Background" Value="{DynamicResource SukiCardBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SukiControlBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Border.strategy-condition">
+            <Setter Property="Background" Value="{DynamicResource SukiCardBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SukiControlBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+    </UserControl.Styles>
+    <Grid ColumnDefinitions="225,12,*" Margin="12">
+        <Border Classes="strategy-card" CornerRadius="12" Padding="12">
+            <Grid RowDefinitions="Auto,*,Auto">
+                <StackPanel Spacing="10" Margin="0,0,0,10">
+                    <TextBlock Text="作战策略" FontSize="18" FontWeight="SemiBold" />
+                    <WrapPanel>
+                        <Button x:Name="NewStrategy" Content="新建" Margin="0,0,6,4" Click="OnNewStrategy" />
+                        <Button x:Name="CopyStrategy" Content="复制" Margin="0,0,6,4" Click="OnCopyStrategy" />
+                        <Button x:Name="RenameStrategy" Content="重命名" Margin="0,0,0,4" Click="OnRenameStrategy" />
+                    </WrapPanel>
+                </StackPanel>
+                <ListBox Grid.Row="1" x:Name="StrategyList" SelectionChanged="OnStrategySelected" />
+                <Button Grid.Row="2" x:Name="LoadWarnings" IsVisible="False" Content="部分策略文件无法读取"
+                        Margin="0,8,0,0" HorizontalAlignment="Stretch" Click="OnLoadWarnings" />
+            </Grid>
+        </Border>
+        <Grid Grid.Column="2" RowDefinitions="*,Auto">
+            <ScrollViewer x:Name="StageScroll" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Spacing="12" Margin="0,0,8,12">
+                    <StackPanel x:Name="StageCards" Spacing="12" />
+                    <Button x:Name="AddStage" Content="＋" FontSize="26" Height="48"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            ToolTip.Tip="新增阶段" Click="OnAddStage" />
+                </StackPanel>
+            </ScrollViewer>
+            <Border Grid.Row="1" Classes="strategy-card" CornerRadius="12" Padding="12" Margin="0,8,0,0">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                    <WrapPanel>
+                        <Button x:Name="SaveStrategy" Content="保存" Margin="0,0,8,0" Click="OnSaveStrategy" />
+                        <Button x:Name="DeleteStrategy" Content="删除" Margin="0,0,8,0" Click="OnDeleteStrategy" />
+                        <Button Content="全部展开" Margin="0,0,8,0" Click="OnExpandAll" />
+                        <Button Content="全部折叠" Click="OnCollapseAll" />
+                    </WrapPanel>
+                    <TextBlock Grid.Column="1" x:Name="SaveStatus" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" TextWrapping="Wrap" MaxHeight="55" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

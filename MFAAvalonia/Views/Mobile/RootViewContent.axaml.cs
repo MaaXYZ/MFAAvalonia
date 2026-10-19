@@ -20,9 +20,16 @@ namespace MFAAvalonia.Views.Mobile;
 
 public partial class RootViewContent : UserControl
 {
+    private readonly MFAAvalonia.Features.CombatStrategies.Controls.CombatStrategyNavigationGuard _strategyNavigationGuard;
+
     public RootViewContent()
     {
         InitializeComponent();
+        _strategyNavigationGuard = new(
+            this.FindControl<SukiSideMenu>("MainSideMenu")!,
+            this.FindControl<SukiSideMenuItem>("CombatStrategyMenuItem")!,
+            () => Instances.CombatStrategyViewModel.Session.HasUnsavedChanges,
+            () => Instances.CombatStrategyView.ConfirmLeaveAsync());
         Loaded += OnLoaded;
     }
 

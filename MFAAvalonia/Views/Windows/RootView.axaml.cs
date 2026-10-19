@@ -250,8 +250,18 @@ public partial class RootView : SukiWindow
     }
 
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在此调用完成之前将会继续执行当前方法。请考虑将 "await" 运算符应用于调用结果。
+    private bool _strategyCloseInProgress;
+
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        if (Instances.IsResolved<MFAAvalonia.ViewModels.Pages.CombatStrategyViewModel>() &&
+            Instances.CombatStrategyViewModel.Session.HasUnsavedChanges)
+        {
+            e.Cancel = true;
+            if (!_strategyCloseInProgress)
+                _ = ConfirmStrategyCloseAsync();
+            return;
+        }
         if (Instances.RootViewModel.IsRunning && !_exitConfirmed)
         {
             e.Cancel = true;
@@ -262,6 +272,27 @@ public partial class RootView : SukiWindow
 
         Instances.EnsureShutdownWatchdogStarted();
         base.OnClosing(e);
+    }
+
+    private async Task ConfirmStrategyCloseAsync()
+    {
+        _strategyCloseInProgress = true;
+        try { if (await ConfirmStrategyLeaveAsync()) Close(); }
+        finally { _strategyCloseInProgress = false; }
+    }
+
+    private async Task<bool> ConfirmStrategyLeaveAsync()
+    {
+        if (!Instances.IsResolved<MFAAvalonia.ViewModels.Pages.CombatStrategyViewModel>() ||
+            !Instances.CombatStrategyViewModel.Session.HasUnsavedChanges) return true;
+        if (!IsVisible)
+        {
+            Show();
+            Instances.RootViewModel.IsWindowVisible = true;
+        }
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+        return await Instances.CombatStrategyView.ConfirmLeaveAsync();
     }
 
     private async Task ConfirmExitAndShutdownAsync()
@@ -346,6 +377,7 @@ public partial class RootView : SukiWindow
 
     public async Task<bool> ConfirmExit()
     {
+        if (!await ConfirmStrategyLeaveAsync()) return false;
         if (!Instances.RootViewModel.IsRunning)
             return true;
 
