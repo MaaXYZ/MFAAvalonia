@@ -46,7 +46,7 @@ sealed class Program
 
         try
         {
-            var executablePath = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "MFAAvalonia.exe");
+            var executablePath = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "MaaPazugiri.exe");
             var instanceKey = AppRuntime.CreateInstanceKey(executablePath);
             AppRuntime.Initialize(args, instanceKey);
             TelemetryService.InitializeBootstrapFromInterface(AppContext.BaseDirectory);

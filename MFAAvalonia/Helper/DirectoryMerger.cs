@@ -150,8 +150,8 @@ public static class DirectoryMerger
                 // 判断是否需要跳过文件
                 if (!(overwriteMFA
                         || !Path.GetFileName(tempPath).Contains("MFAUpdater")
-                        && !Path.GetFileName(tempPath).Contains("MFAAvalonia")
-                        && !Path.GetFileName(tempPath).Contains(Process.GetCurrentProcess().MainModule?.ModuleName ?? "MFAAvalonia.exe"))
+                        && !Path.GetFileName(tempPath).Contains("MaaPazugiri")
+                        && !Path.GetFileName(tempPath).Contains(Process.GetCurrentProcess().MainModule?.ModuleName ?? "MaaPazugiri.exe"))
                     || Path.GetFileName(tempPath).Contains("interface.json", StringComparison.OrdinalIgnoreCase)
                     // || Path.GetExtension(tempPath).Equals(".dll", StringComparison.OrdinalIgnoreCase) && OperatingSystem.IsWindows()
                     // || !Path.FindPath(tempPath).Contains("minicap.so", StringComparison.OrdinalIgnoreCase)

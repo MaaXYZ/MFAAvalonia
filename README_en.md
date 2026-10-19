@@ -109,7 +109,7 @@ The template can also use a `PresetSettings` dictionary to override settings for
 MFAAvalonia can select instances and run tasks from the command line. An instance can be specified by name or instance ID. Copy an instance ID from the context menu of its tab.
 
 ```text
-MFAAvalonia.exe [options]
+MaaPazugiri.exe [options]
 ```
 
 | Option | Description |
@@ -124,21 +124,21 @@ MFAAvalonia.exe [options]
 
 ```powershell
 # Show help
-.\MFAAvalonia.exe --help
+.\MaaPazugiri.exe --help
 
 # Select an instance by name or ID
-.\MFAAvalonia.exe --instance "Daily Tasks"
-.\MFAAvalonia.exe -i 1a2b3c4d
+.\MaaPazugiri.exe --instance "Daily Tasks"
+.\MaaPazugiri.exe -i 1a2b3c4d
 
 # Run the selected instance automatically
-.\MFAAvalonia.exe --autostart -i "Daily Tasks"
+.\MaaPazugiri.exe --autostart -i "Daily Tasks"
 
 # Exit after the run finishes
-.\MFAAvalonia.exe --autostart -i 1a2b3c4d -q
+.\MaaPazugiri.exe --autostart -i 1a2b3c4d -q
 
 # Stop and restart the target instance if it is already running
-.\MFAAvalonia.exe --autostart -i "Daily Tasks" --forceStart
-.\MFAAvalonia.exe --autostart -c 1a2b3c4d -f
+.\MaaPazugiri.exe --autostart -i "Daily Tasks" --forceStart
+.\MaaPazugiri.exe --autostart -c 1a2b3c4d -f
 ```
 
 ### Option combinations

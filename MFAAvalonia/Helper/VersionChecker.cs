@@ -3614,16 +3614,17 @@ public static class VersionChecker
             || normalized.StartsWith("libs/", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        if (fileName.Equals("MFAAvalonia.dll", StringComparison.OrdinalIgnoreCase)
-            || fileName.Equals("MFAAvalonia.deps.json", StringComparison.OrdinalIgnoreCase)
-            || fileName.Equals("MFAAvalonia.runtimeconfig.json", StringComparison.OrdinalIgnoreCase)
+        if (fileName.Equals("MaaPazugiri.dll", StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals("MaaPazugiri.deps.json", StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals("MaaPazugiri.runtimeconfig.json", StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals("MaaPazugiri", StringComparison.OrdinalIgnoreCase)
             || IsCurrentProcessExecutableFileName(fileName)
             || fileName.Equals("MFAUpdater", StringComparison.OrdinalIgnoreCase)
             || fileName.Equals("MFAUpdater.exe", StringComparison.OrdinalIgnoreCase))
             return true;
 
         if (fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-            && fileName.Contains("MFAAvalonia", StringComparison.OrdinalIgnoreCase))
+            && fileName.Contains("MaaPazugiri", StringComparison.OrdinalIgnoreCase))
             return true;
 
         return false;
@@ -4314,7 +4315,7 @@ public static class VersionChecker
 
     /// <summary>
     /// 从目录中查找 MFAAvalonia 的可执行文件
-    ///通过查找 MFAAvalonia.dll 或 MFAAvalonia.deps.json 来定位，因为这些文件名是固定的
+    /// 通过查找应用程序集或运行配置文件来定位可执行文件。
     /// </summary>
     /// <param name="directory">要搜索的目录</param>
     /// <returns>找到的可执行文件路径，如果未找到则返回空字符串</returns>
@@ -4325,8 +4326,8 @@ public static class VersionChecker
 
         try
         {
-            // 方法1: 查找 MFAAvalonia.dll 所在目录，然后找同目录下的可执行文件
-            var dllFiles = Directory.GetFiles(directory, "MFAAvalonia.dll", SearchOption.AllDirectories);
+            // 方法1: 查找 MaaPazugiri.dll 所在目录，然后找同目录下的可执行文件
+            var dllFiles = Directory.GetFiles(directory, "MaaPazugiri.dll", SearchOption.AllDirectories);
             if (dllFiles.Length > 0)
             {
                 var dllDir = Path.GetDirectoryName(dllFiles[0]);
@@ -4335,14 +4336,14 @@ public static class VersionChecker
                     var exeFile = FindExecutableInSameDirectory(dllDir);
                     if (!string.IsNullOrEmpty(exeFile))
                     {
-                        LoggerHelper.Info($"已通过 MFAAvalonia.dll 定位可执行文件：{exeFile}");
+                        LoggerHelper.Info($"已通过 MaaPazugiri.dll 定位可执行文件：{exeFile}");
                         return exeFile;
                     }
                 }
             }
 
-            // 方法2: 查找 MFAAvalonia.deps.json 所在目录
-            var depsFiles = Directory.GetFiles(directory, "MFAAvalonia.deps.json", SearchOption.AllDirectories);
+            // 方法2: 查找 MaaPazugiri.deps.json 所在目录
+            var depsFiles = Directory.GetFiles(directory, "MaaPazugiri.deps.json", SearchOption.AllDirectories);
             if (depsFiles.Length > 0)
             {
                 var depsDir = Path.GetDirectoryName(depsFiles[0]);
@@ -4351,14 +4352,14 @@ public static class VersionChecker
                     var exeFile = FindExecutableInSameDirectory(depsDir);
                     if (!string.IsNullOrEmpty(exeFile))
                     {
-                        LoggerHelper.Info($"已通过 MFAAvalonia.deps.json 定位可执行文件：{exeFile}");
+                        LoggerHelper.Info($"已通过 MaaPazugiri.deps.json 定位可执行文件：{exeFile}");
                         return exeFile;
                     }
                 }
             }
 
-            // 方法3: 查找 MFAAvalonia.runtimeconfig.json 所在目录
-            var runtimeConfigFiles = Directory.GetFiles(directory, "MFAAvalonia.runtimeconfig.json", SearchOption.AllDirectories);
+            // 方法3: 查找 MaaPazugiri.runtimeconfig.json 所在目录
+            var runtimeConfigFiles = Directory.GetFiles(directory, "MaaPazugiri.runtimeconfig.json", SearchOption.AllDirectories);
             if (runtimeConfigFiles.Length > 0)
             {
                 var configDir = Path.GetDirectoryName(runtimeConfigFiles[0]);
@@ -4367,7 +4368,7 @@ public static class VersionChecker
                     var exeFile = FindExecutableInSameDirectory(configDir);
                     if (!string.IsNullOrEmpty(exeFile))
                     {
-                        LoggerHelper.Info($"已通过 MFAAvalonia.runtimeconfig.json 定位可执行文件：{exeFile}");
+                        LoggerHelper.Info($"已通过 MaaPazugiri.runtimeconfig.json 定位可执行文件：{exeFile}");
                         return exeFile;
                     }
                 }
