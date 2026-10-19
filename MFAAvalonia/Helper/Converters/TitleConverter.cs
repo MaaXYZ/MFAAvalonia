@@ -17,18 +17,18 @@ public class TitleConverter : MarkupExtension, IMultiValueConverter
         var customTitle = SafeGetValue<string>(values, 0);
         var isCustomVisible = SafeGetValue<bool>(values, 1);
         var appName = SafeGetValue<object>(values, 2);
-        var appVersion = SafeGetValue<string>(values, 3);
-        var resourceName = SafeGetValue<string>(values, 4);
-        var resourceVersion = SafeGetValue<string>(values, 5);
-        var isResourceVisible = SafeGetValue<bool>(values, 6);
+        var resourceName = SafeGetValue<string>(values, 3);
+        var isResourceVisible = SafeGetValue<bool>(values, 4);
 
-        var result = $"{appName} {appVersion}";
+        var result = appName?.ToString() ?? string.Empty;
         // 主逻辑
         if (isCustomVisible && !string.IsNullOrEmpty(customTitle))
             result = customTitle;
 
-        if (isResourceVisible && !string.IsNullOrEmpty(resourceName))
-            result = $"{appName} {appVersion} | {resourceName} {resourceVersion}";
+        if (isResourceVisible
+            && !string.IsNullOrEmpty(resourceName)
+            && !string.Equals(appName?.ToString(), resourceName, StringComparison.OrdinalIgnoreCase))
+            result = $"{appName} | {resourceName}";
         return result;
     }
 
