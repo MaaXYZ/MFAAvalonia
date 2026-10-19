@@ -50,6 +50,13 @@
                                                Icon="{fluent:FluentIcon Icon=TasksApp,
                                                                 IconVariant=Regular}"
                                                PageContent="{extensions:ServiceProvider ServiceType={x:Type pages:InstanceContainerView}}" />
+                        <suki:SukiSideMenuItem x:Name="CombatStrategyMenuItem" IsContentMovable="False"
+                                               Header="策略"
+                                               PageContent="{extensions:ServiceProvider ServiceType={x:Type pages:CombatStrategyView}}">
+                            <suki:SukiSideMenuItem.Icon>
+                                <fluentIcon:FluentIcon Icon="NotepadEdit" IconVariant="Regular" />
+                            </suki:SukiSideMenuItem.Icon>
+                        </suki:SukiSideMenuItem>
                         <suki:SukiSideMenuItem IsContentMovable="False"
                                                Header="{markup:I18n {x:Static helper:LangKeys.Monitor}}"
                                                PageContent="{extensions:ServiceProvider ServiceType={x:Type pages:MonitorView}}">
@@ -62,13 +69,6 @@
                                                Icon="{fluent:FluentIcon Icon=Screenshot,
                                                                IconVariant=Regular}"
                                                PageContent="{extensions:ServiceProvider ServiceType={x:Type pages:ScreenshotView}}" />
-                        <suki:SukiSideMenuItem x:Name="CombatStrategyMenuItem" IsContentMovable="False"
-                                               Header="作战策略"
-                                               PageContent="{extensions:ServiceProvider ServiceType={x:Type pages:CombatStrategyView}}">
-                            <suki:SukiSideMenuItem.Icon>
-                                <TextBlock Text="策" FontWeight="Bold" FontSize="15" />
-                            </suki:SukiSideMenuItem.Icon>
-                        </suki:SukiSideMenuItem>
                         <suki:SukiSideMenuItem IsContentMovable="False"
                                                Header="{markup:I18n {x:Static helper:LangKeys.ResourceOption}}"
                                                Icon="{fluent:FluentIcon Icon=Apps,

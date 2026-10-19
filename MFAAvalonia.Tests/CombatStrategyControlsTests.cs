@@ -14,6 +14,7 @@ using Xunit;
 
 namespace MFAAvalonia.Tests;
 
+[Collection("策略界面")]
 public sealed class CombatStrategyControlsTests
 {
     [Theory]

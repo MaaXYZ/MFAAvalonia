@@ -7,6 +7,7 @@ using Xunit;
 
 namespace MFAAvalonia.Tests;
 
+[Collection("策略界面")]
 public sealed class CombatStrategyNavigationTests
 {
     [Theory]

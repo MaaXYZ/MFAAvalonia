@@ -50,11 +50,15 @@ public sealed class StrategyEditorSession
         Open(StrategyDefaults.CreateEditable(name), isNew: true);
     }
 
-    public void Duplicate()
+    public StrategyDocument Load(string id) => _store.Load(id);
+
+    public void Duplicate() => Duplicate(Current);
+
+    public void Duplicate(StrategyDocument source)
     {
-        var clone = StrategyJson.Clone(Current);
+        var clone = StrategyJson.Clone(source);
         clone.Id = NewId();
-        clone.Name = Current.Name + " 副本";
+        clone.Name = source.Name + " 副本";
         var ids = clone.Stages.ToDictionary(x => x.Id, _ => NewId());
         clone.InitialStageId = ids[clone.InitialStageId];
         foreach (var stage in clone.Stages)
@@ -76,6 +80,21 @@ public sealed class StrategyEditorSession
         Current.Name = name.Trim();
         MarkDirty();
         RefreshCatalog();
+    }
+
+    public void Rename(string id, string name)
+    {
+        if (id == Current.Id)
+        {
+            Rename(name);
+            return;
+        }
+
+        var document = _store.Load(id);
+        document.Name = name.Trim();
+        _store.Save(document);
+        RefreshCatalog();
+        StateChanged?.Invoke();
     }
 
     public void Save()
@@ -141,6 +160,19 @@ public sealed class StrategyEditorSession
         EnsureWritable();
         _store.Delete(Current.Id);
         Open(StrategyDefaults.Create(), false);
+    }
+
+    public void Delete(string id)
+    {
+        if (id == Current.Id)
+        {
+            DeleteCurrent();
+            return;
+        }
+
+        _store.Delete(id);
+        RefreshCatalog();
+        StateChanged?.Invoke();
     }
 
     public StrategyStage AddStage()
