@@ -3515,7 +3515,9 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                     if (ShouldRebuildStaleLiveViewChannel())
                         return;
 
-                    if (!_liveViewNoImageLogged)
+                    if (!_liveViewNoImageLogged
+                        && (_lastConnectedAtUtc is null
+                            || DateTime.UtcNow - _lastConnectedAtUtc.Value >= LiveViewFrameGrace))
                     {
                         _liveViewNoImageLogged = true;
                         var screencapType = Processor.ScreenshotType();
