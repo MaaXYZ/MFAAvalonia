@@ -47,6 +47,7 @@ public class MaaProcessor
     private static readonly Random Random = new();
     private int _taskQueueTotal;
     private int _isTaskRunActive;
+    private MFATask? _activeQueueTask;
     private readonly BlockingCollection<Func<Task>> _commandQueue = new();
     private readonly object _commandThreadLock = new();
     private readonly CancellationTokenSource _commandThreadCts = new();
@@ -518,6 +519,12 @@ public class MaaProcessor
     public void RecordCustomActionActivity()
     {
         _recoveryMonitor.RecordActivity(_recoveryClock.Elapsed);
+    }
+
+    public bool RequestEarlyCompletionForActiveTask(string? reason)
+    {
+        var activeTask = Volatile.Read(ref _activeQueueTask);
+        return activeTask?.RequestEarlyCompletion(reason) == true;
     }
 
     public void LogRestartEvent(string eventName, string message, bool isError)
@@ -3723,7 +3730,17 @@ public class MaaProcessor
             }
             if (token.IsCancellationRequested) break;
 
-            var result = await task.Run(token);
+            Volatile.Write(ref _activeQueueTask, task);
+            MFATask.RunResult result;
+            try
+            {
+                result = await task.Run(token);
+            }
+            finally
+            {
+                Interlocked.CompareExchange(ref _activeQueueTask, null, task);
+            }
+
             if (result.Status == MFATask.MFATaskStatus.FAILED)
             {
                 completedWithFailures = true;
@@ -5234,6 +5251,7 @@ public class MaaProcessor
             tasker.Resource.Register(new Custom.WebhookAction());
             tasker.Resource.Register(new Custom.HeiLiuAction((content, color) => AddLog(content, color)));
             tasker.Resource.Register(new Custom.SwitchInstanceAction(this));
+            tasker.Resource.Register(new Custom.CompleteCurrentTaskAction(this));
             LoggerHelper.Info("已注册内置特殊任务动作。");
 
             // 获取当前资源的自定义目录

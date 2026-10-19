@@ -45,6 +45,43 @@ public partial class MFATask : ObservableObject
     public long RunId { get; set; }
     public bool ContinueOnError { get; set; }
 
+    private readonly object _earlyCompletionLock = new();
+    private string? _earlyCompletionReason;
+    private bool _earlyCompletionRequested;
+
+    /// <summary>
+    /// 请求本轮结束后停止该队列项的剩余重复次数。
+    /// </summary>
+    public bool RequestEarlyCompletion(string? reason)
+    {
+        lock (_earlyCompletionLock)
+        {
+            if (_earlyCompletionRequested)
+                return true;
+
+            _earlyCompletionReason = reason;
+            _earlyCompletionRequested = true;
+            return true;
+        }
+    }
+
+    private bool TryConsumeEarlyCompletion(out string? reason)
+    {
+        lock (_earlyCompletionLock)
+        {
+            if (!_earlyCompletionRequested)
+            {
+                reason = null;
+                return false;
+            }
+
+            reason = _earlyCompletionReason;
+            _earlyCompletionReason = null;
+            _earlyCompletionRequested = false;
+            return true;
+        }
+    }
+
     public async Task<RunResult> Run(CancellationToken token)
     {
         var instanceId = OwnerViewModel?.Processor.InstanceId;
@@ -106,6 +143,18 @@ public partial class MFATask : ObservableObject
                     await Action();
                     token.ThrowIfCancellationRequested();
                 }
+
+                if (TryConsumeEarlyCompletion(out var earlyCompletionReason))
+                {
+                    var taskName = string.IsNullOrWhiteSpace(SourceItem?.Name)
+                        ? LanguageHelper.GetLocalizedString(Name)
+                        : SourceItem.Name;
+                    var message = $"[{taskName}] 任务结束 原因：{earlyCompletionReason}";
+                    LoggerHelper.Info(message);
+                    OwnerViewModel?.Processor.AddLog(message, (IBrush?)null);
+                    break;
+                }
+
                 OwnerViewModel?.MarkTaskIterationCompleted(SourceItem, RunId);
                 // 有限重复任务每轮完成后输出进度；单次任务与无限任务不输出此进度。
                 if (!infinite && Count > 1 && Type == MFATaskType.MAAFW)
