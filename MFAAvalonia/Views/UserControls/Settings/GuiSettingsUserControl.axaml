@@ -267,11 +267,13 @@
                         <Button
                             Command="{Binding RestoreDefaultBackgroundCommand}" Classes="Basic Round"
                             IsEnabled="{Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
+                            Margin="0,0,8,0"
                             Padding="0"
                             ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.RestoreDefaultBackground}}">
+                            <!-- ArrowReset has no 16px glyph in FluentIcons 2.0.318; Size16 renders an empty button. -->
                             <fluent1:FluentIcon Height="18"
                                                  Icon="ArrowReset"
-                                                 IconSize="Size16"
+                                                 IconSize="Size20"
                                                  IconVariant="Regular" />
                         </Button>
                         <Button
