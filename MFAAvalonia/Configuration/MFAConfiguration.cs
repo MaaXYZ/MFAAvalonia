@@ -20,6 +20,27 @@ public partial class MFAConfiguration(string name, string fileName, Dictionary<s
 
     [ObservableProperty] private Dictionary<string, object> _config = config;
 
+    public bool IsLoadedSuccessfully { get; internal set; } = true;
+
+    public bool TryCommitBackground(BackgroundDefaults.Change change)
+    {
+        if (!IsLoadedSuccessfully)
+        {
+            LoggerHelper.Warning("用户配置解析失败，未保存背景修改。");
+            return false;
+        }
+        if (!BackgroundConfigurationWriter.TryWrite(GetConfigFilePath(), change.Values, change.IsMigration,
+                out var error, new MaaInterfaceSelectAdvancedConverter(false), new MaaInterfaceSelectOptionConverter(false)))
+        {
+            LoggerHelper.Error($"背景配置保存失败，保留原设置：{error}");
+            return false;
+        }
+        Config = change.Values;
+        if (change.IsMigration)
+            LoggerHelper.Info($"背景默认值迁移已保存：删除字段=[{string.Join(", ", change.RemovedKeys)}]");
+        return true;
+    }
+
 
     [RelayCommand]
     private void DeleteConfiguration()
@@ -230,9 +251,10 @@ public partial class MFAConfiguration(string name, string fileName, Dictionary<s
         return this;
     }
 
-    public MFAConfiguration SetConfig(Dictionary<string, object> config)
+    public MFAConfiguration SetConfig(Dictionary<string, object> config, bool loadedSuccessfully = true)
     {
         Config = config;
+        IsLoadedSuccessfully = loadedSuccessfully;
         return this;
     }
 }

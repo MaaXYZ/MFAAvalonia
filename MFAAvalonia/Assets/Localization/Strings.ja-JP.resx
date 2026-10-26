@@ -346,6 +346,9 @@
   <data name="Warning" xml:space="preserve">
     <value>警告</value>
   </data>
+  <data name="RestoreDefaultBackground" xml:space="preserve">
+    <value>背景を既定に戻す</value>
+  </data>
   <data name="BackgroundImageTitle" xml:space="preserve">
     <value>背景画像</value>
   </data>

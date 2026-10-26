@@ -1512,6 +1512,9 @@
     <data name="Reset" xml:space="preserve">
         <value>重置</value>
      </data>
+    <data name="RestoreDefaultBackground" xml:space="preserve">
+        <value>還原預設背景</value>
+    </data>
     <data name="BackgroundImageTitle" xml:space="preserve">
         <value>背景圖片</value>
     </data>

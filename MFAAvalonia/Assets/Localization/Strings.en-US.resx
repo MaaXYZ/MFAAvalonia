@@ -1509,6 +1509,9 @@
     <data name="Reset" xml:space="preserve">
         <value>Reset</value>
     </data>
+    <data name="RestoreDefaultBackground" xml:space="preserve">
+        <value>Restore default background</value>
+    </data>
     <data name="BackgroundImageTitle" xml:space="preserve">
         <value>Background Image</value>
     </data>

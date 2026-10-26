@@ -260,7 +260,17 @@
                             Padding="0"
                             ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.ButtonClear}}">
                             <fluent1:FluentIcon Height="18"
-                                                 Icon="ArrowSync"
+                                                 Icon="Delete"
+                                                 IconSize="Size16"
+                                                 IconVariant="Regular" />
+                        </Button>
+                        <Button
+                            Command="{Binding RestoreDefaultBackgroundCommand}" Classes="Basic Round"
+                            IsEnabled="{Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
+                            Padding="0"
+                            ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.RestoreDefaultBackground}}">
+                            <fluent1:FluentIcon Height="18"
+                                                 Icon="ArrowReset"
                                                  IconSize="Size16"
                                                  IconVariant="Regular" />
                         </Button>
