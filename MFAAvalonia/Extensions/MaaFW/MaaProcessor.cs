@@ -1699,6 +1699,11 @@ public class MaaProcessor
         for (var attempt = 0; attempt < 5; attempt++)
         {
             token.ThrowIfCancellationRequested();
+            // LinkStart connects the controller but does not fill its image cache.
+            // Request a frame before reading the cache, otherwise a new screenshot
+            // controller can never finish initialization and is recreated repeatedly.
+            await Task.Run(() => tasker.Controller.Screencap().Wait(), token);
+            token.ThrowIfCancellationRequested();
             using (var imageBuffer = new MaaImageBuffer())
             {
                 if (tasker.GetCachedImage(imageBuffer) && !imageBuffer.IsEmpty)
