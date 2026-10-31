@@ -1656,11 +1656,12 @@ public class MaaProcessor
             return null;
         }
 
+        MaaTasker? tasker = null;
         try
         {
             token.ThrowIfCancellationRequested();
 
-            var tasker = new MaaTasker
+            tasker = new MaaTasker
             {
                 Controller = controller,
                 Resource = maaResource,
@@ -1690,6 +1691,8 @@ public class MaaProcessor
         catch (Exception ex)
         {
             LoggerHelper.Warning($"截图任务执行器初始化失败：{ex.Message}");
+            // The tasker owns the controller and resource; no screencap is still in flight here.
+            tasker?.Dispose();
             return null;
         }
     }
@@ -1698,6 +1701,11 @@ public class MaaProcessor
     {
         for (var attempt = 0; attempt < 5; attempt++)
         {
+            token.ThrowIfCancellationRequested();
+            // LinkStart connects the controller but does not fill its image cache.
+            // Request a frame before reading the cache, otherwise a new screenshot
+            // controller can never finish initialization and is recreated repeatedly.
+            await Task.Run(() => tasker.Controller.Screencap().Wait(), token);
             token.ThrowIfCancellationRequested();
             using (var imageBuffer = new MaaImageBuffer())
             {
