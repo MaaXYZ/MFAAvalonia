@@ -1678,6 +1678,13 @@ public class MaaProcessor
                 return null;
             }
 
+            if (!await WaitForScreenshotFrameAsync(tasker, token))
+            {
+                LoggerHelper.Warning("截图控制器已连接，但首帧缓存仍为空。");
+                tasker.Dispose();
+                return null;
+            }
+
             return tasker;
         }
         catch (Exception ex)
@@ -1685,6 +1692,23 @@ public class MaaProcessor
             LoggerHelper.Warning($"截图任务执行器初始化失败：{ex.Message}");
             return null;
         }
+    }
+
+    private static async Task<bool> WaitForScreenshotFrameAsync(MaaTasker tasker, CancellationToken token)
+    {
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            token.ThrowIfCancellationRequested();
+            using (var imageBuffer = new MaaImageBuffer())
+            {
+                if (tasker.GetCachedImage(imageBuffer) && !imageBuffer.IsEmpty)
+                    return true;
+            }
+
+            await Task.Delay(250, token);
+        }
+
+        return false;
     }
 
     private void ConfigureScreenshotTasker(MaaTasker tasker)
