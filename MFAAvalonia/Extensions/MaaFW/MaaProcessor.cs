@@ -1005,6 +1005,40 @@ public class MaaProcessor
         return true;
     }
 
+    public string DescribeAdbConnectionTarget()
+    {
+        if (ViewModel?.CurrentController != MaaControllerTypes.Adb)
+            return "target_check=not_adb";
+
+        var selected = ViewModel.CurrentDevice as AdbDeviceInfo;
+        var selectedSerial = selected?.AdbSerial ?? "<none>";
+        var selectedIndex = DeviceDisplayConverter.GetFirstEmulatorIndex(selected?.Config ?? "{}");
+        string actual;
+        try
+        {
+            var controller = MaaTasker?.Controller;
+            var info = controller?.Info;
+            if (string.IsNullOrWhiteSpace(info))
+                actual = controller == null ? "<not_created>" : "<info_unavailable>";
+            else
+            {
+                var root = JObject.Parse(info);
+                var config = root["config"];
+                var configJson = config?.Type == JTokenType.String
+                    ? config.Value<string>() : config?.ToString(Formatting.None);
+                var index = DeviceDisplayConverter.GetFirstEmulatorIndex(configJson ?? "{}");
+                actual = $"serial={root["adb_serial"]?.Value<string>() ?? "<unknown>"}, index={index}, connected={controller?.IsConnected}";
+            }
+        }
+        catch (Exception ex)
+        {
+            actual = $"<info_error:{ex.GetType().Name}>";
+        }
+
+        return $"当前选择=[serial={selectedSerial}, index={selectedIndex}], 控制器实际=[{actual}]"
+            .Replace('\r', ' ').Replace('\n', ' ');
+    }
+
     public async Task<MaaTasker?> GetTaskerAsync(CancellationToken token = default)
     {
         return (await GetTaskerAndBoolAsync(token)).Item1;
@@ -4158,6 +4192,7 @@ public class MaaProcessor
         TaskQueue.Enqueue(CreateMFATask(LangKeys.Connection.ToLocalization(), async () =>
         {
             await HandleDeviceConnectionAsync(token);
+            LoggerHelper.Info($"[TaskTargetReady] {DescribeAdbConnectionTarget()}");
         }));
 
         TaskQueue.Enqueue(CreateMFATask(LangKeys.PerformanceBenchmark.ToLocalization(), async () =>
