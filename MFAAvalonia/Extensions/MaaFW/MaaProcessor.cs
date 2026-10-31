@@ -1215,6 +1215,18 @@ public class MaaProcessor
     private MFATask.MFATaskStatus Status = MFATask.MFATaskStatus.NOT_STARTED;
     private int _stopCompletionMessageHandled;
     private const int ActionFailedLimit = 20;
+
+    internal void OnAgentUnavailable(AgentContext context)
+    {
+        if (!_agentStarted || !_agentContexts.Contains(context))
+            return;
+
+        _agentStarted = false;
+        LoggerHelper.Error("Agent 通道已断开，已取消当前任务队列。");
+        AddLogByKey(LangKeys.AgentStartFailed, Brushes.OrangeRed, changeColor: false);
+        CancellationTokenSource?.SafeCancel();
+        _emulatorCancellationTokenSource?.SafeCancel();
+    }
     private int _screencapFailedCount;
     private readonly Lock _screencapLogLock = new();
     private bool _screencapAbortLogPending;
