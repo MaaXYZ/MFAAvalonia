@@ -744,6 +744,8 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         DragItemViewModel source)
     {
         var wrapper = new StackPanel();
+        var selectionValid = OptionSelection.Resolve(interfaceOption, option);
+        var selectionStatus = CreateSelectionStatus(option);
 
         var grid = new Grid
         {
@@ -760,7 +762,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
 
         var toggleSwitch = new ToggleSwitch
         {
-            IsChecked = option.Index == yesValue,
+            IsChecked = selectionValid ? option.Index == yesValue : null,
             Classes = { "Switch" },
             MaxHeight = 60,
             MaxWidth = 100,
@@ -771,7 +773,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         };
 
         BindIdleEnabled(toggleSwitch);
-        toggleSwitch.Bind(ToolTip.TipProperty, new ResourceBindingWithFallback(option.DisplayName, option.Name));
+        toggleSwitch.Bind(ToolTip.TipProperty, new ResourceBindingWithFallback(interfaceOption.DisplayName, option.Name));
         
         // Sub-options container
         var subOptionsContainer = new StackPanel();
@@ -801,16 +803,18 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
 
         toggleSwitch.IsCheckedChanged += (_, _) =>
         {
-            option.Index = toggleSwitch.IsChecked == true ? yesValue : noValue;
-            UpdateSubOptions(option.Index ?? 0);
+            if (!CanEditOptions || !OptionSelection.SelectIndex(interfaceOption, option,
+                    toggleSwitch.IsChecked == true ? yesValue : noValue)) return;
+            selectionStatus.IsVisible = false;
+            UpdateSubOptions(option.Index ?? -1);
             saveConfigurationAction();
         };
 
         // Initialize sub-options
-        UpdateSubOptions(option.Index ?? 0);
+        UpdateSubOptions(selectionValid ? option.Index ?? -1 : -1);
 
         // Label with Icon
-        var labelPanel = CreateLabelPanel(option.DisplayName, option.Name, interfaceOption.Description, interfaceOption.Document);
+        var labelPanel = CreateLabelPanel(interfaceOption.DisplayName, option.Name, interfaceOption.Description, interfaceOption.Document);
         var icon = CreateIcon(interfaceOption);
         icon.Margin = new Thickness(0, 0, 6, 0);
         labelPanel.Children.Insert(0, icon);
@@ -821,6 +825,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         grid.Children.Add(labelPanel);
         grid.Children.Add(toggleSwitch);
         wrapper.Children.Add(grid);
+        wrapper.Children.Add(selectionStatus);
 
         // Enhanced Sub-option visualization
         wrapper.Children.Add(CreateNestedOptionsBorder(subOptionsContainer));
@@ -834,6 +839,8 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         DragItemViewModel source)
     {
         var wrapper = new StackPanel();
+        var selectionValid = OptionSelection.Resolve(interfaceOption, option);
+        var selectionStatus = CreateSelectionStatus(option);
         var grid = CreateBaseGrid();
 
         interfaceOption.Cases?.ForEach(c => c.InitializeDisplayName());
@@ -845,7 +852,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
             Classes = { "LimitWidth" },
             Margin = new Thickness(0, 2, 0, 2),
             ItemsSource = interfaceOption.Cases,
-            SelectedIndex = option.Index ?? 0,
+            SelectedIndex = selectionValid ? option.Index ?? -1 : -1,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         
@@ -884,18 +891,19 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
                 ? interfaceOption.Cases.FindIndex(c => c.Name == selectedCase.Name)
                 : comboBox.SelectedIndex;
 
-            option.Index = resolvedIndex;
+            if (!CanEditOptions || !OptionSelection.SelectIndex(interfaceOption, option, resolvedIndex)) return;
+            selectionStatus.IsVisible = false;
             UpdateSubOptions(resolvedIndex);
             saveConfigurationAction();
         };
         
-        UpdateSubOptions(option.Index ?? 0);
+        UpdateSubOptions(selectionValid ? option.Index ?? -1 : -1);
         ComboBoxExtensions.SetDisableNavigationOnLostFocus(comboBox, true);
         ComboBoxExtensions.SetCanSearch(comboBox, true);
         ComboBoxExtensions.SetSearchMemberPath(comboBox, "DisplayName");
         comboBox.Bind(ComboBoxExtensions.SearchWatermarkProperty, new I18nBinding(LangKeys.Search));
         // Header
-        var labelPanel = CreateLabelPanel(option.DisplayName, option.Name, interfaceOption.Description, interfaceOption.Document);
+        var labelPanel = CreateLabelPanel(interfaceOption.DisplayName, option.Name, interfaceOption.Description, interfaceOption.Document);
         var icon = CreateIcon(interfaceOption);
         icon.Margin = new Thickness(0, 0, 6, 0);
         labelPanel.Children.Insert(0, icon);
@@ -909,12 +917,23 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         grid.Children.Add(comboBox);
 
         wrapper.Children.Add(grid);
+        wrapper.Children.Add(selectionStatus);
         
         // Sub-options border
         wrapper.Children.Add(CreateNestedOptionsBorder(subOptionsContainer));
 
         return wrapper;
     }
+
+    private static TextBlock CreateSelectionStatus(MaaInterface.MaaInterfaceSelectOption option)
+        => new()
+        {
+            Text = option.SelectionError,
+            IsVisible = option.SelectionError != null,
+            Foreground = Brushes.OrangeRed,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = OptionRowMargin
+        };
     
     // ... Methods for Advanced Options, Helper methods below ...
 
@@ -1398,7 +1417,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
 
     private static MaaInterface.MaaInterfaceSelectOption CreateDefaultSelectOption(string optionName)
     {
-        var selectOption = new MaaInterface.MaaInterfaceSelectOption { Name = optionName, Index = 0 };
+        var selectOption = new MaaInterface.MaaInterfaceSelectOption { Name = optionName };
         if (MaaProcessor.Interface?.Option?.TryGetValue(optionName, out var interfaceOption) == true)
         {
             if (interfaceOption.IsHotkey && interfaceOption.Hotkeys != null)
@@ -1419,11 +1438,8 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
                 // 任务 9：checkbox 类型初始化 SelectedCases from DefaultCases
                 selectOption.SelectedCases = new List<string>(interfaceOption.DefaultCases ?? new List<string>());
             }
-            else if (!string.IsNullOrEmpty(interfaceOption.DefaultCase) && interfaceOption.Cases != null)
-            {
-                var idx = interfaceOption.Cases.FindIndex(c => c.Name == interfaceOption.DefaultCase);
-                if (idx >= 0) selectOption.Index = idx;
-            }
+            else
+                OptionSelection.Resolve(interfaceOption, selectOption);
         }
         return selectOption;
     }

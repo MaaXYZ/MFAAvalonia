@@ -38,8 +38,7 @@ public class MaaInterfaceSelectOptionConverter(bool serializeAsStringArray) : Js
                     {
                         list.Add(new MaaInterface.MaaInterfaceSelectOption
                         {
-                            Name = item.ToString(),
-                            Index = 0
+                            Name = item.ToString()
                         });
                     }
 
@@ -61,8 +60,7 @@ public class MaaInterfaceSelectOptionConverter(bool serializeAsStringArray) : Js
                 {
                     new()
                     {
-                        Name = oName ?? "",
-                        Index = 0
+                        Name = oName ?? ""
                     }
                 };
             case JTokenType.None:
@@ -91,58 +89,8 @@ public class MaaInterfaceSelectOptionConverter(bool serializeAsStringArray) : Js
             {
                 foreach (var option in selectOptions)
                 {
-                    JObject obj = new JObject
-                    {
-                        ["name"] = option.Name,
-                        ["index"] = option.Index
-                    };
-
-                    // 保存 input 类型的 Data 字典
-                    if (option.Data != null && option.Data.Count > 0)
-                    {
-                        obj["data"] = JObject.FromObject(option.Data);
-                    }
-
-                    // 保存 checkbox 类型的 SelectedCases（空列表也需保存，否则预设"全部取消"会丢失）
-                    if (option.SelectedCases != null)
-                    {
-                        obj["selected_cases"] = new JArray(option.SelectedCases);
-                    }
-
-                    // 递归保存子选项
-                    if (option.SubOptions != null && option.SubOptions.Count > 0)
-                    {
-                        var subArray = new JArray();
-                        foreach (var subOption in option.SubOptions)
-                        {
-                            var subObj = new JObject
-                            {
-                                ["name"] = subOption.Name,
-                                ["index"] = subOption.Index
-                            };
-
-                            if (subOption.Data != null && subOption.Data.Count > 0)
-                            {
-                                subObj["data"] = JObject.FromObject(subOption.Data);
-                            }
-
-                            if (subOption.SelectedCases != null)
-                            {
-                                subObj["selected_cases"] = new JArray(subOption.SelectedCases);
-                            }
-
-                            // 递归处理嵌套子选项
-                            if (subOption.SubOptions != null && subOption.SubOptions.Count > 0)
-                            {
-                                subObj["sub_options"] = SerializeSubOptions(subOption.SubOptions);
-                            }
-
-                            subArray.Add(subObj);
-                        }
-                        obj["sub_options"] = subArray;
-                    }
-
-                    array.Add(obj);
+                    // The model owns client fields and encrypted input persistence at every depth.
+                    array.Add(JObject.FromObject(option, serializer));
                 }
             }
 
@@ -150,36 +98,4 @@ public class MaaInterfaceSelectOptionConverter(bool serializeAsStringArray) : Js
         }
     }
 
-    /// <summary>
-    /// 递归序列化子选项列表
-    private static JArray SerializeSubOptions(List<MaaInterface.MaaInterfaceSelectOption> subOptions)
-    {
-        var array = new JArray();
-        foreach (var option in subOptions)
-        {
-            var obj = new JObject
-            {
-                ["name"] = option.Name,
-                ["index"] = option.Index
-            };
-
-            if (option.Data != null && option.Data.Count > 0)
-            {
-                obj["data"] = JObject.FromObject(option.Data);
-            }
-
-            if (option.SelectedCases != null)
-            {
-                obj["selected_cases"] = new JArray(option.SelectedCases);
-            }
-
-            if (option.SubOptions != null && option.SubOptions.Count > 0)
-            {
-                obj["sub_options"] = SerializeSubOptions(option.SubOptions);
-            }
-
-            array.Add(obj);
-        }
-        return array;
-    }
 }

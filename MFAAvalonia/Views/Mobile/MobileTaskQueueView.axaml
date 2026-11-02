@@ -253,11 +253,14 @@
                                 ContextRequested="TaskItem_OnContextRequested">
                             <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,22">
                                 <CheckBox IsThreeState="True" MinWidth="40"
-                                          IsEnabled="{Binding !IsResourceOptionItem}"
+                                          IsEnabled="{Binding CanToggleCheck}"
                                           IsChecked="{Binding IsCheckedWithNull}" />
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
                                                TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding UnavailableReason}" FontSize="11"
+                                               Foreground="{DynamicResource SukiDangerColor}"
+                                               IsVisible="{Binding HasUnavailableReason}" TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding RunElapsedText}" FontSize="11"
                                                Foreground="{DynamicResource SukiLowText}"
                                                IsVisible="{Binding IsRunElapsedVisible}" />

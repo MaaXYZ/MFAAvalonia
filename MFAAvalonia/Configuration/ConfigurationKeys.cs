@@ -23,6 +23,9 @@ public static class ConfigurationKeys
 
     public const string EnableEdit = "EnableEdit";
     public const string TaskItems = "TaskItems";
+    public const string DeletedTaskNames = "DeletedTaskNames";
+    public const string MissingTaskSessions = "MissingTaskSessions";
+    public const string KeepEmptyTaskQueue = "KeepEmptyTaskQueue";
     public const string ResourceOptionItems = "ResourceOptionItems";
     public const string GlobalOptionItems = "GlobalOptionItems";
     public const string ControllerOptionItems = "ControllerOptionItems";
@@ -226,6 +229,9 @@ public static class ConfigurationKeys
     {
         TaskItems,
         CurrentTasks,
+        DeletedTaskNames,
+        MissingTaskSessions,
+        KeepEmptyTaskQueue,
         InstancePresetKey,
         ResourceOptionItems,
         ControllerOptionItems,

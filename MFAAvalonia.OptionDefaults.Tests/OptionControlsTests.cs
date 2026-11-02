@@ -30,7 +30,7 @@ public sealed class OptionControlsTestSession : IDisposable
     public void Dispose() => Session.Dispose();
 }
 
-public class OptionControlsTests(OptionControlsTestSession fixture) : IClassFixture<OptionControlsTestSession>
+public partial class OptionControlsTests(OptionControlsTestSession fixture) : IClassFixture<OptionControlsTestSession>
 {
     [Fact]
     public Task SingleFieldRestoresLiteralNullWithoutDelayedSaves() => Run(() =>

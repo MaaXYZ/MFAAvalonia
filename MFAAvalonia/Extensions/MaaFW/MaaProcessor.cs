@@ -1,4 +1,4 @@
-﻿using Avalonia.Controls;
+using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
 using Avalonia.Media;
 using MaaFramework.Binding;
@@ -2801,8 +2801,10 @@ public class MaaProcessor
             }
             else
             {
-                var index = value?.Index ?? Math.Max(0, definition.Cases?.FindIndex(x => x.Name == definition.DefaultCase) ?? 0);
-                result[name] = definition.Cases?.ElementAtOrDefault(index)?.Name ?? definition.DefaultCase ?? string.Empty;
+                value ??= new MaaInterface.MaaInterfaceSelectOption { Name = name };
+                if (!OptionSelection.Resolve(definition, value))
+                    throw new InvalidOperationException($"{name}: {value.SelectionError}");
+                result[name] = value.SelectedCase ?? string.Empty;
             }
         }
         return result.ToString(Formatting.None);
@@ -2855,12 +2857,8 @@ public class MaaProcessor
         if (!string.IsNullOrWhiteSpace(customTitle) || !string.IsNullOrWhiteSpace(fallback))
             Instances.RootViewModel.ShowCustomTitleAndFallBack(customTitle, fallback);
 
-        if (Interface != null)
-        {
-            AppendVersionLog(Interface.Version);
-            TasksSource.Clear();
-            LoadTasks(Interface.Task ?? new List<MaaInterface.MaaInterfaceTask>(), dragItem);
-        }
+        if (Interface != null) AppendVersionLog(Interface.Version);
+        if (!LoadTasks(Interface?.Task ?? new List<MaaInterface.MaaInterfaceTask>(), dragItem)) return false;
         return LoadTask();
     }
 
@@ -3189,10 +3187,11 @@ public class MaaProcessor
     public const string NEW_SEPARATOR = "<|||>";
     public const string OLD_SEPARATOR = ":";
 
-    private void LoadTasks(List<MaaInterface.MaaInterfaceTask> tasks, IList<DragItemViewModel>? oldDrags = null)
+    private bool LoadTasks(List<MaaInterface.MaaInterfaceTask> tasks, IList<DragItemViewModel>? oldDrags = null)
     {
         _taskLoader ??= new TaskLoader(Interface, ViewModel!);
-        _taskLoader.LoadTasks(tasks, TasksSource, ref FirstTask, oldDrags);
+        _taskLoader.UpdateInterface(Interface);
+        return _taskLoader.LoadTasks(tasks, TasksSource, ref FirstTask, oldDrags);
     }
 
     private void ResetActionFailedCount()
@@ -3520,7 +3519,21 @@ public class MaaProcessor
             }
             else
             {
-                tasks = FilterExecutableTasks(dragItemViewModels, ignoreCheckedState);
+                // Reloading may replace row objects and resource entries. Rebind each requested
+                // occurrence, keeping intentionally duplicated tasks distinct without new IDs.
+                var fresh = ViewModel?.TaskItemViewModels.Where(item => !item.IsResourceOptionItem).ToList() ?? [];
+                var rebound = new List<DragItemViewModel>();
+                foreach (var requested in dragItemViewModels)
+                {
+                    var name = requested.InterfaceItem?.Name;
+                    var oldMatches = currentTasks.Where(item => !item.IsResourceOptionItem
+                        && item.InterfaceItem?.Name == name).ToList();
+                    var occurrence = oldMatches.IndexOf(requested);
+                    var replacement = occurrence >= 0
+                        ? fresh.Where(item => item.InterfaceItem?.Name == name).ElementAtOrDefault(occurrence) : null;
+                    if (replacement != null) rebound.Add(replacement);
+                }
+                tasks = FilterExecutableTasks(rebound, ignoreCheckedState);
             }
 
             _ = RunTaskChainAsync(tasks, onlyStart, checkUpdate, retainCompletedStates, retainedCompletedTasks);
@@ -3582,25 +3595,43 @@ public class MaaProcessor
         var currentResourceName = ViewModel?.CurrentResource;
         var currentControllerName = ViewModel?.GetCurrentControllerName();
 
-        return source?
-                .Where(task =>
-                {
-                    if (task.IsResourceOptionItem)
-                    {
-                        return false;
-                    }
-
-                    var isSupported = task.SupportsResource(currentResourceName)
-                        && task.SupportsController(currentControllerName);
-
-                    task.IsResourceSupported = task.SupportsResource(currentResourceName);
-                    task.IsControllerSupported = task.SupportsController(currentControllerName);
-                    task.IsTaskSupported = isSupported;
-
-                    return (ignoreCheckedState || task.IsChecked || task.IsCheckedWithNull == null) && isSupported;
-                })
-                .ToList()
-            ?? new List<DragItemViewModel>();
+        if (ViewModel?.IsTaskConfigurationValid != true || !InstanceConfiguration.IsTaskStateValid)
+            return [];
+        bool Applicable(MaaInterface.MaaInterfaceOption definition) =>
+            MaaInterfaceActivationHelper.IsOptionApplicable(Interface, definition, currentControllerName, currentResourceName);
+        static string? InputError(MaaInterface.MaaInterfaceOption definition, MaaInterface.MaaInterfaceSelectOption value)
+        {
+            if (!definition.IsInput) return null;
+            var result = definition.ValidateAllInputs(value.Data);
+            return result.IsValid ? null : result.ErrorMessage;
+        }
+        if (Interface?.Option != null && (ViewModel?.TaskItemViewModels ?? [])
+            .Where(item => item.IsResourceOptionItem)
+            .Any(item => !OptionSelection.ValidateActive(Interface.Option, item.ResourceItem?.SelectOptions, out _, Applicable, InputError)))
+        {
+            LoggerHelper.Warning("全局或资源选项无效，已阻止任务执行，请在选项面板重新选择。");
+            return [];
+        }
+        return source?.Where(task =>
+        {
+            if (task.IsResourceOptionItem) return false;
+            var model = task.InterfaceItem;
+            var exists = model?.Entry != null && MFAAvalonia.ViewModels.UsersControls.Settings.AddTaskDialogViewModel.SpecialActionNames.Contains(model.Entry)
+                || Interface?.Task?.Any(definition => definition.Name == model?.Name) == true;
+            var isSupported = exists && task.IsDefinitionAvailable
+                && task.SupportsResource(currentResourceName) && task.SupportsController(currentControllerName);
+            task.IsResourceSupported = task.SupportsResource(currentResourceName);
+            task.IsControllerSupported = task.SupportsController(currentControllerName);
+            task.IsTaskSupported = isSupported;
+            task.HasValidationError = false;
+            if (Interface?.Option != null && !OptionSelection.ValidateActive(Interface.Option, model?.Option, out _, Applicable, InputError))
+            {
+                task.HasValidationError = true;
+                LoggerHelper.Warning($"任务选项无效，已跳过：{model?.Name}");
+                return false;
+            }
+            return (ignoreCheckedState || task.IsChecked || task.IsCheckedWithNull == null) && isSupported;
+        }).ToList() ?? [];
     }
 
     /// <summary>
@@ -3952,8 +3983,8 @@ public class MaaProcessor
                     taskModels.Merge(param);
                 }
             }
-            // 处理 select/switch 类型
-            else if (selectOption.Index is int index
+            // Resolve the saved case before deriving execution parameters.
+            else if (OptionSelection.Resolve(interfaceOption, selectOption) && selectOption.Index is int index
                      && interfaceOption.Cases is { } cases
                      && index >= 0
                      && index < cases.Count)

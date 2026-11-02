@@ -1,4 +1,5 @@
 using MFAAvalonia.Helper;
+using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Helper.Converters;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -17,6 +18,11 @@ public sealed class InstanceConfiguration
 {
     private readonly string _instanceId;
     private Dictionary<string, object> _config;
+    private readonly string? _configFilePath;
+    private readonly MFAConfiguration? _legacyConfig;
+    private string? _loadError;
+    public string? TaskStateError { get; private set; }
+    public bool IsTaskStateValid => _loadError == null && TaskStateError == null;
     private const int MaxReportedDeserializationFailures = 1024;
     private static readonly object DeserializationFailureLock = new();
     private static readonly HashSet<DeserializationFailureFingerprint> ReportedDeserializationFailures = new();
@@ -31,11 +37,19 @@ public sealed class InstanceConfiguration
         _config = LoadInstanceConfig();
     }
 
+    internal InstanceConfiguration(string instanceId, string configFilePath, MFAConfiguration legacyConfig)
+    {
+        _instanceId = instanceId;
+        _configFilePath = configFilePath;
+        _legacyConfig = legacyConfig;
+        _config = LoadInstanceConfig();
+    }
+
     /// <summary>
     /// 获取实例配置文件路径：config/instances/{id}.json
     /// </summary>
     public string GetConfigFilePath() =>
-        Path.Combine(InstancesDir, $"{_instanceId}.json");
+        _configFilePath ?? Path.Combine(InstancesDir, $"{_instanceId}.json");
 
     public bool ConfigFileExists()
         => File.Exists(GetConfigFilePath());
@@ -48,14 +62,23 @@ public sealed class InstanceConfiguration
     /// </summary>
     private Dictionary<string, object> LoadInstanceConfig()
     {
-        if (!Directory.Exists(InstancesDir))
-            Directory.CreateDirectory(InstancesDir);
-
         var filePath = GetConfigFilePath();
+        _loadError = null;
+        TaskStateError = null;
         if (!File.Exists(filePath))
             return new Dictionary<string, object>();
-
-        return JsonHelper.LoadJson(filePath, new Dictionary<string, object>());
+        try
+        {
+            return JsonConvert.DeserializeObject<Dictionary<string, object>>(File.ReadAllText(filePath),
+                new JsonSerializerSettings { DateParseHandling = DateParseHandling.None, CheckAdditionalContent = true })
+                ?? throw new JsonSerializationException("实例配置必须是 JSON 对象");
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"实例配置读取失败 ({ex.GetType().Name})：{filePath}";
+            LoggerHelper.Error(_loadError);
+            return new Dictionary<string, object>();
+        }
     }
 
     /// <summary>
@@ -63,10 +86,10 @@ public sealed class InstanceConfiguration
     /// </summary>
     private void SaveInstanceConfig()
     {
-        if (_isDeleted) return;
+        if (_isDeleted || _loadError != null) return;
 
-        if (!Directory.Exists(InstancesDir))
-            Directory.CreateDirectory(InstancesDir);
+        var directory = Path.GetDirectoryName(GetConfigFilePath());
+        if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
 
         JsonHelper.SaveJson(
             GetConfigFilePath(),
@@ -75,7 +98,7 @@ public sealed class InstanceConfiguration
             new MaaInterfaceSelectOptionConverter(false));
     }
 
-    private MFAConfiguration GlobalConfig => ConfigurationManager.Current;
+    private MFAConfiguration GlobalConfig => _legacyConfig ?? ConfigurationManager.Current;
 
     private bool ShouldPersistFallbackValue()
     {
@@ -90,7 +113,7 @@ public sealed class InstanceConfiguration
 
     private void PersistFallbackValue(string key, object? value)
     {
-        if (!ShouldPersistFallbackValue())
+        if (!ShouldPersistFallbackValue() || IsTaskStateKey(key))
             return;
 
         SetValue(key, value);
@@ -99,27 +122,275 @@ public sealed class InstanceConfiguration
     public bool ContainsKey(string key)
         => _config.ContainsKey(key) || GlobalConfig.ContainsKey(key);
 
+    private static bool IsTaskStateKey(string key) => key is ConfigurationKeys.TaskItems
+        or ConfigurationKeys.CurrentTasks or ConfigurationKeys.DeletedTaskNames
+        or ConfigurationKeys.MissingTaskSessions or ConfigurationKeys.KeepEmptyTaskQueue
+        or ConfigurationKeys.InstancePresetKey or ConfigurationKeys.GlobalOptionItems
+        or ConfigurationKeys.ResourceOptionItems or ConfigurationKeys.ControllerOptionItems;
+
+    private bool CanWriteKeys(IEnumerable<string> keys)
+    {
+        if (_isDeleted || _loadError != null) return false;
+        if (!keys.Any(IsTaskStateKey)) return true;
+        if (TaskStateError == null && TryReadTaskState(out _, out _)) return true;
+        LoggerHelper.Error($"任务配置未保存：{TaskStateError}");
+        return false;
+    }
+
+    private static object MaterializeTaskItems(string key, object value) =>
+        key == ConfigurationKeys.TaskItems && value is IEnumerable<MaaInterface.MaaInterfaceTask> tasks
+            ? tasks.ToList()
+            : TaskQueueState.IsExtraKey(key) ? TaskQueueState.CloneExtraValue(key, value)
+            : value;
+
+    /// <summary>
+    /// False means invalid, true with IsInitialized=false means genuinely absent.
+    /// Reading legacy values never writes a partial migration or removes its source.
+    /// </summary>
+    public bool TryReadTaskState(out TaskQueueState state, out string? error)
+    {
+        state = new();
+        var currentField = ConfigurationKeys.TaskItems;
+        error = _loadError;
+        if (error != null)
+        {
+            TaskStateError = error;
+            return false;
+        }
+        try
+        {
+            Dictionary<string, object?> ReadExtraValues()
+            {
+                var extras = new Dictionary<string, object?>(StringComparer.Ordinal);
+                foreach (var key in new[] { ConfigurationKeys.GlobalOptionItems,
+                             ConfigurationKeys.ResourceOptionItems, ConfigurationKeys.ControllerOptionItems })
+                {
+                    currentField = key;
+                    if (_config.TryGetValue(key, out var value))
+                    {
+                        extras[key] = TaskQueueState.CloneExtraValue(key, value);
+                        continue;
+                    }
+                    var legacy = GlobalConfig;
+                    if (!legacy.IsLoadedSuccessfully)
+                        throw new JsonSerializationException("Legacy task options could not be loaded.");
+                    var prefixes = _instanceId == "default"
+                        ? new[] { "Instance.default.", string.Empty }
+                        : new[] { $"Instance.{_instanceId}.", "Instance.default.", string.Empty };
+                    foreach (var candidatePrefix in prefixes)
+                    {
+                        if (!legacy.Config.TryGetValue(candidatePrefix + key, out value)) continue;
+                        extras[key] = TaskQueueState.CloneExtraValue(key, value);
+                        break;
+                    }
+                }
+                return extras;
+            }
+
+            var source = _config;
+            var prefix = string.Empty;
+            if (!_config.ContainsKey(ConfigurationKeys.TaskItems))
+            {
+                var legacy = GlobalConfig;
+                if (!legacy.IsLoadedSuccessfully)
+                    throw new JsonSerializationException("旧配置未成功读取，不能初始化任务队列");
+                var prefixes = _instanceId == "default"
+                    ? new[] { $"Instance.{_instanceId}.", string.Empty }
+                    : new[] { $"Instance.{_instanceId}.", "Instance.default.", string.Empty };
+                var legacyPrefix = prefixes.FirstOrDefault(candidate =>
+                    legacy.Config.ContainsKey(candidate + ConfigurationKeys.TaskItems));
+                if (legacyPrefix == null)
+                {
+                    if (_config.Keys.Any(key => IsTaskStateKey(key)
+                            && key != ConfigurationKeys.InstancePresetKey && !TaskQueueState.IsExtraKey(key))
+                        || prefixes.Any(candidate => new[]
+                        {
+                            ConfigurationKeys.CurrentTasks, ConfigurationKeys.DeletedTaskNames,
+                            ConfigurationKeys.MissingTaskSessions, ConfigurationKeys.KeepEmptyTaskQueue,
+                        }.Any(key => legacy.Config.ContainsKey(candidate + key))))
+                        throw new JsonSerializationException("任务状态存在，但 TaskItems 缺失");
+                    state.ExtraValues = ReadExtraValues();
+                    TaskStateError = null;
+                    return true;
+                }
+                source = legacy.Config;
+                prefix = legacyPrefix;
+            }
+
+            bool TryField(string key, out object value)
+            {
+                if (_config.TryGetValue(key, out value!)) return true;
+                return source.TryGetValue(prefix + key, out value!);
+            }
+
+            JToken? Field(string key)
+            {
+                currentField = key;
+                if (!TryField(key, out var value)) return null;
+                if (value == null) return JValue.CreateNull();
+                // Serialize to detach mutable queues/options before synchronization edits them.
+                return JToken.FromObject(value);
+            }
+
+            var tasksToken = Field(ConfigurationKeys.TaskItems);
+            if (tasksToken is not JArray tasksArray || tasksArray.Any(task =>
+                    task is not JObject obj || obj["name"]?.Type != JTokenType.String
+                    || string.IsNullOrWhiteSpace(obj["name"]!.Value<string>())))
+                throw new JsonSerializationException("TaskItems 必须是包含有效任务名称的数组");
+            state.Tasks = tasksArray.ToObject<List<MaaInterface.MaaInterfaceTask>>(
+                JsonSerializer.Create(DeserializeSettings))!;
+            state.IsInitialized = true;
+
+            List<string> StringList(string key)
+            {
+                var token = Field(key);
+                if (token == null) return new();
+                if (token is not JArray array || array.Any(value => value.Type != JTokenType.String))
+                    throw new JsonSerializationException($"{key} 必须是字符串数组");
+                return array.Values<string>().Select(value => value!).ToList();
+            }
+
+            state.CurrentTasks = StringList(ConfigurationKeys.CurrentTasks);
+            state.HasExplicitDeletionState = TryField(ConfigurationKeys.DeletedTaskNames, out _);
+            state.DeletedTaskNames = new(StringList(ConfigurationKeys.DeletedTaskNames), StringComparer.Ordinal);
+
+            var missing = Field(ConfigurationKeys.MissingTaskSessions);
+            if (missing != null)
+            {
+                if (missing is not JObject sessions || sessions.Properties().Any(property =>
+                        string.IsNullOrWhiteSpace(property.Name) || property.Value.Type != JTokenType.String
+                        || string.IsNullOrWhiteSpace(property.Value.Value<string>())))
+                    throw new JsonSerializationException("MissingTaskSessions 必须是任务名称到启动批次的字典");
+                state.MissingTaskSessions = sessions.Properties().ToDictionary(
+                    property => property.Name, property => property.Value.Value<string>()!, StringComparer.Ordinal);
+            }
+
+            var keepEmpty = Field(ConfigurationKeys.KeepEmptyTaskQueue);
+            if (keepEmpty != null && keepEmpty.Type != JTokenType.Boolean)
+                throw new JsonSerializationException("KeepEmptyTaskQueue 必须是布尔值");
+            state.KeepEmpty = keepEmpty?.Value<bool>() ?? state.Tasks.Count == 0;
+
+            var preset = Field(ConfigurationKeys.InstancePresetKey);
+            state.HasPresetKey = preset != null;
+            if (preset != null && preset.Type != JTokenType.String && preset.Type != JTokenType.Null)
+                throw new JsonSerializationException("InstancePresetKey 必须是字符串或 null");
+            state.PresetKey = preset?.Value<string>();
+            state.ExtraValues = ReadExtraValues();
+            TaskStateError = null;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Exception messages may include option data. Never log deserialized payloads.
+            error = $"任务配置读取失败：{currentField} ({ex.GetType().Name})，{GetConfigFilePath()}";
+            TaskStateError = error;
+            LoggerHelper.Error(error);
+            state = new();
+            return false;
+        }
+    }
+
+    /// <summary>Commit the complete queue state, retaining every unrelated configuration key.</summary>
+    public bool TryCommitTaskState(TaskQueueState state, out string? error)
+    {
+        error = TaskStateError ?? _loadError;
+        if (_isDeleted)
+        {
+            error = "实例已经删除，不能保存任务配置";
+            return false;
+        }
+        if (error != null || !TryReadTaskState(out _, out error)) return false;
+        try
+        {
+            if (!state.IsInitialized || state.Tasks.Any(task => task == null || string.IsNullOrWhiteSpace(task.Name))
+                || state.CurrentTasks.Any(name => name == null)
+                || state.DeletedTaskNames.Any(name => name == null)
+                || state.MissingTaskSessions.Any(pair =>
+                    string.IsNullOrWhiteSpace(pair.Key) || string.IsNullOrWhiteSpace(pair.Value)))
+            {
+                error = "待保存的任务状态无效";
+                return false;
+            }
+            var detached = state.Clone();
+            var candidate = new Dictionary<string, object>(_config)
+            {
+                [ConfigurationKeys.TaskItems] = detached.Tasks,
+                [ConfigurationKeys.CurrentTasks] = detached.CurrentTasks,
+                [ConfigurationKeys.DeletedTaskNames] = detached.DeletedTaskNames,
+                [ConfigurationKeys.MissingTaskSessions] = detached.MissingTaskSessions,
+                [ConfigurationKeys.KeepEmptyTaskQueue] = detached.KeepEmpty,
+            };
+            if (detached.HasPresetKey)
+                candidate[ConfigurationKeys.InstancePresetKey] = detached.PresetKey!;
+            foreach (var pair in detached.ExtraValues)
+                candidate[pair.Key] = pair.Value!;
+            if (!TaskConfigurationWriter.TryWrite(GetConfigFilePath(), candidate,
+                    !_config.ContainsKey(ConfigurationKeys.DeletedTaskNames), out error,
+                    new MaaInterfaceSelectAdvancedConverter(false), new MaaInterfaceSelectOptionConverter(false)))
+                return false;
+            _config = candidate;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = $"任务配置提交失败 ({ex.GetType().Name})：{GetConfigFilePath()}";
+            return false;
+        }
+    }
+
     public void SetValue(string key, object? value)
     {
-        if (value == null || _isDeleted) return;
-        _config[key] = value;
+        if (value == null || !CanWriteKeys(new[] { key })) return;
+        var materialized = MaterializeTaskItems(key, value);
+        if (IsTaskStateKey(key))
+        {
+            SaveTaskValues(new Dictionary<string, object> { [key] = materialized });
+            return;
+        }
+        _config[key] = materialized;
         SaveInstanceConfig();
+    }
+
+    private void SaveTaskValues(Dictionary<string, object> values)
+    {
+        var candidate = new Dictionary<string, object>(_config);
+        foreach (var pair in values) candidate[pair.Key] = pair.Value;
+        if (TaskConfigurationWriter.TryWrite(GetConfigFilePath(), candidate,
+                !_config.ContainsKey(ConfigurationKeys.DeletedTaskNames), out var error,
+                new MaaInterfaceSelectAdvancedConverter(false), new MaaInterfaceSelectOptionConverter(false)))
+            _config = candidate;
+        else
+            LoggerHelper.Error(error ?? "任务配置未保存");
     }
 
     public void RemoveValue(string key)
     {
-        if (_isDeleted) return;
+        if (!CanWriteKeys(new[] { key })) return;
+        if (IsTaskStateKey(key))
+        {
+            var candidate = new Dictionary<string, object>(_config);
+            if (!candidate.Remove(key)) return;
+            if (TaskConfigurationWriter.TryWrite(GetConfigFilePath(), candidate,
+                    !_config.ContainsKey(ConfigurationKeys.DeletedTaskNames), out var error,
+                    new MaaInterfaceSelectAdvancedConverter(false), new MaaInterfaceSelectOptionConverter(false)))
+                _config = candidate;
+            else
+                LoggerHelper.Error(error ?? "任务配置未保存");
+            return;
+        }
         if (!_config.Remove(key)) return;
         SaveInstanceConfig();
     }
 
     public T GetValue<T>(string key, T defaultValue)
     {
+        if (_loadError != null) return defaultValue;
         // 优先从实例独立配置读取
         if (_config.TryGetValue(key, out var data))
         {
             var result = ConvertValue<T>(data);
             if (result != null) return result;
+            return defaultValue;
         }
 
         // 回退：从全局 config.json 的旧 scoped key 读取（兼容过渡）
@@ -163,12 +434,14 @@ public sealed class InstanceConfiguration
 
     public T GetValue<T>(string key, T defaultValue, Dictionary<object, T> options)
     {
+        if (_loadError != null) return defaultValue;
         if (_config.TryGetValue(key, out var data))
         {
             if (options != null && options.TryGetValue(data, out var result))
                 return result;
             var converted = ConvertValue<T>(data);
             if (converted != null) return converted;
+            return defaultValue;
         }
 
         // 回退到全局配置
@@ -203,6 +476,7 @@ public sealed class InstanceConfiguration
 
     public T GetValue<T>(string key, T defaultValue, T? noValue = default, params JsonConverter[] valueConverters)
     {
+        if (_loadError != null) return defaultValue;
         if (_config.TryGetValue(key, out var data))
         {
             try
@@ -217,6 +491,7 @@ public sealed class InstanceConfiguration
             catch (Exception e)
             {
                 LoggerHelper.Error($"类型转换失败: {e.Message}");
+                return defaultValue;
             }
         }
 
@@ -252,6 +527,7 @@ public sealed class InstanceConfiguration
 
     public T GetValue<T>(string key, T defaultValue, List<T>? noValue = null, params JsonConverter[] valueConverters)
     {
+        if (_loadError != null) return defaultValue;
         if (_config.TryGetValue(key, out var data))
         {
             try
@@ -266,6 +542,7 @@ public sealed class InstanceConfiguration
             catch (Exception e)
             {
                 LoggerHelper.Error($"类型转换失败: {e.Message}");
+                return defaultValue;
             }
         }
 
@@ -301,8 +578,13 @@ public sealed class InstanceConfiguration
 
     public bool TryGetValue<T>(string key, out T output, params JsonConverter[] valueConverters)
     {
-        if (TryGetLocalValue(key, out output, valueConverters))
-            return true;
+        if (_loadError != null)
+        {
+            output = default!;
+            return false;
+        }
+        if (_config.ContainsKey(key))
+            return TryGetLocalValue(key, out output, valueConverters);
 
         // 回退到全局配置
         var scopedKey = $"Instance.{_instanceId}.{key}";
@@ -700,6 +982,7 @@ public sealed class InstanceConfiguration
     /// </summary>
     public void CopyToNewInstance(string targetInstanceId)
     {
+        if (!TryReadTaskState(out _, out _)) return;
         if (!Directory.Exists(InstancesDir))
             Directory.CreateDirectory(InstancesDir);
 
@@ -718,7 +1001,14 @@ public sealed class InstanceConfiguration
     /// </summary>
     public void SetValues(Dictionary<string, object> values)
     {
-        foreach (var kvp in values)
+        if (!CanWriteKeys(values.Keys)) return;
+        var materialized = values.ToDictionary(pair => pair.Key, pair => MaterializeTaskItems(pair.Key, pair.Value));
+        if (values.Keys.Any(IsTaskStateKey))
+        {
+            SaveTaskValues(materialized);
+            return;
+        }
+        foreach (var kvp in materialized)
         {
             _config[kvp.Key] = kvp.Value;
         }

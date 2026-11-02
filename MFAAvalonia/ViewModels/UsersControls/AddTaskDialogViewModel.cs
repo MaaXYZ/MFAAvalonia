@@ -20,6 +20,7 @@ public partial class AddTaskDialogViewModel : ViewModelBase, IDisposable
 {
     private const string CommonGroupName = "__common__";
     private string _currentSearchKey = string.Empty;
+    private readonly TaskQueueViewModel _taskQueueViewModel;
 
     /// <summary>
     /// 已知的特殊任务 Action 名称集合，用于判断一个任务是否为特殊任务
@@ -59,6 +60,7 @@ public partial class AddTaskDialogViewModel : ViewModelBase, IDisposable
     public AddTaskDialogViewModel(ISukiDialog dialog, ICollection<DragItemViewModel> sources, TaskQueueViewModel taskQueueViewModel)
     {
         Dialog = dialog;
+        _taskQueueViewModel = taskQueueViewModel;
         Sources = sources
             .Where(source => IsTaskAvailableForCurrentContext(source, taskQueueViewModel))
             .Select(s => new AddTaskItemViewModel(s))
@@ -103,7 +105,8 @@ public partial class AddTaskDialogViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     void Add()
     {
-        var vm = Instances.InstanceTabBarViewModel.ActiveTab.TaskQueueViewModel;
+        var vm = _taskQueueViewModel;
+        var candidate = vm.TaskItemViewModels.ToList();
 
         // 添加普通任务
         foreach (var item in Sources)
@@ -115,9 +118,9 @@ public partial class AddTaskDialogViewModel : ViewModelBase, IDisposable
                 if (output.InterfaceItem.Option != null)
                     output.InterfaceItem.Option.ForEach(option =>
                         TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, option));
-                output.OwnerViewModel = vm;
+                output.OwnerViewModel = null;
                 vm.RefreshTaskSupportForCurrentContext(output);
-                vm.TaskItemViewModels.Add(output);
+                candidate.Add(output);
             }
         }
 
@@ -130,15 +133,14 @@ public partial class AddTaskDialogViewModel : ViewModelBase, IDisposable
                 var task = CreateSpecialTask(special);
                 if (task != null)
                 {
-                    task.OwnerViewModel = vm;
+                    task.OwnerViewModel = null;
                     vm.RefreshTaskSupportForCurrentContext(task);
-                    vm.TaskItemViewModels.Add(task);
+                    candidate.Add(task);
                 }
             }
         }
 
-        vm.Processor.InstanceConfiguration.SetValue(ConfigurationKeys.TaskItems,
-            vm.TaskItemViewModels.Where(m => !m.IsResourceOptionItem).Select(model => model.InterfaceItem).ToList());
+        if (!vm.TryApplyTaskEdit(candidate)) return;
 
         var totalAdded = Sources.Sum(s => s.AddCount) + SpecialTasks.Sum(s => s.AddCount);
         if (totalAdded > 0)

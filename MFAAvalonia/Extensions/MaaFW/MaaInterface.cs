@@ -656,8 +656,54 @@ public partial class MaaInterface
         public string? Name { get; set; }
 
         /// <summary>用于 select/switch 类型的选项索引</summary>
+        [JsonIgnore]
+        public int? Index
+        {
+            get => _index;
+            set
+            {
+                _index = value;
+                _invalidIndex = null;
+            }
+        }
+
+        private int? _index;
+        private JToken? _invalidIndex;
+
+        // Keep malformed legacy values recoverable instead of failing the entire task list.
         [JsonProperty("index")]
-        public int? Index { get; set; }
+        private JToken? PersistedIndex
+        {
+            get => _invalidIndex?.DeepClone() ?? (_index.HasValue ? new JValue(_index.Value) : null);
+            set
+            {
+                _index = null;
+                _invalidIndex = null;
+                if (value == null || value.Type == JTokenType.Null) return;
+                if (value.Type == JTokenType.Integer && int.TryParse(value.ToString(), out var index))
+                    _index = index;
+                else
+                    _invalidIndex = value.DeepClone();
+            }
+        }
+
+        /// <summary>Client configuration identity; never emitted by the PI string-list converter.</summary>
+        [JsonProperty("selected_case", NullValueHandling = NullValueHandling.Ignore)]
+        public string? SelectedCase { get; set; }
+
+        [JsonIgnore]
+        public bool HasInvalidIndex => _invalidIndex != null;
+
+        [JsonIgnore]
+        public string? SelectionError { get; set; }
+
+        public void CopySelectionFrom(MaaInterfaceSelectOption source)
+        {
+            _index = source._index;
+            _invalidIndex = source._invalidIndex?.DeepClone();
+            SelectedCase = source.SelectedCase;
+            SelectionError = source.SelectionError;
+        }
 
         /// <summary>用于 checkbox 类型的多选 case 名称列表</summary>
         [JsonProperty("selected_cases")]

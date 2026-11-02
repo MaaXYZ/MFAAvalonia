@@ -666,12 +666,6 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty] private ObservableCollection<DragItemViewModel> _taskItemViewModels = [];
 
-    partial void OnTaskItemViewModelsChanged(ObservableCollection<DragItemViewModel> value)
-    {
-        if (ConfigurationManager.IsSwitching) return;
-        Processor.InstanceConfiguration.SetValue(ConfigurationKeys.TaskItems, value.Where(model => !model.IsResourceOptionItem).Select(model => model.InterfaceItem).ToList());
-    }
-
     [RelayCommand]
     private void Toggle()
     {
@@ -737,10 +731,11 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
         // 验证所有已勾选任务的 input 选项
         var failedTasks = new List<string>();
+        var hasSharedValidationError = false;
         foreach (var task in TaskItemViewModels)
         {
             task.HasValidationError = false;
-            if (!task.IsChecked) continue;
+            if (!task.IsChecked || !task.IsTaskSupported) continue;
 
             var options = task.IsResourceOptionItem
                 ? task.ResourceItem?.SelectOptions
@@ -753,13 +748,14 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             {
                 task.HasValidationError = true;
                 failedTasks.Add($"{task.Name}: {error}");
+                hasSharedValidationError |= task.IsResourceOptionItem;
             }
         }
 
         if (failedTasks.Count > 0)
         {
-            ToastHelper.Warn(LangKeys.CannotStart.ToLocalization(), string.Join("\n", failedTasks));
-            return;
+            ToastHelper.Warn(LangKeys.Tip.ToLocalization(), string.Join("\n", failedTasks));
+            if (hasSharedValidationError) return;
         }
 
         if (PlatformControllerFactory.CanInitializeWithoutDevice && Processor.MaaTasker?.Controller == null)
@@ -788,36 +784,20 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         Processor.Stop(MFATask.MFATaskStatus.STOPPED, action: action);
     }
 
-    private static string? ValidateOptionsRecursive(IEnumerable<MaaInterface.MaaInterfaceSelectOption> options)
+    private string? ValidateOptionsRecursive(IEnumerable<MaaInterface.MaaInterfaceSelectOption> options)
     {
-        foreach (var selectOption in options)
-        {
-            if (string.IsNullOrEmpty(selectOption.Name)) continue;
-            if (MaaProcessor.Interface?.Option?.TryGetValue(selectOption.Name, out var optDef) != true) continue;
-
-            if (optDef.IsInput)
+        if (MaaProcessor.Interface?.Option == null) return null;
+        var controllerName = GetCurrentControllerName();
+        OptionSelection.ValidateActive(MaaProcessor.Interface.Option, options, out var error,
+            definition => MaaInterfaceActivationHelper.IsOptionApplicable(
+                MaaProcessor.Interface, definition, controllerName, CurrentResource),
+            (definition, selection) =>
             {
-                var result = optDef.ValidateAllInputs(selectOption.Data);
-                if (!result.IsValid) return result.ErrorMessage;
-            }
-
-            if (selectOption.SubOptions is { Count: > 0 } && optDef.Cases != null)
-            {
-                var index = selectOption.Index ?? 0;
-                if (index >= 0 && index < optDef.Cases.Count)
-                {
-                    var selectedCase = optDef.Cases[index];
-                    if (selectedCase.Option is { Count: > 0 })
-                    {
-                        var activeNames = new HashSet<string>(selectedCase.Option);
-                        var subError = ValidateOptionsRecursive(
-                            selectOption.SubOptions.Where(s => activeNames.Contains(s.Name ?? string.Empty)));
-                        if (subError != null) return subError;
-                    }
-                }
-            }
-        }
-        return null;
+                if (!definition.IsInput) return null;
+                var result = definition.ValidateAllInputs(selection.Data);
+                return result.IsValid ? null : result.ErrorMessage;
+            });
+        return error;
     }
 
     private static void EnsureDefaultOptionValues(IEnumerable<MaaInterface.MaaInterfaceSelectOption>? options)
@@ -834,8 +814,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     private void SelectAll()
     {
         using var _ = BeginUiLogScope("SelectAllTasks");
-        foreach (var task in TaskItemViewModels)
-            task.IsChecked = true;
+        ApplyTaskCheckState(true);
         LoggerHelper.UserAction("全选任务", $"taskCount={TaskItemViewModels.Count}",
             operation: "SelectAllTasks", instanceId: Processor.InstanceId, instanceName: InstanceName);
     }
@@ -844,8 +823,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     private void SelectNone()
     {
         using var _ = BeginUiLogScope("SelectNoneTasks");
-        foreach (var task in TaskItemViewModels)
-            task.IsChecked = false;
+        ApplyTaskCheckState(false);
         LoggerHelper.UserAction("取消全选任务", $"taskCount={TaskItemViewModels.Count}",
             operation: "SelectNoneTasks", instanceId: Processor.InstanceId, instanceName: InstanceName);
     }
@@ -925,12 +903,11 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
         var presetTaskBindings = new List<(MaaInterface.MaaInterfacePresetTask PresetTask, DragItemViewModel DragItem)>();
 
-        // 重新构建 TaskItemViewModels
-        TaskItemViewModels.Clear();
+        var candidate = new List<DragItemViewModel>();
 
         // 先恢复资源选项项（保持原有顺序）
         foreach (var item in resourceOptionItems)
-            TaskItemViewModels.Add(item);
+            candidate.Add(item);
 
         // 再按预设顺序添加任务项，并记录“预设项 -> 新克隆任务项”的一一映射
         foreach (var presetTask in preset.Task.Where(t => !string.IsNullOrEmpty(t.Name)))
@@ -938,14 +915,14 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             if (!templateDict.TryGetValue(presetTask.Name!, out var templateVm)) continue;
 
             var cloned = templateVm.Clone();
-            cloned.OwnerViewModel = this;
-            TaskItemViewModels.Add(cloned);
+            cloned.OwnerViewModel = null;
+            candidate.Add(cloned);
             presetTaskBindings.Add((presetTask, cloned));
         }
 
         // 最后把特殊任务放到列表末尾
         foreach (var special in specialTasks)
-            TaskItemViewModels.Add(special);
+            candidate.Add(special);
 
         foreach (var (presetTask, dragItem) in presetTaskBindings)
         {
@@ -1024,7 +1001,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                         var fullOption = optionValue.ToObject<MaaInterface.MaaInterfaceSelectOption>();
                         if (fullOption != null)
                         {
-                            selectOption.Index = fullOption.Index;
+                            selectOption.CopySelectionFrom(fullOption);
                             selectOption.SelectedCases = fullOption.SelectedCases;
                             selectOption.Data = fullOption.Data;
                             selectOption.SubOptions = fullOption.SubOptions;
@@ -1038,7 +1015,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                         if (caseName != null && interfaceOption.Cases != null)
                         {
                             var idx = interfaceOption.Cases.FindIndex(c => c.Name == caseName);
-                            if (idx >= 0) selectOption.Index = idx;
+                            if (idx >= 0) OptionSelection.SelectIndex(interfaceOption, selectOption, idx);
                         }
                     }
                 }
@@ -1052,23 +1029,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             }
         }
 
-        var savedTaskItems = TaskItemViewModels
-            .Where(model => !model.IsResourceOptionItem)
-            .Select(model => model.InterfaceItem)
-            .ToList();
-        var currentTaskKeys = savedTaskItems
-            .Where(task => !string.IsNullOrWhiteSpace(task?.Name) && !string.IsNullOrWhiteSpace(task.Entry))
-            .Select(task => $"{task!.Name}{TaskLoader.NEW_SEPARATOR}{task.Entry}")
-            .Distinct()
-            .ToList();
-
-        Processor.InstanceConfiguration.SetValue(ConfigurationKeys.TaskItems, savedTaskItems);
-        Processor.InstanceConfiguration.SetValue(ConfigurationKeys.CurrentTasks, currentTaskKeys);
-
-        if (!string.IsNullOrWhiteSpace(preset.Name))
-            Processor.InstanceConfiguration.SetValue(ConfigurationKeys.InstancePresetKey, preset.Name);
-        else
-            Processor.InstanceConfiguration.RemoveValue(ConfigurationKeys.InstancePresetKey);
+        TryApplyTaskEdit(candidate, resetHistory: true, setPreset: true, presetKey: preset.Name);
     }
 
     private void RefreshPresetOptionRuntimeState(MaaInterface.MaaInterfaceSelectOption option)
@@ -1096,6 +1057,8 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
         if (interfaceOption.IsCheckbox)
             option.SelectedCases ??= new List<string>(interfaceOption.DefaultCases ?? new List<string>());
+        else if (!interfaceOption.IsInput)
+            OptionSelection.Resolve(interfaceOption, option);
 
         if (option.SubOptions == null) return;
 
@@ -1205,32 +1168,26 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 && ViewModels.UsersControls.Settings.AddTaskDialogViewModel.SpecialActionNames.Contains(t.InterfaceItem.Entry!))
             .ToList();
 
-        // 清空当前任务列表
-        TaskItemViewModels.Clear();
+        var candidate = TaskItemViewModels.Where(item => item.IsResourceOptionItem).ToList();
 
         // 从 TasksSource 重新填充任务（TasksSource 包含 interface 中定义的原始任务）
         foreach (var item in Processor.TasksSource)
         {
             // 克隆任务以避免引用问题
             var resetItem = item.Clone();
-            resetItem.OwnerViewModel = this;
+            resetItem.OwnerViewModel = null;
             EnsureDefaultOptionValues(resetItem.InterfaceItem?.Option);
-            TaskItemViewModels.Add(resetItem);
+            candidate.Add(resetItem);
         }
 
         // 恢复特殊任务到列表末尾
         foreach (var special in specialTasks)
         {
-            special.OwnerViewModel = this;
-            EnsureDefaultOptionValues(special.InterfaceItem?.Option);
-            TaskItemViewModels.Add(special);
+            candidate.Add(special);
         }
 
-        // 更新任务的资源支持状态
+        if (!TryApplyTaskEdit(candidate, resetHistory: true, setPreset: true)) return;
         UpdateTasksForResource(CurrentResource);
-
-        // 保存配置
-        Processor.InstanceConfiguration.SetValue(ConfigurationKeys.TaskItems, TaskItemViewModels.ToList().Select(model => model.InterfaceItem));
         LoggerHelper.UserAction("重置任务列表", $"taskCount={TaskItemViewModels.Count}",
             operation: "ResetTasks", instanceId: Processor.InstanceId, instanceName: InstanceName);
     }
@@ -3155,50 +3112,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             instanceConfig.SetValue(ConfigurationKeys.Resource, CurrentResource);
         }
 
-        instanceConfig.SetValue(
-            ConfigurationKeys.TaskItems,
-            TaskItemViewModels
-                .Where(m => !m.IsResourceOptionItem)
-                .Select(m => m.InterfaceItem)
-                .ToList());
-
-        PersistResourceOptionConfiguration(instanceConfig);
-    }
-
-    private void PersistResourceOptionConfiguration(InstanceConfiguration instanceConfig)
-    {
-        var allItems = TaskItemViewModels
-            .Where(m => m.IsResourceOptionItem && m.ResourceItem?.SelectOptions != null)
-            .ToList();
-
-        var globalItem = allItems.FirstOrDefault(m => m.ResourceItem?.Name == "__GlobalOption__");
-        if (globalItem?.ResourceItem?.SelectOptions != null)
-        {
-            instanceConfig.SetValue(
-                ConfigurationKeys.GlobalOptionItems,
-                globalItem.ResourceItem.SelectOptions);
-        }
-
-        const string controllerPrefix = "__ControllerOption__";
-        var controllerOptionItems = allItems
-            .Where(m => m.ResourceItem?.Name?.StartsWith(controllerPrefix) == true)
-            .ToDictionary(
-                m => m.ResourceItem!.Name![controllerPrefix.Length..],
-                m => m.ResourceItem!.SelectOptions!);
-        if (controllerOptionItems.Count > 0)
-        {
-            instanceConfig.SetValue(
-                ConfigurationKeys.ControllerOptionItems,
-                controllerOptionItems);
-        }
-
-        var resourceOptionItems = allItems
-            .Where(m => m.ResourceItem?.Name != "__GlobalOption__" &&
-                        m.ResourceItem?.Name?.StartsWith(controllerPrefix) != true)
-            .ToDictionary(
-                m => m.ResourceItem!.Name ?? string.Empty,
-                m => m.ResourceItem!.SelectOptions!);
-        instanceConfig.SetValue(ConfigurationKeys.ResourceOptionItems, resourceOptionItems);
+        TrySaveTaskItems();
     }
 
     /// <summary>
@@ -3450,9 +3364,10 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 var savedOption = new MaaInterface.MaaInterfaceSelectOption
                 {
                     Name = saved.Name,
-                    Index = saved.Index,
                     SelectedCases = saved.SelectedCases != null ? new List<string>(saved.SelectedCases) : null,
+                    SubOptions = saved.SubOptions != null ? CloneSubOptions(saved.SubOptions) : null,
                 };
+                savedOption.CopySelectionFrom(saved);
                 savedOption.CopyInputDataFrom(saved);
                 TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, savedOption);
                 return savedOption;
@@ -3521,6 +3436,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 // 优先使用已有的值（保留运行时的修改）
                 if (existingDict.TryGetValue(optionName, out var existingOpt))
                 {
+                    TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, existingOpt);
                     return existingOpt;
                 }
 
@@ -3531,11 +3447,12 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                     var clonedOpt = new MaaInterface.MaaInterfaceSelectOption
                     {
                         Name = savedOpt.Name,
-                        Index = savedOpt.Index,
                         SubOptions = savedOpt.SubOptions != null ? CloneSubOptions(savedOpt.SubOptions) : null,
                         SelectedCases = savedOpt.SelectedCases != null ? new List<string>(savedOpt.SelectedCases) : null,
                     };
+                    clonedOpt.CopySelectionFrom(savedOpt);
                     clonedOpt.CopyInputDataFrom(savedOpt);
+                    TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, clonedOpt);
                     return clonedOpt;
                 }
 
@@ -3559,10 +3476,10 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             var clone = new MaaInterface.MaaInterfaceSelectOption
             {
                 Name = opt.Name,
-                Index = opt.Index,
                 SubOptions = opt.SubOptions != null ? CloneSubOptions(opt.SubOptions) : null,
                 SelectedCases = opt.SelectedCases != null ? new List<string>(opt.SelectedCases) : null
             };
+            clone.CopySelectionFrom(opt);
             clone.CopyInputDataFrom(opt);
             return clone;
         }).ToList();

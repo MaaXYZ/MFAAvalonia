@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
@@ -97,6 +97,7 @@ public partial class TaskQueueView : UserControl
     }
 
     private TaskQueueViewModel? _subscribedViewModel;
+    private INotifyCollectionChanged? _subscribedTaskItems;
 
     private void UpdateViewModelSubscription(TaskQueueViewModel? newVm)
     {
@@ -104,8 +105,10 @@ public partial class TaskQueueView : UserControl
         {
             _subscribedViewModel.PropertyChanged -= OnTaskQueueViewModelPropertyChanged;
             _subscribedViewModel.SetOptionRequested -= OnSetOptionRequested;
-            _subscribedViewModel.TaskItemViewModels.CollectionChanged -= OnTaskItemsCollectionChanged;
         }
+        if (_subscribedTaskItems != null)
+            _subscribedTaskItems.CollectionChanged -= OnTaskItemsCollectionChanged;
+        _subscribedTaskItems = null;
 
         _subscribedViewModel = newVm;
 
@@ -113,7 +116,8 @@ public partial class TaskQueueView : UserControl
         {
             _subscribedViewModel.PropertyChanged += OnTaskQueueViewModelPropertyChanged;
             _subscribedViewModel.SetOptionRequested += OnSetOptionRequested;
-            _subscribedViewModel.TaskItemViewModels.CollectionChanged += OnTaskItemsCollectionChanged;
+            _subscribedTaskItems = _subscribedViewModel.TaskItemViewModels;
+            _subscribedTaskItems.CollectionChanged += OnTaskItemsCollectionChanged;
             Dispatcher.UIThread.Post(ClearUnsupportedSelection, DispatcherPriority.Background);
             Dispatcher.UIThread.Post(ApplyLiveViewCardState, DispatcherPriority.Background);
         }
@@ -234,7 +238,7 @@ public partial class TaskQueueView : UserControl
 
         foreach (var container in TaskListBox.GetVisualDescendants().OfType<ListBoxItem>())
         {
-            container.IsVisible = container.DataContext is not DragItemViewModel item || item.IsTaskSupported;
+            container.IsVisible = container.DataContext is not DragItemViewModel item || item.IsTaskVisible;
         }
     }
 
@@ -355,9 +359,9 @@ public partial class TaskQueueView : UserControl
             }
         }
 
-        vm.TaskItemViewModels.Insert(insertIndex, output);
-        vm.Processor.InstanceConfiguration.SetValue(ConfigurationKeys.TaskItems,
-            vm.TaskItemViewModels.Where(m => !m.IsResourceOptionItem).Select(model => model.InterfaceItem).ToList());
+        var candidate = vm.TaskItemViewModels.ToList();
+        candidate.Insert(insertIndex, output);
+        if (!vm.TryApplyTaskEdit(candidate)) return;
         listBox.SelectedItem = output;
         ToastHelper.Info(LangKeys.Tip.ToLocalization(), LangKeys.TaskAddedToast.ToLocalizationFormatted(false, output.Name));
     }
@@ -412,13 +416,12 @@ public partial class TaskQueueView : UserControl
                 interfaceItem.Remark,
                 (displayNameOverride, remark) =>
                 {
-                    interfaceItem.DisplayNameOverride = string.IsNullOrWhiteSpace(displayNameOverride) ? null : displayNameOverride;
-                    interfaceItem.Remark = string.IsNullOrWhiteSpace(remark) ? null : remark;
-                    taskItemViewModel.RefreshDisplayName();
-
-                    vm.Processor.InstanceConfiguration.SetValue(ConfigurationKeys.TaskItems,
-                        vm.TaskItemViewModels.Where(m => !m.IsResourceOptionItem)
-                            .Select(model => model.InterfaceItem));
+                    var edited = taskItemViewModel.Clone();
+                    edited.CopyRuntimeStateFrom(taskItemViewModel);
+                    edited.InterfaceItem!.DisplayNameOverride = string.IsNullOrWhiteSpace(displayNameOverride) ? null : displayNameOverride;
+                    edited.InterfaceItem.Remark = string.IsNullOrWhiteSpace(remark) ? null : remark;
+                    edited.RefreshDisplayName();
+                    vm.TryApplyTaskEdit(vm.TaskItemViewModels.Select(item => ReferenceEquals(item, taskItemViewModel) ? edited : item));
                 }))
             .TryShow();
     }
@@ -443,25 +446,10 @@ public partial class TaskQueueView : UserControl
         }
 
         var deletedName = taskItemViewModel.Name;
-        vm.TaskItemViewModels.RemoveAt(index);
+        var candidate = vm.TaskItemViewModels.ToList();
+        candidate.RemoveAt(index);
+        if (!vm.TryApplyTaskEdit(candidate, deletedName: taskItemViewModel.InterfaceItem?.Name)) return;
         this.SetOption(taskItemViewModel, false);
-
-        var instanceConfig = vm.Processor.InstanceConfiguration;
-
-        // 保存 TaskItems 时过滤掉 resource option items（与 SaveConfiguration 保持一致）
-        instanceConfig.SetValue(ConfigurationKeys.TaskItems,
-            vm.TaskItemViewModels.Where(m => !m.IsResourceOptionItem).Select(m => m.InterfaceItem));
-
-        // 同步更新 CurrentTasks：确保被删除任务的 key 保留在 CurrentTasks 中，
-        // 这样 SynchronizeTaskItems 的 deletedTaskKeys 计算（currentTaskSet - existingKeys）
-        // 才能正确识别该任务是"用户已见过但手动删除"的，而非"从未见过的新任务"
-        var deletedKey = $"{taskItemViewModel.InterfaceItem?.Name}{TaskLoader.NEW_SEPARATOR}{taskItemViewModel.InterfaceItem?.Entry}";
-        var currentTasks = instanceConfig.GetValue(ConfigurationKeys.CurrentTasks, new List<string>()) ?? new List<string>();
-        if (!currentTasks.Contains(deletedKey))
-        {
-            currentTasks.Add(deletedKey);
-            instanceConfig.SetValue(ConfigurationKeys.CurrentTasks, currentTasks);
-        }
 
         vm.ShowSettings = false;
         ToastHelper.Info(LangKeys.Tip.ToLocalization(), LangKeys.TaskDeletedToast.ToLocalizationFormatted(false, deletedName));
@@ -1612,7 +1600,7 @@ public partial class TaskQueueView : UserControl
 
         var button = new ToggleSwitch
         {
-            IsChecked = option.Index == yesValue,
+            IsChecked = OptionSelection.Resolve(interfaceOption, option) ? option.Index == yesValue : null,
             Classes =
             {
                 "Switch"
@@ -1665,13 +1653,13 @@ public partial class TaskQueueView : UserControl
 
         button.IsCheckedChanged += (_, _) =>
         {
-            option.Index = button.IsChecked == true ? yesValue : noValue;
-            UpdateSubOptions(option.Index ?? 0);
+            if (!OptionSelection.SelectIndex(interfaceOption, option, button.IsChecked == true ? yesValue : noValue)) return;
+            UpdateSubOptions(option.Index ?? -1);
             SaveConfiguration();
         };
 
         // 初始化时显示子配置项
-        UpdateSubOptions(option.Index ?? 0);
+        UpdateSubOptions(option.SelectionError == null ? option.Index ?? -1 : -1);
 
         // 初始化图标
         interfaceOption.InitializeIcon();
@@ -1928,7 +1916,7 @@ public partial class TaskQueueView : UserControl
                 return itemGrid;
             }),
 
-            SelectedIndex = option.Index ?? 0,
+            SelectedIndex = OptionSelection.Resolve(interfaceOption, option) ? option.Index ?? -1 : -1,
         };
 
 
@@ -1979,13 +1967,13 @@ public partial class TaskQueueView : UserControl
                 ? interfaceOption.Cases.FindIndex(c => c.Name == selectedCase.Name)
                 : combo.SelectedIndex;
 
-            option.Index = resolvedIndex;
+            if (!OptionSelection.SelectIndex(interfaceOption, option, resolvedIndex)) return;
             UpdateSubOptions(resolvedIndex);
             SaveConfiguration();
         };
 
 // 初始化时显示子配置项
-        UpdateSubOptions(option.Index ?? 0);
+        UpdateSubOptions(option.SelectionError == null ? option.Index ?? -1 : -1);
 
         ComboBoxExtensions.SetDisableNavigationOnLostFocus(combo, true);
         Grid.SetColumn(combo, 1);
@@ -2127,47 +2115,9 @@ public partial class TaskQueueView : UserControl
     {
         var selectOption = new MaaInterface.MaaInterfaceSelectOption
         {
-            Name = optionName,
-            Index = 0
+            Name = optionName
         };
-
-        // 获取对应的 interfaceOption 定义
-        if (MaaProcessor.Interface?.Option?.TryGetValue(optionName, out var interfaceOption) == true)
-        {
-            if (interfaceOption.IsInput)
-            {
-                // input 类型：初始化 Data 字典
-                selectOption.Data = new Dictionary<string, string?>();
-                if (interfaceOption.Inputs != null)
-                {
-                    foreach (var input in interfaceOption.Inputs)
-                    {
-                        if (!string.IsNullOrEmpty(input.Name))
-                        {
-                            selectOption.Data[input.Name] = input.Default ?? string.Empty;
-                        }
-                    }
-                }
-            }
-            else if (interfaceOption.IsCheckbox)
-            {
-                // checkbox 类型：初始化 SelectedCases
-                selectOption.SelectedCases = new List<string>(interfaceOption.DefaultCases ?? new List<string>());
-            }
-            else
-            {
-                // select/switch 类型：设置默认索引
-                if (!string.IsNullOrEmpty(interfaceOption.DefaultCase) && interfaceOption.Cases != null)
-                {
-                    var defaultCaseIndex = interfaceOption.Cases.FindIndex(c => c.Name == interfaceOption.DefaultCase);
-                    if (defaultCaseIndex >= 0)
-                    {
-                        selectOption.Index = defaultCaseIndex;
-                    }
-                }
-            }
-        }
-
+        TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, selectOption);
         return selectOption;
     }
 
@@ -2207,58 +2157,7 @@ public partial class TaskQueueView : UserControl
 
     private void SaveConfiguration()
     {
-        if (DataContext is not TaskQueueViewModel vm) return;
-
-        var instanceConfig = vm.Processor.InstanceConfiguration;
-
-        // 保存普通任务项配置
-        instanceConfig.SetValue(ConfigurationKeys.TaskItems,
-            vm.TaskItemViewModels.Where(m => !m.IsResourceOptionItem).Select(m => m.InterfaceItem));
-
-        // 保存资源选项配置
-        SaveResourceOptionConfiguration(vm);
-    }
-
-    /// <summary>
-    /// 保存资源选项配置到配置文件（全局/控制器/资源选项分别保存到各自的 key）
-    /// </summary>
-    private void SaveResourceOptionConfiguration(TaskQueueViewModel vm)
-    {
-        var allItems = vm.TaskItemViewModels
-            .Where(m => m.IsResourceOptionItem && m.ResourceItem?.SelectOptions != null)
-            .ToList();
-
-        // 保存全局选项到 GlobalOptionItems
-        var globalItem = allItems.FirstOrDefault(m => m.ResourceItem?.Name == "__GlobalOption__");
-        if (globalItem?.ResourceItem?.SelectOptions != null)
-        {
-            vm.Processor.InstanceConfiguration.SetValue(
-                ConfigurationKeys.GlobalOptionItems,
-                globalItem.ResourceItem.SelectOptions);
-        }
-
-        // 保存控制器选项到 ControllerOptionItems（Name 以 "__ControllerOption__" 开头）
-        const string controllerPrefix = "__ControllerOption__";
-        var controllerOptionItems = allItems
-            .Where(m => m.ResourceItem?.Name?.StartsWith(controllerPrefix) == true)
-            .ToDictionary(
-                m => m.ResourceItem!.Name![controllerPrefix.Length..],
-                m => m.ResourceItem!.SelectOptions!);
-        if (controllerOptionItems.Count > 0)
-        {
-            vm.Processor.InstanceConfiguration.SetValue(
-                ConfigurationKeys.ControllerOptionItems,
-                controllerOptionItems);
-        }
-
-        // 保存普通资源选项到 ResourceOptionItems（排除全局和控制器选项）
-        var resourceOptionItems = allItems
-            .Where(m => m.ResourceItem?.Name != "__GlobalOption__" &&
-                        m.ResourceItem?.Name?.StartsWith(controllerPrefix) != true)
-            .ToDictionary(
-                m => m.ResourceItem!.Name ?? string.Empty,
-                m => m.ResourceItem!.SelectOptions!);
-        vm.Processor.InstanceConfiguration.SetValue(ConfigurationKeys.ResourceOptionItems, resourceOptionItems);
+        if (DataContext is TaskQueueViewModel vm) vm.TrySaveTaskItems();
     }
 
     public static string ConvertCustomMarkup(string input, string outputFormat = "html")
@@ -2496,6 +2395,17 @@ public partial class TaskQueueView : UserControl
 
     private void OnTaskQueueViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(TaskQueueViewModel.TaskItemViewModels))
+        {
+            if (_subscribedTaskItems != null)
+                _subscribedTaskItems.CollectionChanged -= OnTaskItemsCollectionChanged;
+            _subscribedTaskItems = _subscribedViewModel?.TaskItemViewModels;
+            if (_subscribedTaskItems != null)
+                _subscribedTaskItems.CollectionChanged += OnTaskItemsCollectionChanged;
+            ClearOptionPanelCaches();
+            Dispatcher.UIThread.Post(ClearUnsupportedSelection, DispatcherPriority.Background);
+            Dispatcher.UIThread.Post(ReopenActiveTaskPanel, DispatcherPriority.Background);
+        }
         if (e.PropertyName == nameof(TaskQueueViewModel.EnableLiveView))
         {
             ApplyLiveViewCardState();
