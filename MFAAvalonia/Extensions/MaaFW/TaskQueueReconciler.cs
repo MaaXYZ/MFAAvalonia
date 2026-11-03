@@ -97,11 +97,13 @@ public static class TaskQueueReconciler
         if (removed.Count > 0 && retained.Count == 0) state.KeepEmpty = false;
         state.Tasks = retained;
 
-        HashSet<string>? allowed = null;
-        if (!string.IsNullOrWhiteSpace(state.PresetKey))
-            allowed = catalogue.Preset?.FirstOrDefault(preset => preset.Name == state.PresetKey)?.Task?
-                .Where(task => task.Name != null).Select(task => task.Name!).ToHashSet(StringComparer.Ordinal)
-                ?? new HashSet<string>(StringComparer.Ordinal);
+        var presetOrder = string.IsNullOrWhiteSpace(state.PresetKey) ? null
+            : catalogue.Preset?.FirstOrDefault(preset => preset.Name == state.PresetKey)?.Task?
+                .Where(task => task.Name != null && definitions.ContainsKey(task.Name))
+                .Select(task => task.Name!).ToList();
+        var allowed = string.IsNullOrWhiteSpace(state.PresetKey) ? null
+            : presetOrder?.ToHashSet(StringComparer.Ordinal) ?? new HashSet<string>(StringComparer.Ordinal);
+        var catalogueOrder = catalogue.Task.Select(task => task.Name!).ToList();
 
         var present = state.Tasks.Where(task => !IsSpecial(task) && task.Name != null).Select(task => task.Name!).ToHashSet(StringComparer.Ordinal);
         if (!state.KeepEmpty || !state.IsInitialized || state.Tasks.Count > 0)
@@ -113,7 +115,11 @@ public static class TaskQueueReconciler
                 if (present.Contains(name) || seen.Contains(name) || state.DeletedTaskNames.Contains(name)
                     || (allowed != null && !allowed.Contains(name))) continue;
                 var newTask = MergeDefinition(null, definition, catalogue);
-                InsertBesideNeighbour(state.Tasks, newTask, catalogue.Task, definitionIndex, specialEntries);
+                // Automatic seeding still adds one row per name, at its first preset occurrence.
+                var presetIndex = presetOrder?.IndexOf(name) ?? -1;
+                InsertBesideNeighbour(state.Tasks, newTask,
+                    presetIndex >= 0 ? presetOrder! : catalogueOrder,
+                    presetIndex >= 0 ? presetIndex : definitionIndex, specialEntries, presetIndex >= 0);
                 present.Add(name);
                 seen.Add(name);
             }
@@ -138,21 +144,35 @@ public static class TaskQueueReconciler
     }
 
     private static void InsertBesideNeighbour(List<MaaInterface.MaaInterfaceTask> queue,
-        MaaInterface.MaaInterfaceTask task, List<MaaInterface.MaaInterfaceTask> definitions, int index,
-        IReadOnlySet<string> specialEntries)
+        MaaInterface.MaaInterfaceTask task, IReadOnlyList<string> order, int index,
+        IReadOnlySet<string> specialEntries, bool usePresetOccurrences)
     {
+        int FindNeighbour(int referenceIndex, bool preceding)
+        {
+            var name = order[referenceIndex];
+            bool Matches(MaaInterface.MaaInterfaceTask item) => item.Name == name
+                && (item.Entry == null || !specialEntries.Contains(item.Entry));
+            if (usePresetOccurrences && order.Count(candidate => candidate == name) > 1)
+            {
+                // Repeated preset entries are distinct positions; do not collapse them by name.
+                var occurrence = order.Take(referenceIndex + 1).Count(candidate => candidate == name);
+                for (var position = 0; position < queue.Count; position++)
+                    if (Matches(queue[position]) && --occurrence == 0) return position;
+                return -1;
+            }
+            return preceding ? queue.FindLastIndex(Matches) : queue.FindIndex(Matches);
+        }
+
         for (var previous = index - 1; previous >= 0; previous--)
         {
-            var position = queue.FindLastIndex(item => item.Name == definitions[previous].Name
-                && (item.Entry == null || !specialEntries.Contains(item.Entry)));
+            var position = FindNeighbour(previous, true);
             if (position < 0) continue;
             queue.Insert(position + 1, task);
             return;
         }
-        for (var next = index + 1; next < definitions.Count; next++)
+        for (var next = index + 1; next < order.Count; next++)
         {
-            var position = queue.FindIndex(item => item.Name == definitions[next].Name
-                && (item.Entry == null || !specialEntries.Contains(item.Entry)));
+            var position = FindNeighbour(next, false);
             if (position < 0) continue;
             queue.Insert(position, task);
             return;

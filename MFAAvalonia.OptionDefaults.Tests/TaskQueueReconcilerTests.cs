@@ -35,6 +35,86 @@ public class TaskQueueReconcilerTests
         Assert.Equal(after.Split(','), result.State.Tasks.Select(task => task.Name));
     }
 
+    [Theory]
+    [InlineData("A,B", "A,B,N", "A,N,B", "A,N,B")]
+    [InlineData("B,A,C", "A,B,C,N", "A,N,B,C", "B,A,N,C")]
+    [InlineData("A,A,B", "A,B,N", "A,N,A,B", "A,N,A,B")]
+    [InlineData("A,A,B", "A,B,N", "A,A,N,B", "A,A,N,B")]
+    [InlineData("A,A,B", "A,B,N", "N,A,A,B", "N,A,A,B")]
+    [InlineData("A,B", "A,B,N", "A,A,N,B", "A,N,B")]
+    [InlineData("A,X,B", "A,X,B,N", "A,X,A,N,B", "A,X,N,B")]
+    [InlineData("A,B,A", "A,B,N", "A,N,B", "A,B,A,N")]
+    [InlineData("A,B", "A,B,N", "A,N,B,N", "A,N,B")]
+    [InlineData("A,B", "A,B,N2,N1", "A,N1,N2,B", "A,N1,N2,B")]
+    [InlineData("A,B", "A,N,B", "N", "A,B,N")]
+    public void InsertsBesidePresetOccurrencesWithoutReorderingSavedRows(
+        string before, string definitions, string presetOrder, string after)
+    {
+        var state = Saved(before.Split(','));
+        for (var index = 0; index < state.Tasks.Count; index++) state.Tasks[index].Remark = $"saved-{index}";
+        state.PresetKey = "seed";
+        var catalog = Catalogue(definitions.Split(','));
+        catalog.Preset = [new()
+        {
+            Name = "seed",
+            Task = presetOrder.Split(',').Select(name => new MaaInterface.MaaInterfacePresetTask { Name = name }).ToList()
+        }];
+
+        var result = Reconcile(state, catalog);
+
+        Assert.Equal(after.Split(','), result.State.Tasks.Select(task => task.Name));
+        Assert.Equal(state.Tasks.Select(task => task.Remark),
+            result.State.Tasks.Where(task => task.Remark != null).Select(task => task.Remark));
+        Assert.Equal(after.Split(','), Reconcile(result.State, catalog).State.Tasks.Select(task => task.Name));
+    }
+
+    [Fact]
+    public void Mfabd2ToolPresetInsertsLastCatalogueTaskBetweenItsRealPresetNeighbours()
+    {
+        // Task/preset order from sunyink/MFABD2 assets/interface.json at 637c4c26 (2026-11-03).
+        var catalog = Catalogue(
+            "多存档", "[全局]启动脚本(置顶)", "[全局]启动脚本(置顶)PC", "[执行]快速狩猎扫荡",
+            "[执行]地图采集[单章]", "[执行]装备制作&炼制日常", "[执行]白嫖抽卡", "[执行]竞技场",
+            "[执行]赛季活动快速战斗", "[执行]肉鸽塔每日快速战斗", "[执行]周常任务", "[领取]日常任务",
+            "[领取]任务页(每日/每周)", "[领取]活动页奖励", "[领取]通行证奖励", "[领取]领取邮件",
+            "[执行]地图采集[完整]", "[执行]商店套利", "[半自动]自动钓鱼", "[全局]结束游戏",
+            "[手动]生活技能刷级", "[特殊]半自动操作");
+        string[] presetOrder = ["多存档", "[半自动]自动钓鱼", "[特殊]半自动操作", "[手动]生活技能刷级"];
+        const string added = "[特殊]半自动操作";
+        catalog.Preset = [new()
+        {
+            Name = "小工具",
+            Task = presetOrder.Select(name => new MaaInterface.MaaInterfacePresetTask { Name = name }).ToList()
+        }];
+        var state = Saved(presetOrder.Where(name => name != added).ToArray());
+        state.PresetKey = "小工具";
+
+        var result = Reconcile(state, catalog);
+
+        Assert.Equal(added, catalog.Task![^1].Name);
+        Assert.Equal(presetOrder, result.State.Tasks.Select(task => task.Name));
+    }
+
+    [Fact]
+    public void PresetOccurrenceCountingExcludesSpecialRowsAndMissingDefinitions()
+    {
+        var state = Saved("A", "X", "A", "B");
+        state.Tasks.Insert(0, Task("A", "CountdownAction"));
+        state.PresetKey = "seed";
+        var catalog = Catalogue("A", "B", "N");
+        catalog.Preset = [new()
+        {
+            Name = "seed",
+            Task = [new() { Name = "A" }, new() { Name = "X" }, new() { Name = "N" }, new() { Name = "A" }, new() { Name = "B" }]
+        }];
+
+        var result = Reconcile(state, catalog);
+
+        Assert.Equal(new[] { "A", "A", "N", "X", "A", "B" }, result.State.Tasks.Select(task => task.Name));
+        Assert.Equal("CountdownAction", result.State.Tasks[0].Entry);
+        Assert.Equal(new[] { "X" }, result.MissingNames);
+    }
+
     [Fact]
     public void ChangedEntryPreservesBothCopiesAndTheirOwnSettingsWithoutMutatingInput()
     {
@@ -116,15 +196,23 @@ public class TaskQueueReconcilerTests
     }
 
     [Fact]
-    public void PresetOnlyFiltersNewSeedsAndUnsupportedRowsRemainInsertionAnchors()
+    public void PresetFiltersNewSeedsAndUnsupportedRowsRemainInsertionAnchors()
     {
         var state = Saved("A", "C");
         state.PresetKey = "seed";
         var catalog = Catalogue("A", "B", "C", "D");
         catalog.Task![0].Controller = ["OtherController"];
-        catalog.Preset = [new() { Name = "seed", Task = [new() { Name = "B" }] }];
+        catalog.Preset = [new() { Name = "seed", Task = [new() { Name = "A" }, new() { Name = "B" }, new() { Name = "C" }] }];
         var result = Reconcile(state, catalog);
         Assert.Equal(new[] { "A", "B", "C" }, result.State.Tasks.Select(task => task.Name));
+    }
+
+    [Fact]
+    public void MissingPresetStillSuppressesNewSeeds()
+    {
+        var state = Saved("A", "B");
+        state.PresetKey = "missing";
+        Assert.Equal(new[] { "A", "B" }, Reconcile(state, Catalogue("A", "N", "B")).State.Tasks.Select(task => task.Name));
     }
 
     [Fact]
