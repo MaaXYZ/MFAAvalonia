@@ -397,14 +397,19 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
         var nameChanged = !string.Equals(NormalizeControllerName(_savedControllerName),
             NormalizeControllerName(value.Name), StringComparison.OrdinalIgnoreCase);
-        _savedControllerName = value.Name;
-        Processor.InstanceConfiguration.SetValue(ConfigurationKeys.CurrentControllerName, value.Name ?? string.Empty);
+        // Before ReadInterface, the default list is only a temporary UI selection.
+        // Keep the saved identity in memory as well as on disk for the real catalogue.
+        if (MaaProcessor.Interface != null)
+        {
+            _savedControllerName = value.Name;
+            Processor.InstanceConfiguration.SetValue(ConfigurationKeys.CurrentControllerName, value.Name ?? string.Empty);
+        }
 
         if (value.ControllerType != CurrentController)
         {
             CurrentController = value.ControllerType;
         }
-        else if (!_isSyncing && nameChanged)
+        else if (!_isSyncing && MaaProcessor.Interface != null && nameChanged)
         {
             // A different named controller can use the same backend with different settings.
             HandleControllerChanged(value.ControllerType);
@@ -416,10 +421,15 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     /// </summary>
     public string? GetCurrentControllerName()
     {
-        return SelectedController?.Name ?? _savedControllerName ?? TaskLoader.GetControllerName(CurrentController, MaaProcessor.Interface);
+        if (MaaProcessor.Interface == null)
+            return NormalizeControllerName(_savedControllerName) ?? SelectedController?.Name;
+
+        return GetSelectedControllerDefinition(CurrentController)?.Name
+            ?? MaaInterfaceActivationHelper.ResolveControllerDefinition(
+                ControllerOptions, CurrentController, _savedControllerName)?.Name;
     }
 
-    public void UpdateResourcesForController(string? targetResource = null)
+    public void UpdateResourcesForController(string? targetResource = null, bool controllerChanged = false)
     {
         try
         {
@@ -461,7 +471,9 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
             DispatcherHelper.RunOnMainThread(() =>
             {
+                var resourceUnchanged = string.Equals(CurrentResource, resolvedResource, StringComparison.Ordinal);
                 _isRefreshingResourceSelection = true;
+                _isChangingControllerResource = controllerChanged;
                 _pendingResourceSelection = resolvedResource;
                 try
                 {
@@ -471,6 +483,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 finally
                 {
                     _isRefreshingResourceSelection = false;
+                    _isChangingControllerResource = false;
                     _pendingResourceSelection = null;
                 }
 
@@ -478,6 +491,8 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 {
                     CurrentResource = resolvedResource;
                 }
+                if (controllerChanged && resourceUnchanged)
+                    UpdateTasksForResource(CurrentResource);
             });
         }
         catch (Exception ex)
@@ -1743,7 +1758,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
     partial void OnCurrentControllerChanged(MaaControllerTypes value)
     {
-        if (_isSyncing) return;
+        if (_isSyncing || MaaProcessor.Interface == null) return;
         if (value != MaaControllerTypes.Adb && _customAdbTarget != null)
         {
             _customAdbTarget = null;
@@ -1766,7 +1781,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         Processor.InstanceConfiguration.SetValue(ConfigurationKeys.CurrentControllerName, _savedControllerName ?? string.Empty);
         if (Instances.IsResolved<ConnectSettingsUserControlModel>())
             Instances.ConnectSettingsUserControlModel.CurrentControllerType = value;
-        UpdateResourcesForController(CurrentResource);
+        UpdateResourcesForController(CurrentResource, controllerChanged: true);
         RefreshPresets();
         if (value == MaaControllerTypes.PlayCover)
         {
@@ -1776,6 +1791,9 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         // Invalidate the old connection even when the new controller finds no device
         // or uses the same input methods. Its resource/window rules may still differ.
         _refreshCancellationTokenSource?.Cancel();
+        // The switch owns the reset. Persist changed defaults as one batch so each
+        // input/screencap property does not reset the old controller again.
+        Instances.ConnectSettingsUserControlModel.WithoutTaskerReset(() => HandleControllerSettings(value));
         Processor.SetTasker();
         _suppressAutoConnect = true;
         try
@@ -1814,18 +1832,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
     private MaaInterface.MaaResourceController? ResolveTargetController(MaaControllerTypes controllerType)
     {
-        if (!string.IsNullOrWhiteSpace(_savedControllerName))
-        {
-            var exactMatch = ControllerOptions.FirstOrDefault(c =>
-                !string.IsNullOrWhiteSpace(c.Name)
-                && c.Name.Equals(_savedControllerName, StringComparison.OrdinalIgnoreCase));
-            if (exactMatch != null)
-            {
-                return exactMatch;
-            }
-        }
-
-        return ControllerOptions.FirstOrDefault(c => c.ControllerType == controllerType)
+        return MaaInterfaceActivationHelper.ResolveControllerDefinition(ControllerOptions, controllerType, _savedControllerName)
             ?? ControllerOptions.FirstOrDefault();
     }
 
@@ -2560,14 +2567,10 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         });
     }
 
-    private MaaInterface.MaaResourceController? GetSelectedControllerDefinition(MaaControllerTypes controllerType)
+    public MaaInterface.MaaResourceController? GetSelectedControllerDefinition(MaaControllerTypes controllerType)
     {
-        var controllerName = NormalizeControllerName(GetCurrentControllerName());
-        var controllers = MaaProcessor.Interface?.Controller;
-        return controllers?.FirstOrDefault(c => c.ControllerType == controllerType
-                && !string.IsNullOrWhiteSpace(controllerName)
-                && string.Equals(NormalizeControllerName(c.Name), controllerName, StringComparison.OrdinalIgnoreCase))
-            ?? controllers?.FirstOrDefault(c => c.ControllerType == controllerType);
+        return MaaInterfaceActivationHelper.ResolveControllerDefinition(
+            MaaProcessor.Interface?.Controller, controllerType, _savedControllerName);
     }
 
     private void HandleControllerSettings(MaaControllerTypes controllerType)
@@ -2579,7 +2582,9 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         var controllerName = NormalizeControllerName(GetCurrentControllerName());
         var controller = GetSelectedControllerDefinition(controllerType);
         var settingsKey = (controllerType, controllerName);
-        if (_lastAppliedControllerSettingsKey == settingsKey)
+        if (_lastAppliedControllerSettingsKey is { } applied
+            && applied.Type == settingsKey.controllerType
+            && string.Equals(applied.Name, settingsKey.controllerName, StringComparison.OrdinalIgnoreCase))
             return;
 
         if (controller == null) return;
@@ -2597,7 +2602,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     }
 
     private static string? NormalizeControllerName(string? name) =>
-        string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        MaaInterfaceActivationHelper.NormalizeControllerName(name);
 
     private void HandleInputSettings(MaaInterface.MaaResourceController controller, bool isAdb)
     {
@@ -3087,6 +3092,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private ObservableCollection<MaaInterface.MaaInterfaceResource> _currentResources = [];
     private string _currentResource = string.Empty;
     private bool _isRefreshingResourceSelection;
+    private bool _isChangingControllerResource;
     private string? _pendingResourceSelection;
 
     public string CurrentResource
@@ -3116,7 +3122,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(value))
+            if (!string.IsNullOrWhiteSpace(value) && !_isChangingControllerResource)
             {
                 // SetTasker 内部会同步等待旧 Tasker 停止，移到后台线程避免阻塞 UI
                 ResetTaskerInBackground();
@@ -3323,8 +3329,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         }
 
         // 获取当前控制器对象
-        var controllerObj = MaaProcessor.Interface?.Controller?.FirstOrDefault(c =>
-            c.Name != null && c.Name.Equals(currentControllerName, StringComparison.OrdinalIgnoreCase));
+        var controllerObj = GetSelectedControllerDefinition(CurrentController);
         if (controllerObj == null) return;
 
         // 确保控制器的 SelectOptions 已初始化

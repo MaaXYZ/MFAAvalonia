@@ -303,18 +303,13 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
     /// </summary>
     public string? GetCurrentControllerName()
     {
-        return GetControllerName(taskQueueViewModel.CurrentController, maaInterface);
+        return GetControllerName(taskQueueViewModel.CurrentController, maaInterface, taskQueueViewModel.GetCurrentControllerName());
     }
 
-    public static string? GetControllerName(MaaControllerTypes currentControllerType, MaaInterface? maaInterface)
+    public static string? GetControllerName(MaaControllerTypes currentControllerType, MaaInterface? maaInterface,
+        string? controllerName)
     {
-        var controllerTypeKey = currentControllerType.ToJsonKey();
-
-        // 从 interface 的 controller 配置中查找匹配的控制器
-        var controller = maaInterface?.Controller?.Find(c =>
-            c.Type != null && c.Type.Equals(controllerTypeKey, StringComparison.OrdinalIgnoreCase));
-
-        return controller?.Name;
+        return MaaInterfaceActivationHelper.ResolveControllerName(maaInterface, currentControllerType, controllerName);
     }
 
     /// <summary>
@@ -494,10 +489,8 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
     /// </summary>
     private MaaInterface.MaaResourceController? GetCurrentControllerObject()
     {
-        var controllerName = GetCurrentControllerName();
-        if (string.IsNullOrWhiteSpace(controllerName)) return null;
-        return maaInterface?.Controller?.Find(c =>
-            c.Name != null && c.Name.Equals(controllerName, StringComparison.OrdinalIgnoreCase));
+        return MaaInterfaceActivationHelper.ResolveControllerDefinition(
+            maaInterface?.Controller, taskQueueViewModel.CurrentController, taskQueueViewModel.GetCurrentControllerName());
     }
 
     /// <summary>

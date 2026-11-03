@@ -1082,13 +1082,11 @@ public class MaaProcessor
 
     private MaaInterface.MaaResourceController? GetCurrentInterfaceController()
     {
-        var controllerType = ViewModel?.CurrentController ?? MaaControllerTypes.Adb;
-        var controllerName = ViewModel?.GetCurrentControllerName();
-        return Interface?.Controller?.FirstOrDefault(controller =>
-                   !string.IsNullOrWhiteSpace(controllerName)
-                   && string.Equals(controller.Name, controllerName, StringComparison.OrdinalIgnoreCase))
-               ?? Interface?.Controller?.FirstOrDefault(controller =>
-                   string.Equals(controller.Type, controllerType.ToJsonKey(), StringComparison.OrdinalIgnoreCase));
+        var controllerType = ViewModel?.CurrentController
+            ?? InstanceConfiguration.GetValue(ConfigurationKeys.CurrentController, MaaControllerTypes.Adb);
+        return ViewModel?.GetSelectedControllerDefinition(controllerType)
+            ?? MaaInterfaceActivationHelper.ResolveControllerDefinition(Interface?.Controller, controllerType,
+                InstanceConfiguration.GetValue(ConfigurationKeys.CurrentControllerName, string.Empty));
     }
 
     private bool UseSeparateScreenshotTasker =>
@@ -2714,10 +2712,7 @@ public class MaaProcessor
     private async Task<bool> RunPreTasksAsync(CancellationToken token)
     {
         if (Interface?.PreTask is not { Count: > 0 }) return false;
-        var controllerName = ViewModel?.GetCurrentControllerName()
-            ?? MaaInterfaceActivationHelper.ResolveControllerName(
-                Interface, ViewModel?.CurrentController ?? MaaControllerTypes.None)
-            ?? ViewModel?.CurrentController.ToJsonKey();
+        var controllerName = GetCurrentControllerNameForOptionMerge();
         var resourceName = ViewModel?.CurrentResource;
         var executed = false;
 
@@ -3094,8 +3089,7 @@ public class MaaProcessor
         if (ViewModel?.CurrentController != MaaControllerTypes.PlayCover)
             return;
 
-        var controller = Interface?.Controller?.FirstOrDefault(c =>
-            c.Type?.Equals("playcover", StringComparison.OrdinalIgnoreCase) == true);
+        var controller = GetCurrentInterfaceController();
 
         if (!string.IsNullOrWhiteSpace(controller?.PlayCover?.Uuid))
         {
@@ -3916,9 +3910,7 @@ public class MaaProcessor
 
     private string? GetCurrentControllerNameForOptionMerge()
     {
-        var controllerType = ViewModel?.CurrentController ?? MaaControllerTypes.None;
-        return MaaInterfaceActivationHelper.ResolveControllerName(Interface, controllerType)
-            ?? controllerType.ToJsonKey();
+        return ViewModel?.GetCurrentControllerName() ?? GetCurrentInterfaceController()?.Name;
     }
 
     private void InitializeConnectionTasksAsync(CancellationToken token)

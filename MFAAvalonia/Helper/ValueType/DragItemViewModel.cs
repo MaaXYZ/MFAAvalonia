@@ -318,9 +318,7 @@ public partial class DragItemViewModel : ObservableObject
 
     private string? GetCurrentControllerName()
     {
-        var currentControllerType = (OwnerViewModel ?? Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel)?.CurrentController
-            ?? MaaControllerTypes.None;
-        return MaaInterfaceActivationHelper.ResolveControllerName(MaaProcessor.Interface, currentControllerType);
+        return (OwnerViewModel ?? Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel)?.GetCurrentControllerName();
     }
     
     private void UpdateContent()

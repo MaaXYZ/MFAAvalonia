@@ -7,11 +7,34 @@ using MFAAvalonia.Helper.Converters;
 using MFAAvalonia.Helper.ValueType;
 using MFAAvalonia.ViewModels.Other;
 using System.Collections.ObjectModel;
+using System;
 
 namespace MFAAvalonia.ViewModels.UsersControls.Settings;
 
 public partial class ConnectSettingsUserControlModel : ViewModelBase
 {
+    private bool _suppressTaskerReset;
+
+    internal void WithoutTaskerReset(Action applySettings)
+    {
+        var previous = _suppressTaskerReset;
+        _suppressTaskerReset = true;
+        try
+        {
+            applySettings();
+        }
+        finally
+        {
+            _suppressTaskerReset = previous;
+        }
+    }
+
+    private void ResetTaskerForSettingsChange()
+    {
+        if (!_suppressTaskerReset)
+            MaaProcessorManager.Instance.Current.SetTasker();
+    }
+
     /// <summary>
     /// 批量同步标志，为 true 时跳过属性变更的副作用（SetTasker、写回配置等）
     /// </summary>
@@ -197,55 +220,55 @@ public partial class ConnectSettingsUserControlModel : ViewModelBase
     partial void OnAdbControlScreenCapTypeChanged(AdbScreencapMethods value)
     {
         if (IsSyncing) return;
-        HandlePropertyChanged(ConfigurationKeys.AdbControlScreenCapType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+        HandlePropertyChanged(ConfigurationKeys.AdbControlScreenCapType, value.ToString(), ResetTaskerForSettingsChange);
     }
 
     partial void OnAdbControlInputTypeChanged(AdbInputMethods value)
     {
         if (IsSyncing) return;
-        HandlePropertyChanged(ConfigurationKeys.AdbControlInputType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+        HandlePropertyChanged(ConfigurationKeys.AdbControlInputType, value.ToString(), ResetTaskerForSettingsChange);
     }
 
     partial void OnWin32ControlScreenCapTypeChanged(Win32ScreencapMethods value)
     {
         if (IsSyncing) return;
-        HandlePropertyChanged(ConfigurationKeys.Win32ControlScreenCapType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+        HandlePropertyChanged(ConfigurationKeys.Win32ControlScreenCapType, value.ToString(), ResetTaskerForSettingsChange);
     }
 
     partial void OnWin32ControlMouseTypeChanged(Win32InputMethod value)
     {
         if (IsSyncing) return;
-        HandlePropertyChanged(ConfigurationKeys.Win32ControlMouseType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+        HandlePropertyChanged(ConfigurationKeys.Win32ControlMouseType, value.ToString(), ResetTaskerForSettingsChange);
     }
 
     partial void OnWin32ControlKeyboardTypeChanged(Win32InputMethod value)
     {
         if (IsSyncing) return;
-        HandlePropertyChanged(ConfigurationKeys.Win32ControlKeyboardType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+        HandlePropertyChanged(ConfigurationKeys.Win32ControlKeyboardType, value.ToString(), ResetTaskerForSettingsChange);
     }
 
     partial void OnMacOSControlScreenCapTypeChanged(MacOSScreencapMethod value)
     {
         if (IsSyncing) return;
-        HandlePropertyChanged(ConfigurationKeys.MacOSControlScreenCapType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+        HandlePropertyChanged(ConfigurationKeys.MacOSControlScreenCapType, value.ToString(), ResetTaskerForSettingsChange);
     }
 
     partial void OnMacOSControlInputTypeChanged(MacOSInputMethod value)
     {
         if (IsSyncing) return;
-        HandlePropertyChanged(ConfigurationKeys.MacOSControlInputType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+        HandlePropertyChanged(ConfigurationKeys.MacOSControlInputType, value.ToString(), ResetTaskerForSettingsChange);
     }
 
     partial void OnGamepadControlScreenCapTypeChanged(Win32ScreencapMethods value)
     {
         if (IsSyncing) return;
-        HandlePropertyChanged(ConfigurationKeys.GamepadControlScreenCapType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+        HandlePropertyChanged(ConfigurationKeys.GamepadControlScreenCapType, value.ToString(), ResetTaskerForSettingsChange);
     }
 
     partial void OnGamepadTypeChanged(MaaFramework.Binding.GamepadType value)
     {
         if (IsSyncing) return;
-        HandlePropertyChanged(ConfigurationKeys.GamepadType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+        HandlePropertyChanged(ConfigurationKeys.GamepadType, value.ToString(), ResetTaskerForSettingsChange);
     }
 
     [ObservableProperty] private bool _retryOnDisconnected = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.RetryOnDisconnected, false);

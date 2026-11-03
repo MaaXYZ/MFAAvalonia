@@ -247,9 +247,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
     /// </summary>
     private bool IsOptionApplicable(MaaInterface.MaaInterfaceOption interfaceOption)
     {
-        var currentControllerName = MaaInterfaceActivationHelper.ResolveControllerName(
-            MaaProcessor.Interface,
-            viewModel.CurrentController) ?? viewModel.CurrentController.ToJsonKey();
+        var currentControllerName = viewModel.GetCurrentControllerName();
 
         return MaaInterfaceActivationHelper.IsOptionApplicable(
             MaaProcessor.Interface,
