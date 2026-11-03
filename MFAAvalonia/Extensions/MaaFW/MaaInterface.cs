@@ -695,7 +695,7 @@ public partial class MaaInterface
         public bool HasInvalidIndex => _invalidIndex != null;
 
         [JsonIgnore]
-        public string? SelectionError { get; set; }
+        public string? SelectionError { get; set; } // Localization key; resolved by the displaying control.
 
         public void CopySelectionFrom(MaaInterfaceSelectOption source)
         {

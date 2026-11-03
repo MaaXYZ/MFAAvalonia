@@ -2300,4 +2300,18 @@
   <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>「{0}」で変更された {1} 項目を、プリセットではなくリソースに定義された既定値に戻します。既定値のない項目とサブオプションの設定は保持されます。</value></data>
   <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>グループを戻す</value></data>
   <data name="ResumeInterruptedQueue" xml:space="preserve"><value>キューを再開するとき、前回未完了のタスクから再開（成功済みタスクはスキップ）</value></data>
+  <data name="TaskConfigurationTitle" xml:space="preserve"><value>タスク設定</value></data>
+  <data name="TaskCleanupPaused" xml:space="preserve"><value>リソース内に多くのタスクが見つからないため、自動削除を一時停止しました。リソースパッケージを確認してください。</value></data>
+  <data name="TaskMissingFromResource" xml:space="preserve"><value>このタスクはリソース内に存在しません。次回アプリ起動時にも見つからない場合、自動的に削除されます。</value></data>
+  <data name="TaskConfigurationReadFailed" xml:space="preserve"><value>タスク設定を読み込めませんでした。元の設定は保持されています。詳細はログを確認してください。</value></data>
+  <data name="TaskConfigurationDefinitionsNotLoaded" xml:space="preserve"><value>リソースのタスク定義が完全に読み込まれていません。元のタスク設定は保持されています。詳細はログを確認してください。</value></data>
+  <data name="TaskConfigurationDefinitionsInvalid" xml:space="preserve"><value>リソースのタスク定義が無効です。元のタスク設定は保持されています。リソースパッケージとログの詳細を確認してください。</value></data>
+  <data name="TaskConfigurationSaveFailed" xml:space="preserve"><value>タスク設定を保存できませんでした。元の設定は保持されています。詳細はログを確認してください。</value></data>
+  <data name="TaskConfigurationInstanceDeleted" xml:space="preserve"><value>このインスタンスは削除されているため、タスク設定を保存できません。詳細はログを確認してください。</value></data>
+  <data name="TaskConfigurationSyncFailed" xml:space="preserve"><value>タスク設定を同期できなかったため、タスクの実行をブロックしました。詳細はログを確認してください。</value></data>
+  <data name="OptionCaseDefinitionInvalid" xml:space="preserve"><value>このオプションの選択肢が定義されていないか、選択肢の名前が重複しています。リソースパッケージを確認してください。</value></data>
+  <data name="OptionSavedSelectionInvalid" xml:space="preserve"><value>保存された選択は無効になっています。もう一度選択してください。</value></data>
+  <data name="OptionDefaultCaseUnavailable" xml:space="preserve"><value>リソースで指定された既定の選択肢が存在しません。リソースパッケージを確認するか、別の選択肢を選んでください。</value></data>
+  <data name="TaskExecutionBlockedByOptions" xml:space="preserve"><value>グローバル、リソース、またはコントローラーのオプションが無効なため、次のタスクをブロックしました：{0}。オプション画面で選択し直すか、入力を修正してください。</value></data>
+  <data name="TaskSkippedInvalidOptions" xml:space="preserve"><value>タスクのオプションが無効なため、スキップしました：{0}。オプション画面で選択し直すか、入力を修正してください。</value></data>
 </root>

@@ -926,14 +926,18 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
     }
 
     private static TextBlock CreateSelectionStatus(MaaInterface.MaaInterfaceSelectOption option)
-        => new()
+    {
+        var status = new TextBlock
         {
-            Text = option.SelectionError,
             IsVisible = option.SelectionError != null,
             Foreground = Brushes.OrangeRed,
             TextWrapping = TextWrapping.Wrap,
             Margin = OptionRowMargin
         };
+        if (option.SelectionError != null)
+            status.Bind(TextBlock.TextProperty, new I18nBinding(option.SelectionError));
+        return status;
+    }
     
     // ... Methods for Advanced Options, Helper methods below ...
 

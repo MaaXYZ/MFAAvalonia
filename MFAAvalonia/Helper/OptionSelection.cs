@@ -1,3 +1,4 @@
+using MFAAvalonia.Extensions;
 using MFAAvalonia.Extensions.MaaFW;
 using System;
 using System.Collections.Generic;
@@ -17,24 +18,24 @@ public static class OptionSelection
         var cases = definition.Cases;
         if (cases == null || cases.Count == 0 || cases.Any(item => string.IsNullOrEmpty(item.Name))
             || cases.Select(item => item.Name).Distinct(StringComparer.Ordinal).Count() != cases.Count)
-            return Invalid(selection, "The option has no unambiguous case definition.");
+            return Invalid(selection, LangKeys.OptionCaseDefinitionInvalid);
 
         if (selection.SelectedCase != null)
         {
             var namedIndex = cases.FindIndex(item => string.Equals(item.Name, selection.SelectedCase, StringComparison.Ordinal));
             if (namedIndex < 0)
-                return Invalid(selection, $"The saved case '{selection.SelectedCase}' is no longer available. Please select a case.");
+                return Invalid(selection, LangKeys.OptionSavedSelectionInvalid);
             selection.Index = namedIndex;
             return true;
         }
 
         if (selection.HasInvalidIndex)
-            return Invalid(selection, "The saved index is not an integer. Please select a case.");
+            return Invalid(selection, LangKeys.OptionSavedSelectionInvalid);
 
         if (selection.Index is int legacyIndex)
         {
             if (legacyIndex < 0 || legacyIndex >= cases.Count)
-                return Invalid(selection, $"The saved index {legacyIndex} is outside the current cases. Please select a case.");
+                return Invalid(selection, LangKeys.OptionSavedSelectionInvalid);
             // Compatibility interpretation: without a historical definition the old meaning is unknowable.
             selection.SelectedCase = cases[legacyIndex].Name;
             return true;
@@ -43,7 +44,7 @@ public static class OptionSelection
         var defaultIndex = definition.DefaultCase == null ? 0
             : cases.FindIndex(item => string.Equals(item.Name, definition.DefaultCase, StringComparison.Ordinal));
         if (defaultIndex < 0)
-            return Invalid(selection, $"The default case '{definition.DefaultCase}' is not available.");
+            return Invalid(selection, LangKeys.OptionDefaultCaseUnavailable);
         return SelectIndex(definition, selection, defaultIndex);
     }
 
@@ -85,7 +86,7 @@ public static class OptionSelection
             resolved.CopySelectionFrom(selection);
             if (!Resolve(definition, resolved))
             {
-                error = $"{selection.Name}: {resolved.SelectionError}";
+                error = $"{selection.Name}: {resolved.SelectionError.ToLocalization()}";
                 return false;
             }
             var valueError = validateSelection?.Invoke(definition, selection);

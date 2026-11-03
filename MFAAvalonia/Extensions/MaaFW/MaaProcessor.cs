@@ -2803,7 +2803,7 @@ public class MaaProcessor
             {
                 value ??= new MaaInterface.MaaInterfaceSelectOption { Name = name };
                 if (!OptionSelection.Resolve(definition, value))
-                    throw new InvalidOperationException($"{name}: {value.SelectionError}");
+                    throw new InvalidOperationException($"{name}: {value.SelectionError.ToLocalization()}");
                 result[name] = value.SelectedCase ?? string.Empty;
             }
         }
@@ -3592,6 +3592,7 @@ public class MaaProcessor
 
     private List<DragItemViewModel> FilterExecutableTasks(IEnumerable<DragItemViewModel>? source, bool ignoreCheckedState = false)
     {
+        var candidates = source?.ToList() ?? [];
         var currentResourceName = ViewModel?.CurrentResource;
         var currentControllerName = ViewModel?.GetCurrentControllerName();
 
@@ -3599,6 +3600,14 @@ public class MaaProcessor
             return [];
         bool Applicable(MaaInterface.MaaInterfaceOption definition) =>
             MaaInterfaceActivationHelper.IsOptionApplicable(Interface, definition, currentControllerName, currentResourceName);
+        bool Available(DragItemViewModel task)
+        {
+            var model = task.InterfaceItem;
+            var exists = model?.Entry != null && MFAAvalonia.ViewModels.UsersControls.Settings.AddTaskDialogViewModel.SpecialActionNames.Contains(model.Entry)
+                || Interface?.Task?.Any(definition => definition.Name == model?.Name) == true;
+            return exists && task.IsDefinitionAvailable
+                && task.SupportsResource(currentResourceName) && task.SupportsController(currentControllerName);
+        }
         static string? InputError(MaaInterface.MaaInterfaceOption definition, MaaInterface.MaaInterfaceSelectOption value)
         {
             if (!definition.IsInput) return null;
@@ -3610,16 +3619,20 @@ public class MaaProcessor
             .Any(item => !OptionSelection.ValidateActive(Interface.Option, item.ResourceItem?.SelectOptions, out _, Applicable, InputError)))
         {
             LoggerHelper.Warning("全局或资源选项无效，已阻止任务执行，请在选项面板重新选择。");
+            var blockedNames = candidates.Where(task => !task.IsResourceOptionItem
+                    && Available(task)
+                    && (ignoreCheckedState || task.IsChecked || task.IsCheckedWithNull == null))
+                .Select(task => task.Name).ToList();
+            if (blockedNames.Count > 0)
+                AddLogByKey(LangKeys.TaskExecutionBlockedByOptions, BrushHelper.ConvertToBrush("DarkGoldenrod"),
+                    false, false, string.Join(", ", blockedNames));
             return [];
         }
-        return source?.Where(task =>
+        return candidates.Where(task =>
         {
             if (task.IsResourceOptionItem) return false;
             var model = task.InterfaceItem;
-            var exists = model?.Entry != null && MFAAvalonia.ViewModels.UsersControls.Settings.AddTaskDialogViewModel.SpecialActionNames.Contains(model.Entry)
-                || Interface?.Task?.Any(definition => definition.Name == model?.Name) == true;
-            var isSupported = exists && task.IsDefinitionAvailable
-                && task.SupportsResource(currentResourceName) && task.SupportsController(currentControllerName);
+            var isSupported = Available(task);
             task.IsResourceSupported = task.SupportsResource(currentResourceName);
             task.IsControllerSupported = task.SupportsController(currentControllerName);
             task.IsTaskSupported = isSupported;
@@ -3628,10 +3641,13 @@ public class MaaProcessor
             {
                 task.HasValidationError = true;
                 LoggerHelper.Warning($"任务选项无效，已跳过：{model?.Name}");
+                if (isSupported && (ignoreCheckedState || task.IsChecked || task.IsCheckedWithNull == null))
+                    AddLogByKey(LangKeys.TaskSkippedInvalidOptions, BrushHelper.ConvertToBrush("DarkGoldenrod"),
+                        false, false, task.Name);
                 return false;
             }
             return (ignoreCheckedState || task.IsChecked || task.IsCheckedWithNull == null) && isSupported;
-        }).ToList() ?? [];
+        }).ToList();
     }
 
     /// <summary>

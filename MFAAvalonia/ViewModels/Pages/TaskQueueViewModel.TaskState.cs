@@ -214,9 +214,10 @@ public partial class TaskQueueViewModel
         }
     }
 
-    private static void ReportTaskSaveFailure(string? error)
+    private void ReportTaskSaveFailure(string? error)
     {
         LoggerHelper.Warning($"任务配置保存失败：{error}");
-        ToastHelper.Warn(LangKeys.SaveFailureMessage.ToLocalization(), error);
+        ToastHelper.Warn(LangKeys.TaskConfigurationTitle.ToLocalization(),
+            TaskConfigurationFeedback.GetSaveFailureKey(TaskEditing.Configuration()).ToLocalization());
     }
 }

@@ -418,6 +418,28 @@ public sealed class TaskConfigurationStorageTests
         Assert.Equal(original, File.ReadAllText(fixture.Path));
     }
 
+    [Fact]
+    public void ConfigurationFeedbackDistinguishesReadSaveAndDeletedInstanceFailures()
+    {
+        using var unreadable = new Fixture("not-json");
+        var readConfig = unreadable.Open();
+        Assert.False(readConfig.TryReadTaskState(out _, out _));
+        Assert.Equal(MFAAvalonia.Helper.LangKeys.TaskConfigurationReadFailed,
+            MFAAvalonia.Helper.TaskConfigurationFeedback.GetSaveFailureKey(readConfig));
+
+        using var unwritable = new Fixture("{\"TaskItems\":[]}");
+        Directory.CreateDirectory(unwritable.Path + TaskConfigurationWriter.BackupSuffix);
+        var saveConfig = unwritable.Open();
+        Assert.False(saveConfig.TryCommitTaskState(Initialized(), out _));
+        Assert.Equal(MFAAvalonia.Helper.LangKeys.TaskConfigurationSaveFailed,
+            MFAAvalonia.Helper.TaskConfigurationFeedback.GetSaveFailureKey(saveConfig));
+
+        saveConfig.DeleteConfigFile();
+        Assert.False(saveConfig.TryCommitTaskState(Initialized(), out _));
+        Assert.Equal(MFAAvalonia.Helper.LangKeys.TaskConfigurationInstanceDeleted,
+            MFAAvalonia.Helper.TaskConfigurationFeedback.GetSaveFailureKey(saveConfig));
+    }
+
     private static MaaInterface.MaaInterfaceTask Task(string name) => new() { Name = name, Entry = "Entry" + name };
     private static TaskQueueState Initialized(params MaaInterface.MaaInterfaceTask[] tasks) => new()
     {

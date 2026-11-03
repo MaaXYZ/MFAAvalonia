@@ -15,5 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MFAAvalonia\MFAAvalonia.csproj" />
+    <Content Include="..\MFAAvalonia\Assets\Localization\Strings*.resx"
+             Link="Localization\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

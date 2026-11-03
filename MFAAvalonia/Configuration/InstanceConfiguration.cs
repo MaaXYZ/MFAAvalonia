@@ -28,6 +28,7 @@ public sealed class InstanceConfiguration
     private static readonly HashSet<DeserializationFailureFingerprint> ReportedDeserializationFailures = new();
     private static readonly Queue<DeserializationFailureFingerprint> DeserializationFailureOrder = new();
     private volatile bool _isDeleted;
+    public bool IsDeleted => _isDeleted;
 
     internal static string InstancesDir => AppPaths.InstancesDirectory;
 

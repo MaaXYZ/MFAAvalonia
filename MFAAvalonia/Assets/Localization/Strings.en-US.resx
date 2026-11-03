@@ -2305,6 +2305,20 @@ Update using this archive?</value>
   <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>Restore {1} changed item(s) in “{0}” to the defaults declared by the resource, rather than preset values. Fields without declared defaults and sub-option settings will be kept.</value></data>
   <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>Restore group</value></data>
   <data name="ResumeInterruptedQueue" xml:space="preserve"><value>When restarting the queue, resume from the first unfinished task (succeeded tasks are skipped)</value></data>
+  <data name="TaskConfigurationTitle" xml:space="preserve"><value>Task configuration</value></data>
+  <data name="TaskCleanupPaused" xml:space="preserve"><value>Many tasks were not found in the resource. Automatic cleanup is paused. Please check the resource package.</value></data>
+  <data name="TaskMissingFromResource" xml:space="preserve"><value>This task is no longer in the resource. If it is still missing the next time the application starts, it will be removed automatically.</value></data>
+  <data name="TaskConfigurationReadFailed" xml:space="preserve"><value>Failed to read the task configuration. The original configuration has been preserved. See the logs for details.</value></data>
+  <data name="TaskConfigurationDefinitionsNotLoaded" xml:space="preserve"><value>The resource&apos;s task definitions have not fully loaded. The original task configuration has been preserved. See the logs for details.</value></data>
+  <data name="TaskConfigurationDefinitionsInvalid" xml:space="preserve"><value>The resource&apos;s task definitions are invalid. The original task configuration has been preserved. Check the resource package and see the logs for details.</value></data>
+  <data name="TaskConfigurationSaveFailed" xml:space="preserve"><value>Failed to save the task configuration. The original configuration has been preserved. See the logs for details.</value></data>
+  <data name="TaskConfigurationInstanceDeleted" xml:space="preserve"><value>This instance has been deleted. Its task configuration cannot be saved. See the logs for details.</value></data>
+  <data name="TaskConfigurationSyncFailed" xml:space="preserve"><value>Failed to synchronize the task configuration. Task execution has been blocked. See the logs for details.</value></data>
+  <data name="OptionCaseDefinitionInvalid" xml:space="preserve"><value>This option has missing choices or duplicate choice names. Please check the resource package.</value></data>
+  <data name="OptionSavedSelectionInvalid" xml:space="preserve"><value>The saved selection is no longer valid. Please select an option again.</value></data>
+  <data name="OptionDefaultCaseUnavailable" xml:space="preserve"><value>The default choice specified by the resource is unavailable. Check the resource package or select another choice.</value></data>
+  <data name="TaskExecutionBlockedByOptions" xml:space="preserve"><value>Invalid global, resource, or controller options blocked these tasks: {0}. Reselect the options or correct their input in the options panel.</value></data>
+  <data name="TaskSkippedInvalidOptions" xml:space="preserve"><value>Task skipped because its options are invalid: {0}. Reselect the options or correct their input in the options panel.</value></data>
 </root>
 
 

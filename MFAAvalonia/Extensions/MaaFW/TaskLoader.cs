@@ -40,20 +40,28 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
         _initialLoadAttempted = true;
         var config = taskQueueViewModel.Processor.InstanceConfiguration;
         using var publication = taskQueueViewModel.SuppressTaskStateSaving();
+        var failureKey = LangKeys.TaskConfigurationReadFailed;
         try
         {
             if (!config.TryReadTaskState(out var saved, out var readError))
                 throw new InvalidOperationException(readError);
+            failureKey = LangKeys.TaskConfigurationDefinitionsNotLoaded;
             if (maaInterface?.Task == null)
                 throw new InvalidOperationException("资源任务定义未完整加载，已保留原任务配置。");
             if (oldDrags != null)
                 saved.Tasks = oldDrags.Where(item => !item.IsResourceOptionItem && item.InterfaceItem != null)
                     .Select(item => item.InterfaceItem!.Clone()).ToList();
 
+            failureKey = LangKeys.TaskConfigurationDefinitionsInvalid;
             var result = TaskQueueReconciler.Reconcile(saved, maaInterface, ClientLaunchId,
                 allowRemoval, AddTaskDialogViewModel.SpecialActionNames);
+            failureKey = LangKeys.TaskConfigurationSaveFailed;
             if (!config.TryCommitTaskState(result.State, out var saveError))
+            {
+                failureKey = TaskConfigurationFeedback.GetSaveFailureKey(config);
                 throw new InvalidOperationException(saveError);
+            }
+            failureKey = LangKeys.TaskConfigurationSyncFailed;
             taskQueueViewModel.IsTaskConfigurationValid = true;
 
             if (firstTask)
@@ -73,15 +81,15 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
                 if (previousRows.TryGetValue((task.Name, isSpecial), out var previous) && previous.Count > 0)
                     item.CopyRuntimeStateFrom(previous.Dequeue());
                 item.IsDefinitionAvailable = isSpecial || !result.MissingNames.Contains(task.Name ?? string.Empty);
-                item.UnavailableReason = item.IsDefinitionAvailable ? null : result.CircuitBroken
-                    ? "较多任务未在资源中找到，已暂停自动清理，请检查资源包。"
-                    : "资源中已没有这个任务；下次启动软件时若仍缺失，将自动移除。";
+                item.UnavailableReasonKey = item.IsDefinitionAvailable ? null : result.CircuitBroken
+                    ? LangKeys.TaskCleanupPaused
+                    : LangKeys.TaskMissingFromResource;
                 if (isSpecial) task.Description = AddTaskDialogViewModel.GetSpecialTaskDescription(task.Entry!);
                 return item;
             }).ToList();
             UpdateViewModels(drags, tasks, tasksSource);
             if (result.CircuitBroken)
-                ToastHelper.Warn("任务配置", "较多任务未在资源中找到，已暂停自动清理，请检查资源包。");
+                ToastHelper.Warn(LangKeys.TaskConfigurationTitle.ToLocalization(), LangKeys.TaskCleanupPaused.ToLocalization());
             foreach (var group in result.RemovedNames.GroupBy(name => name))
                 LoggerHelper.Info($"自动移除仍缺失的资源任务：{group.Key}，数量={group.Count()}");
             return true;
@@ -90,7 +98,7 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
         {
             taskQueueViewModel.IsTaskConfigurationValid = false;
             LoggerHelper.Error("任务配置同步失败，未初始化或覆盖原任务队列。", ex);
-            ToastHelper.Warn("任务配置", ex.Message);
+            ToastHelper.Warn(LangKeys.TaskConfigurationTitle.ToLocalization(), failureKey.ToLocalization());
             return false;
         }
     }

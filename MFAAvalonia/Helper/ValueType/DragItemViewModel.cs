@@ -236,8 +236,10 @@ public partial class DragItemViewModel : ObservableObject
     [JsonIgnore] private bool _isDefinitionAvailable = true;
 
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasUnavailableReason))]
-    [JsonIgnore] private string? _unavailableReason;
+    [NotifyPropertyChangedFor(nameof(UnavailableReason))]
+    [JsonIgnore] private string? _unavailableReasonKey;
 
+    [JsonIgnore] public string? UnavailableReason => UnavailableReasonKey?.ToLocalization();
     [JsonIgnore] public bool IsTaskVisible => IsTaskSupported || !IsDefinitionAvailable;
     [JsonIgnore] public bool CanToggleCheck => !IsResourceOptionItem && IsDefinitionAvailable;
     [JsonIgnore] public bool HasUnavailableReason => !string.IsNullOrWhiteSpace(UnavailableReason);
@@ -404,6 +406,7 @@ public partial class DragItemViewModel : ObservableObject
     private void OnLanguageChanged(object sender, EventArgs e)
     {
         UpdateContent();
+        OnPropertyChanged(nameof(UnavailableReason));
     }
 
     /// <summary>
@@ -435,7 +438,7 @@ public partial class DragItemViewModel : ObservableObject
         clone.IsControllerSupported = this.IsControllerSupported;
         clone.IsTaskSupported = this.IsTaskSupported;
         clone.IsDefinitionAvailable = this.IsDefinitionAvailable;
-        clone.UnavailableReason = this.UnavailableReason;
+        clone.UnavailableReasonKey = this.UnavailableReasonKey;
         clone.ResolvedIcon = this.ResolvedIcon;
         clone.HasIcon = this.HasIcon;
         clone.IsResourceOptionItem = this.IsResourceOptionItem;
