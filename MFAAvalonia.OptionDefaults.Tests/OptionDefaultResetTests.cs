@@ -8,18 +8,24 @@ using Xunit;
 
 namespace MFAAvalonia.OptionDefaults.Tests;
 
+/// <summary>Restoring a default clears the saved value so the option follows the current default again.</summary>
 public class OptionDefaultResetTests
 {
     [Fact]
-    public void MissingDefaultDoesNotMutateOption()
+    public void UndeclaredDefaultRestoresToEmptyText()
     {
-        var input = new MaaInterface.MaaInterfaceOptionInput { Name = "amount" };
-        var option = new MaaInterface.MaaInterfaceSelectOption();
+        var definition = ReadDefinition("""{"type":"input","inputs":[{"name":"amount"}]}""");
+        var input = definition.Inputs![0];
+        var untouched = new MaaInterface.MaaInterfaceSelectOption();
+        var option = InputOption(("amount", "5"));
 
-        Assert.False(OptionDefaultReset.HasInputDefault(input));
-        Assert.False(OptionDefaultReset.CanRestoreInput(option, input));
-        Assert.False(OptionDefaultReset.RestoreInput(option, input));
+        Assert.True(OptionDefaultReset.SupportsRestore(input));
+        Assert.False(OptionDefaultReset.CanRestoreInput(untouched, definition, input));
+        Assert.False(OptionDefaultReset.RestoreInput(untouched, definition, input));
+        Assert.Null(untouched.Data);
+        Assert.True(OptionDefaultReset.RestoreInput(option, definition, input));
         Assert.Null(option.Data);
+        Assert.Equal(string.Empty, OptionValues.GetFieldValues(definition, option)["amount"]);
     }
 
     [Fact]
@@ -31,9 +37,8 @@ public class OptionDefaultResetTests
             """);
         var option = InputOption(("text", "custom"));
 
-        Assert.True(OptionDefaultReset.HasInputDefault(definition.Inputs![0]));
         Assert.Equal(1, OptionDefaultReset.RestoreInputs(option, definition));
-        Assert.Equal(string.Empty, option.Data!["text"]);
+        Assert.Null(option.Data);
         var output = Generate(definition, option);
         Assert.Equal(JTokenType.String, output["Test"]!["value"]!.Type);
         Assert.Equal(string.Empty, output["Test"]!["value"]!.Value<string>());
@@ -56,9 +61,10 @@ public class OptionDefaultResetTests
         var option = InputOption(("enabled", current));
 
         Assert.True(bool.Parse(input.Default!));
-        Assert.Equal(expectedCanRestore, OptionDefaultReset.CanRestoreInput(option, input));
-        Assert.Equal(expectedCanRestore, OptionDefaultReset.RestoreInput(option, input));
-        Assert.False(OptionDefaultReset.CanRestoreInput(option, input));
+        Assert.Equal(expectedCanRestore, OptionDefaultReset.CanRestoreInput(option, definition, input));
+        Assert.Equal(expectedCanRestore, OptionDefaultReset.RestoreInput(option, definition, input));
+        Assert.False(OptionDefaultReset.CanRestoreInput(option, definition, input));
+        Assert.Equal(!expectedCanRestore, option.Data?.ContainsKey("enabled") == true);
         var output = Generate(definition, option);
         Assert.Equal(JTokenType.Boolean, output["Test"]!["enabled"]!.Type);
         Assert.True(output["Test"]!["enabled"]!.Value<bool>());
@@ -74,7 +80,7 @@ public class OptionDefaultResetTests
         var option = InputOption(("amount", "70"));
 
         Assert.Equal(1, OptionDefaultReset.RestoreInputs(option, definition));
-        Assert.Equal("007", option.Data!["amount"]);
+        Assert.Equal("007", OptionValues.GetFieldValues(definition, option)["amount"]);
         Assert.Equal(0, OptionDefaultReset.CountChangedInputs(option, definition));
         var output = Generate(definition, option);
         Assert.Equal(JTokenType.Integer, output["Test"]!["amount"]!.Type);
@@ -92,7 +98,7 @@ public class OptionDefaultResetTests
 
         Assert.Equal(JTokenType.Null, Generate(definition, option)["Test"]!["value"]!.Type);
         Assert.Equal(1, OptionDefaultReset.RestoreInputs(option, definition));
-        Assert.Equal("null", option.Data!["text"]);
+        Assert.Equal("null", OptionValues.GetFieldValues(definition, option)["text"]);
         var output = Generate(definition, option);
         Assert.Equal(JTokenType.String, output["Test"]!["value"]!.Type);
         Assert.Equal("null", output["Test"]!["value"]!.Value<string>());
@@ -110,8 +116,8 @@ public class OptionDefaultResetTests
         option.SubOptions = children;
         option.SelectedCases = ["keep-case"];
 
-        Assert.True(OptionDefaultReset.RestoreInput(option, definition.Inputs![0]));
-        Assert.Equal("one", option.Data!["first"]);
+        Assert.True(OptionDefaultReset.RestoreInput(option, definition, definition.Inputs![0]));
+        Assert.False(option.Data!.ContainsKey("first"));
         Assert.Equal("also changed", option.Data["second"]);
         Assert.Equal("retain", option.Data["unknown"]);
         Assert.Equal(["keep-case"], option.SelectedCases);
@@ -121,21 +127,18 @@ public class OptionDefaultResetTests
     }
 
     [Fact]
-    public void GroupRestoreChangesOnlyFieldsWithExplicitDefaults()
+    public void GroupRestoreClearsEveryChangedNamedField()
     {
         var definition = ReadDefinition("""
             {"type":"input","inputs":[{"name":"first","default":"one"},{"name":"second","default":""},
-             {"name":"keep"},{"default":"unnamed"}]}
+             {"name":"undeclared"},{"default":"unnamed"},{"name":"secret","password":true}]}
             """);
-        var option = InputOption(("first", "changed"), ("second", "changed"), ("keep", "custom"));
+        var option = InputOption(("first", "changed"), ("second", "changed"), ("undeclared", "custom"), ("secret", "kept"));
 
-        Assert.Equal(2, OptionDefaultReset.CountInputDefaults(definition));
-        Assert.Equal(2, OptionDefaultReset.CountChangedInputs(option, definition));
-        Assert.Equal(2, OptionDefaultReset.RestoreInputs(option, definition));
-        Assert.Equal("one", option.Data!["first"]);
-        Assert.Equal(string.Empty, option.Data["second"]);
-        Assert.Equal("custom", option.Data["keep"]);
-        Assert.Equal(3, option.Data.Count);
+        Assert.Equal(3, OptionDefaultReset.CountRestorableInputs(definition));
+        Assert.Equal(3, OptionDefaultReset.CountChangedInputs(option, definition));
+        Assert.Equal(3, OptionDefaultReset.RestoreInputs(option, definition));
+        Assert.Equal(new Dictionary<string, string?> { ["secret"] = "kept" }, option.Data);
         Assert.Equal(0, OptionDefaultReset.CountChangedInputs(option, definition));
     }
 
@@ -155,15 +158,11 @@ public class OptionDefaultResetTests
             Option = new Dictionary<string, MaaInterface.MaaInterfaceOption> { ["settings"] = definition }
         }, newTask);
 
-        // A new task saves nothing and follows the defaults; restoring reaches the same values.
+        // A new task saves nothing and follows the defaults; restoring reaches the same state.
         Assert.Null(newTask.Data);
         Assert.Equal(4, OptionDefaultReset.RestoreInputs(option, definition));
-        foreach (var input in definition.Inputs!)
-            Assert.Equal(input.Default, option.Data![input.Name!]);
-        Assert.Equal(OptionValues.GetFieldValues(definition, newTask), OptionValues.GetFieldValues(definition, option));
-        Assert.True(JToken.DeepEquals(
-            JObject.Parse(definition.GenerateProcessedPipeline(OptionValues.GetFieldValues(definition, newTask))),
-            Generate(definition, option)));
+        Assert.Null(option.Data);
+        Assert.True(JToken.DeepEquals(Generate(definition, newTask), Generate(definition, option)));
     }
 
     [Fact]
@@ -183,26 +182,28 @@ public class OptionDefaultResetTests
         };
         option.Data["material0"] = "0";
 
-        Assert.Equal(52, OptionDefaultReset.CountInputDefaults(definition));
+        Assert.Equal(52, OptionDefaultReset.CountRestorableInputs(definition));
         Assert.Equal(51, OptionDefaultReset.CountChangedInputs(option, definition));
         Assert.Equal(51, OptionDefaultReset.RestoreInputs(option, definition));
         Assert.Equal(0, OptionDefaultReset.CountChangedInputs(option, definition));
     }
 
     [Fact]
-    public void MissingCheckboxDefaultDoesNotRestoreOrCreateSelection()
+    public void CheckboxWithoutDeclaredDefaultRestoresToNoCase()
     {
         var definition = ReadDefinition("""{"type":"checkbox","cases":[{"name":"one"}]}""");
-        var option = new MaaInterface.MaaInterfaceSelectOption();
+        var untouched = new MaaInterface.MaaInterfaceSelectOption();
+        var option = new MaaInterface.MaaInterfaceSelectOption { SelectedCases = ["one"] };
 
-        Assert.False(OptionDefaultReset.HasCheckboxDefault(definition));
-        Assert.False(OptionDefaultReset.CanRestoreCheckbox(option, definition));
-        Assert.False(OptionDefaultReset.RestoreCheckbox(option, definition));
+        Assert.False(OptionDefaultReset.CanRestoreCheckbox(untouched, definition));
+        Assert.False(OptionDefaultReset.RestoreCheckbox(untouched, definition));
+        Assert.True(OptionDefaultReset.RestoreCheckbox(option, definition));
         Assert.Null(option.SelectedCases);
+        Assert.Empty(OptionValues.GetSelectedCases(definition, option));
     }
 
     [Fact]
-    public void ExplicitEmptyCheckboxDefaultClearsSelectionWithoutRemovingSubOptions()
+    public void ExplicitEmptyCheckboxDefaultFollowsWithoutRemovingSubOptions()
     {
         var definition = ReadDefinition("""
             {"type":"checkbox","cases":[{"name":"one","option":["child"]}],"default_case":[]}
@@ -211,10 +212,9 @@ public class OptionDefaultResetTests
         var children = new List<MaaInterface.MaaInterfaceSelectOption> { child };
         var option = new MaaInterface.MaaInterfaceSelectOption { SelectedCases = ["one"], SubOptions = children };
 
-        Assert.True(OptionDefaultReset.HasCheckboxDefault(definition));
         Assert.Equal(1, OptionDefaultReset.CountChangedCheckboxCases(option, definition));
         Assert.True(OptionDefaultReset.RestoreCheckbox(option, definition));
-        Assert.Empty(option.SelectedCases!);
+        Assert.Null(option.SelectedCases);
         Assert.Same(children, option.SubOptions);
         Assert.Equal("custom", option.SubOptions![0].Data!["remember"]);
         Assert.False(OptionDefaultReset.CanRestoreCheckbox(option, definition));
@@ -235,7 +235,7 @@ public class OptionDefaultResetTests
     }
 
     [Fact]
-    public void CheckboxRestorationCopiesDefaultsAndPreservesOtherData()
+    public void CheckboxRestorationClearsSelectionAndPreservesOtherData()
     {
         var definition = ReadDefinition("""
             {"type":"checkbox","cases":[{"name":"one"},{"name":"two"}],"default_case":["one"]}
@@ -245,10 +245,9 @@ public class OptionDefaultResetTests
 
         Assert.Equal(2, OptionDefaultReset.CountChangedCheckboxCases(option, definition));
         Assert.True(OptionDefaultReset.RestoreCheckbox(option, definition));
-        Assert.Equal(definition.DefaultCases, option.SelectedCases);
-        Assert.NotSame(definition.DefaultCases, option.SelectedCases);
+        Assert.Null(option.SelectedCases);
+        Assert.Equal(["one"], OptionValues.GetSelectedCases(definition, option));
         Assert.Equal("keep", option.Data!["unrelated"]);
-        option.SelectedCases!.Add("two");
         Assert.Equal(["one"], definition.DefaultCases);
     }
 
@@ -280,13 +279,76 @@ public class OptionDefaultResetTests
         var option = InputOption(("value", "custom"));
         option.SelectedCases = [];
 
-        Assert.Equal(0, OptionDefaultReset.CountInputDefaults(definition));
+        Assert.Equal(0, OptionDefaultReset.CountRestorableInputs(definition));
         Assert.Equal(0, OptionDefaultReset.RestoreInputs(option, definition));
-        Assert.False(OptionDefaultReset.HasCheckboxDefault(definition));
         Assert.False(OptionDefaultReset.RestoreCheckbox(option, definition));
         Assert.Equal("custom", option.Data!["value"]);
         Assert.Empty(option.SelectedCases);
     }
+
+    [Theory]
+    [InlineData("A", true)]
+    [InlineData("B", false)]
+    public void SelectionRestoresOnlyWhenItDiffersFromTheDefault(string saved, bool restorable)
+    {
+        var definition = Select("B");
+        var option = new MaaInterface.MaaInterfaceSelectOption { SelectedCase = saved, Index = saved == "A" ? 0 : 1 };
+
+        Assert.Equal(restorable, OptionDefaultReset.CanRestoreSelection(option, definition));
+        Assert.Equal(restorable, OptionDefaultReset.RestoreSelection(option, definition));
+        if (!restorable) return;
+        Assert.Null(option.SelectedCase);
+        Assert.Null(option.Index);
+        Assert.True(OptionValues.TryGetCaseIndex(definition, option, out var index, out _));
+        Assert.Equal(1, index);
+    }
+
+    [Fact]
+    public void UnsetSelectionHasNothingToRestore()
+        => Assert.False(OptionDefaultReset.CanRestoreSelection(new MaaInterface.MaaInterfaceSelectOption(), Select("B")));
+
+    [Fact]
+    public void UndeclaredSelectionDefaultIsTheFirstCase()
+    {
+        var option = new MaaInterface.MaaInterfaceSelectOption { SelectedCase = "B" };
+
+        Assert.True(OptionDefaultReset.RestoreSelection(option, Select(null)));
+        Assert.Null(option.SelectedCase);
+    }
+
+    [Fact]
+    public void InvalidSavedSelectionsCanBeRestored()
+    {
+        var removed = new MaaInterface.MaaInterfaceSelectOption { SelectedCase = "gone", SelectionError = LangKeys.OptionSavedSelectionInvalid };
+        var malformed = JsonConvert.DeserializeObject<MaaInterface.MaaInterfaceSelectOption>("""{"index":"x"}""")!;
+        var outOfRange = new MaaInterface.MaaInterfaceSelectOption { Index = 7 };
+
+        foreach (var option in new[] { removed, malformed, outOfRange })
+        {
+            Assert.True(OptionDefaultReset.RestoreSelection(option, Select("B")));
+            Assert.Null(option.SelectedCase);
+            Assert.Null(option.Index);
+            Assert.False(option.HasInvalidIndex);
+            Assert.Null(option.SelectionError);
+        }
+    }
+
+    [Fact]
+    public void InvalidResourceDefaultIsNeverOfferedAsRestoreTarget()
+    {
+        var option = new MaaInterface.MaaInterfaceSelectOption { SelectedCase = "A" };
+
+        Assert.False(OptionDefaultReset.CanRestoreSelection(option, Select("missing")));
+        Assert.False(OptionDefaultReset.RestoreSelection(option, Select("missing")));
+        Assert.Equal("A", option.SelectedCase);
+    }
+
+    private static MaaInterface.MaaInterfaceOption Select(string? defaultCase) => new()
+    {
+        Type = "select",
+        DefaultCases = defaultCase == null ? null : [defaultCase],
+        Cases = [new() { Name = "A" }, new() { Name = "B" }]
+    };
 
     private static MaaInterface.MaaInterfaceOption ReadDefinition(string json)
         => JsonConvert.DeserializeObject<MaaInterface.MaaInterfaceOption>(json)!;
@@ -295,6 +357,5 @@ public class OptionDefaultResetTests
         => new() { Data = values.ToDictionary(item => item.Name, item => item.Value) };
 
     private static JObject Generate(MaaInterface.MaaInterfaceOption definition, MaaInterface.MaaInterfaceSelectOption option)
-        => JObject.Parse(definition.GenerateProcessedPipeline(
-            option.Data!.Where(item => item.Value != null).ToDictionary(item => item.Key, item => item.Value!)));
+        => JObject.Parse(definition.GenerateProcessedPipeline(OptionValues.GetFieldValues(definition, option)));
 }

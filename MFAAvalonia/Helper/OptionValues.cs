@@ -111,10 +111,7 @@ public static class OptionValues
     {
         if (definition.IsCheckbox)
         {
-            if (selection.SelectedCases == null) return 0;
-            var valid = new HashSet<string>(definition.Cases?.Select(item => item.Name).OfType<string>() ?? [], StringComparer.Ordinal);
-            var saved = new HashSet<string>(selection.SelectedCases.Where(valid.Contains), StringComparer.Ordinal);
-            if (!saved.SetEquals((definition.DefaultCases ?? []).Where(valid.Contains))) return 0;
+            if (selection.SelectedCases == null || !IsDefaultCaseSet(definition, selection.SelectedCases)) return 0;
             selection.SelectedCases = null;
             return 1;
         }
@@ -152,7 +149,19 @@ public static class OptionValues
         return 0;
     }
 
-    private static bool IsDefaultField(MaaInterface.MaaInterfaceOption definition, string name, string value)
+    /// <summary>Whether a checkbox selection equals the default, comparing valid case names as a set.</summary>
+    public static bool IsDefaultCaseSet(MaaInterface.MaaInterfaceOption definition, IEnumerable<string> cases)
+    {
+        var valid = new HashSet<string>(definition.Cases?.Select(item => item.Name).OfType<string>() ?? [], StringComparer.Ordinal);
+        return new HashSet<string>(cases.Where(valid.Contains), StringComparer.Ordinal)
+            .SetEquals((definition.DefaultCases ?? []).Where(valid.Contains));
+    }
+
+    /// <summary>
+    /// Whether an input/hotkey field value equals its default. Password fields and fields outside the
+    /// definition never count as default.
+    /// </summary>
+    public static bool IsDefaultField(MaaInterface.MaaInterfaceOption definition, string name, string value)
     {
         if (definition.IsHotkey)
         {

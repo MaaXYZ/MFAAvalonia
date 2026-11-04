@@ -51,7 +51,8 @@ public partial class OptionControlsTests(OptionControlsTestSession fixture) : IC
         Click(reset);
         Dispatcher.UIThread.RunJobs();
 
-        Assert.Equal("null", option.Data["text"]);
+        // Restoring clears the saved value; the field follows its default "null" again.
+        Assert.Null(option.Data);
         Assert.Equal("null", panel.GetVisualDescendants().OfType<TextBox>().Single().Text);
         Assert.Equal(1, context.Saves);
         Assert.False(reset.IsEnabled);
@@ -92,8 +93,7 @@ public partial class OptionControlsTests(OptionControlsTestSession fixture) : IC
         Click(context.Dialog.ActionButtons.OfType<Button>().Last());
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(1, context.Saves);
-        foreach (var field in fields)
-            Assert.Equal(field.Default, option.Data[field.Name!]);
+        Assert.Null(option.Data);
         Assert.False(reset.IsEnabled);
         Assert.All(panel.GetVisualDescendants().OfType<TextBox>(), textBox => Assert.NotEqual("999", textBox.Text));
         var output = JObject.Parse(option.PipelineOverride);
@@ -141,7 +141,8 @@ public partial class OptionControlsTests(OptionControlsTestSession fixture) : IC
         Assert.True(reset.IsEnabled);
         Click(reset);
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal("default", option.Data["text"]);
+        Assert.Null(option.Data);
+        Assert.Equal("default", panel.GetVisualDescendants().OfType<TextBox>().Single().Text);
         Assert.Equal(1, context.Saves);
 
         panel.GetVisualDescendants().OfType<TextBox>().Single().Text = "edited again";
@@ -239,7 +240,7 @@ public partial class OptionControlsTests(OptionControlsTestSession fixture) : IC
         Click(FindReset(panel, "RestoreResourceDefault:first"));
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(1, context.Saves);
-        Assert.Equal("one", option.Data["first"]);
+        Assert.False(option.Data!.ContainsKey("first"));
         Assert.Equal("custom", option.Data["second"]);
     });
 
@@ -281,7 +282,7 @@ public partial class OptionControlsTests(OptionControlsTestSession fixture) : IC
         Click(context.Dialog.ActionButtons.OfType<Button>().Last());
         Dispatcher.UIThread.RunJobs();
 
-        Assert.Equal(["one"], option.SelectedCases);
+        Assert.Null(option.SelectedCases);
         var toggles = panel.GetVisualDescendants().OfType<ToggleButton>().ToArray();
         Assert.Equal(3, toggles.Length);
         Assert.True(toggles[0].IsChecked);

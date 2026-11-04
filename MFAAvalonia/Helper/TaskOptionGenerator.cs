@@ -445,11 +445,12 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         // Initialize sub-options for default checked cases
         UpdateSubOptions();
 
-        if (OptionDefaultReset.HasCheckboxDefault(interfaceOption))
+        if (interfaceOption.Cases is { Count: > 0 })
         {
             var resetButton = CreateDefaultResetButton(
                 LangKeys.RestoreGroupResourceDefaults,
-                $"RestoreResourceDefaults:{option.Name}", resetContext,
+                $"RestoreResourceDefaults:{option.Name}",
+                LanguageHelper.GetLocalizedDisplayName(interfaceOption.DisplayName, interfaceOption.Name), resetContext,
                 () => OptionDefaultReset.CanRestoreCheckbox(option, interfaceOption),
                 () => ConfirmDefaultReset(interfaceOption,
                     OptionDefaultReset.CountChangedCheckboxCases(option, interfaceOption), resetContext, () =>
@@ -518,11 +519,12 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         if (needsHeader)
         {
             var header = CreateOptionHeader(interfaceOption);
-            if (allowReset && OptionDefaultReset.CountInputDefaults(interfaceOption) >= 2)
+            if (allowReset && OptionDefaultReset.CountRestorableInputs(interfaceOption) >= 2)
             {
                 AddHeaderAction(header, CreateDefaultResetButton(
                     LangKeys.RestoreGroupResourceDefaults,
-                    $"RestoreResourceDefaults:{option.Name}", resetContext,
+                    $"RestoreResourceDefaults:{option.Name}",
+                    LanguageHelper.GetLocalizedDisplayName(interfaceOption.DisplayName, interfaceOption.Name), resetContext,
                     () => OptionDefaultReset.CountChangedInputs(option, interfaceOption) > 0,
                     () => ConfirmDefaultReset(interfaceOption,
                         OptionDefaultReset.CountChangedInputs(option, interfaceOption), resetContext,
@@ -741,6 +743,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         DragItemViewModel source)
     {
         var wrapper = new StackPanel();
+        var resetContext = new DefaultResetContext();
         // 只算当前取值用于显示，不写回；用户切换时才保存选择。
         var selectionValid = OptionSelection.Evaluate(interfaceOption, option, out var selectedIndex);
         var selectionStatus = CreateSelectionStatus(option);
@@ -801,11 +804,13 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
 
         toggleSwitch.IsCheckedChanged += (_, _) =>
         {
+            if (resetContext.Restoring) return;
             if (!CanEditOptions || !OptionSelection.SelectIndex(interfaceOption, option,
                     toggleSwitch.IsChecked == true ? yesValue : noValue)) return;
             selectionStatus.IsVisible = false;
             UpdateSubOptions(option.Index ?? -1);
             saveConfigurationAction();
+            resetContext.RefreshResetStates();
         };
 
         // Initialize sub-options
@@ -817,11 +822,29 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         icon.Margin = new Thickness(0, 0, 6, 0);
         labelPanel.Children.Insert(0, icon);
 
+        var resetButton = CreateDefaultResetButton(LangKeys.RestoreInputResourceDefault,
+            $"RestoreResourceDefault:{option.Name}",
+            LanguageHelper.GetLocalizedDisplayName(interfaceOption.DisplayName, interfaceOption.Name), resetContext,
+            () => OptionDefaultReset.CanRestoreSelection(option, interfaceOption),
+            () => RestoreSelectionDefault(option, interfaceOption, resetContext, selectionStatus, index =>
+            {
+                toggleSwitch.IsChecked = index < 0 ? null : index == yesValue;
+                UpdateSubOptions(index);
+            }), toggleSwitch);
+        var valueGroup = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { toggleSwitch, resetButton }
+        };
+
         Grid.SetColumn(labelPanel, 0);
-        Grid.SetColumn(toggleSwitch, 2);
-        
+        Grid.SetColumn(valueGroup, 2);
+        AddToggleResponsiveBehavior(grid, labelPanel, valueGroup);
+
         grid.Children.Add(labelPanel);
-        grid.Children.Add(toggleSwitch);
+        grid.Children.Add(valueGroup);
         wrapper.Children.Add(grid);
         wrapper.Children.Add(selectionStatus);
 
@@ -837,6 +860,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         DragItemViewModel source)
     {
         var wrapper = new StackPanel();
+        var resetContext = new DefaultResetContext();
         // 只算当前取值用于显示，不写回；用户选择时才保存。
         var selectionValid = OptionSelection.Evaluate(interfaceOption, option, out var selectedIndex);
         var selectionStatus = CreateSelectionStatus(option);
@@ -885,6 +909,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
 
         comboBox.SelectionChanged += (_, _) =>
         {
+            if (resetContext.Restoring) return;
             var selectedCase = comboBox.SelectedItem as MaaInterface.MaaInterfaceOptionCase;
             var resolvedIndex = selectedCase != null && interfaceOption.Cases != null
                 ? interfaceOption.Cases.FindIndex(c => c.Name == selectedCase.Name)
@@ -894,6 +919,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
             selectionStatus.IsVisible = false;
             UpdateSubOptions(resolvedIndex);
             saveConfigurationAction();
+            resetContext.RefreshResetStates();
         };
         
         UpdateSubOptions(selectionValid ? selectedIndex : -1);
@@ -907,13 +933,24 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         icon.Margin = new Thickness(0, 0, 6, 0);
         labelPanel.Children.Insert(0, icon);
 
+        var resetButton = CreateDefaultResetButton(LangKeys.RestoreInputResourceDefault,
+            $"RestoreResourceDefault:{option.Name}",
+            LanguageHelper.GetLocalizedDisplayName(interfaceOption.DisplayName, interfaceOption.Name), resetContext,
+            () => OptionDefaultReset.CanRestoreSelection(option, interfaceOption),
+            () => RestoreSelectionDefault(option, interfaceOption, resetContext, selectionStatus, index =>
+            {
+                comboBox.SelectedIndex = index;
+                UpdateSubOptions(index);
+            }), comboBox);
+        var valueGroup = WrapWithResetButton(comboBox, resetButton);
+
         Grid.SetColumn(labelPanel, 0);
-        Grid.SetColumn(comboBox, 1);
-        
-        AddResponsiveBehavior(grid, labelPanel, comboBox);
-        
+        Grid.SetColumn(valueGroup, 1);
+
+        AddResponsiveBehavior(grid, labelPanel, valueGroup);
+
         grid.Children.Add(labelPanel);
-        grid.Children.Add(comboBox);
+        grid.Children.Add(valueGroup);
 
         wrapper.Children.Add(grid);
         wrapper.Children.Add(selectionStatus);
@@ -1042,8 +1079,10 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
 
     // Helper Creation Methods
 
-    private Button CreateDefaultResetButton(string tooltipKey, string automationId,
-        DefaultResetContext context, Func<bool> canRestore, Action restore)
+    /// <param name="targetName">Field or group name, so screen readers can tell the buttons apart.</param>
+    /// <param name="focusTarget">Receives focus after a restore disables the button.</param>
+    private Button CreateDefaultResetButton(string tooltipKey, string automationId, string targetName,
+        DefaultResetContext context, Func<bool> canRestore, Action restore, Control? focusTarget = null)
     {
         var state = new DefaultResetButtonState();
         var button = new Button
@@ -1064,7 +1103,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
             }
         };
         AutomationProperties.SetAutomationId(button, automationId);
-        button.Bind(AutomationProperties.NameProperty, new I18nBinding(tooltipKey));
+        AutomationProperties.SetName(button, $"{tooltipKey.ToLocalization()}: {targetName}");
         button.Bind(ToolTip.TipProperty, new I18nBinding(tooltipKey));
         button.Bind(Control.IsEnabledProperty, new MultiBinding
         {
@@ -1089,8 +1128,83 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         {
             if (!CanEditOptions || context.Restoring || context.Confirming || !canRestore()) return;
             restore();
+            if (!canRestore()) focusTarget?.Focus();
         };
         return button;
+    }
+
+    /// <summary>The responsive row keeps exactly two children: the label and this value group.</summary>
+    private static Grid WrapWithResetButton(Control valueControl, Button button)
+    {
+        var wrapper = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            MinWidth = Math.Max(valueControl.MinWidth, 100) + button.MinWidth + button.Margin.Left,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(valueControl, 0);
+        Grid.SetColumn(button, 1);
+        wrapper.Children.Add(valueControl);
+        wrapper.Children.Add(button);
+        return wrapper;
+    }
+
+    /// <summary>
+    /// Restores a select/switch: clears the saved choice so it follows the current default again.
+    /// <paramref name="showSelection"/> displays a case index, or -1 for an invalid selection.
+    /// </summary>
+    private void RestoreSelectionDefault(MaaInterface.MaaInterfaceSelectOption option,
+        MaaInterface.MaaInterfaceOption interfaceOption, DefaultResetContext context,
+        TextBlock selectionStatus, Action<int> showSelection)
+    {
+        if (!CanEditOptions || context.Restoring) return;
+        var previous = new MaaInterface.MaaInterfaceSelectOption();
+        previous.CopySelectionFrom(option);
+        context.Restoring = true;
+        context.RefreshResetStates();
+        try
+        {
+            if (!OptionDefaultReset.RestoreSelection(option, interfaceOption)) return;
+            OptionSelection.Evaluate(interfaceOption, option, out var index);
+            selectionStatus.IsVisible = false;
+            showSelection(index);
+            saveConfigurationAction();
+            LogDefaultReset(option, "selection", 1);
+        }
+        catch
+        {
+            option.CopySelectionFrom(previous);
+            showSelection(OptionSelection.Evaluate(interfaceOption, option, out var index) ? index : -1);
+            throw;
+        }
+        finally
+        {
+            context.Restoring = false;
+            context.RefreshResetStates();
+        }
+    }
+
+    // A switch row keeps its label / value columns; once both no longer fit side by side,
+    // the value group moves to a second row instead of overflowing.
+    private static void AddToggleResponsiveBehavior(Grid grid, Control label, Control value)
+    {
+        grid.SizeChanged += (_, _) =>
+        {
+            label.Measure(Size.Infinity);
+            value.Measure(Size.Infinity);
+            var narrow = label.DesiredSize.Width + value.DesiredSize.Width > grid.Bounds.Width;
+            if (narrow == (Grid.GetRow(value) == 1)) return;
+            grid.RowDefinitions.Clear();
+            if (narrow)
+            {
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            }
+            Grid.SetRow(value, narrow ? 1 : 0);
+            Grid.SetColumn(value, narrow ? 0 : 2);
+            Grid.SetColumnSpan(value, narrow ? 3 : 1);
+        };
     }
 
     private static void AddHeaderAction(Control header, Button button)
@@ -1103,24 +1217,12 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         MaaInterface.MaaInterfaceOptionInput input, MaaInterface.MaaInterfaceSelectOption option,
         MaaInterface.MaaInterfaceOption interfaceOption, DefaultResetContext context, bool allowReset)
     {
-        if (!allowReset || !OptionDefaultReset.HasInputDefault(input)) return inputControl;
+        if (!allowReset || !OptionDefaultReset.SupportsRestore(input)) return inputControl;
         var button = CreateDefaultResetButton(LangKeys.RestoreInputResourceDefault,
-            $"RestoreResourceDefault:{input.Name}", context,
-            () => OptionDefaultReset.CanRestoreInput(option, input),
-            () => RestoreInputDefaults(option, interfaceOption, context, input));
-        // The responsive row must continue to receive exactly two controls: label and input group.
-        var wrapper = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            MinWidth = Math.Max(inputControl.MinWidth, 100) + button.MinWidth + button.Margin.Left,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetColumn(inputControl, 0);
-        Grid.SetColumn(button, 1);
-        wrapper.Children.Add(inputControl);
-        wrapper.Children.Add(button);
-        return wrapper;
+            $"RestoreResourceDefault:{input.Name}", LanguageHelper.GetLocalizedDisplayName(input.DisplayName, input.Name), context,
+            () => OptionDefaultReset.CanRestoreInput(option, interfaceOption, input),
+            () => RestoreInputDefaults(option, interfaceOption, context, input), inputControl);
+        return WrapWithResetButton(inputControl, button);
     }
 
     private void RestoreInputDefaults(MaaInterface.MaaInterfaceSelectOption option,
@@ -1136,7 +1238,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
         {
             var changed = input == null
                 ? OptionDefaultReset.RestoreInputs(option, interfaceOption)
-                : OptionDefaultReset.RestoreInput(option, input) ? 1 : 0;
+                : OptionDefaultReset.RestoreInput(option, interfaceOption, input) ? 1 : 0;
             if (changed == 0) return;
             foreach (var refresh in context.RefreshControls) refresh();
             UpdatePipeline(option, interfaceOption);
@@ -1185,7 +1287,7 @@ public class TaskOptionGenerator(TaskQueueViewModel viewModel, Action saveConfig
     }
 
     private static void LogDefaultReset(MaaInterface.MaaInterfaceSelectOption option, string scope, int changed)
-        => LoggerHelper.UserAction("恢复资源默认值", $"option={option.Name}, scope={scope}, changed={changed}",
+        => LoggerHelper.UserAction("恢复默认值（改为跟随）", $"option={option.Name}, scope={scope}, changed={changed}",
             source: nameof(TaskOptionGenerator), operation: "RestoreResourceDefaults");
 
     private Grid CreateBaseGrid()

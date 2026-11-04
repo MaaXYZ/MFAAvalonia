@@ -54,7 +54,7 @@ public class OptionInputTests
         Assert.Equal(secret, loaded.SubOptions![0].Data!["credential"]);
         Assert.Equal(JTokenType.Object, JObject.Parse(JsonConvert.SerializeObject(loaded))["data"]!["credential"]!.Type);
         Assert.Null(input.Default);
-        Assert.False(OptionDefaultReset.HasInputDefault(input));
+        Assert.False(OptionDefaultReset.SupportsRestore(input));
     }
 
     [Fact]
