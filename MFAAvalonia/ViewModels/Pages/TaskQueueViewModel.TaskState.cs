@@ -80,7 +80,9 @@ public partial class TaskQueueViewModel
 
     public bool TrySaveTaskItems()
     {
-        if (IsPublishingTaskState || TaskEditing.IsSwitching())
+        // 已删除的实例没有可保存的东西。启动时会先删掉构造用的临时实例再切到上次的实例，
+        // 切换前的保存落在它身上，不能当成保存失败去提示用户。
+        if (IsPublishingTaskState || TaskEditing.IsSwitching() || TaskEditing.Configuration().IsDeleted)
             return true;
         if (!IsTaskConfigurationValid)
             return false;

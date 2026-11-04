@@ -120,6 +120,18 @@ public partial class OptionControlsTests
         Assert.Equal(new[] { "A" }, written.Select(task => task.Type == JTokenType.Null ? null : task["name"]?.Value<string>()));
     });
 
+    [Fact]
+    public Task SavingADeletedInstanceIsSkippedWithoutReportingAFailure() => Run(() =>
+    {
+        using var fixture = new TaskEditFixture();
+        fixture.Configuration.DeleteConfigFile();
+
+        Assert.True(fixture.ViewModel.TrySaveTaskItems());
+
+        Assert.Empty(fixture.Errors);
+        Assert.False(File.Exists(fixture.Path));
+    });
+
     private static void SeedResetCatalogue(TaskEditFixture fixture, params MaaInterface.MaaInterfacePreset[] presets)
     {
         fixture.Catalogue.Task = new[] { "A", "B", "C" }
