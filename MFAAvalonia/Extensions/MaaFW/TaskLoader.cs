@@ -65,6 +65,8 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
             taskQueueViewModel.IsTaskConfigurationValid = true;
             if (result.FollowingDefaultCount > 0)
                 LoggerHelper.Info($"选项值等于当前资源默认，已改为跟随默认：{result.FollowingDefaultCount} 项");
+            if (saved.SkippedNullTasks > 0)
+                LoggerHelper.Warning($"任务配置中有 {saved.SkippedNullTasks} 个空任务项（旧版本切换实例时误写），已忽略并清除");
 
             if (firstTask)
             {

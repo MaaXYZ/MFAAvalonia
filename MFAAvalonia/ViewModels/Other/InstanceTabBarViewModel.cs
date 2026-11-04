@@ -402,14 +402,9 @@ public partial class InstanceTabBarViewModel : ViewModelBase
             "SwitchInstance",
             processor.InstanceId,
             MaaProcessorManager.Instance.GetInstanceName(processor.InstanceId));
-        // 切换前保存当前实例的任务状态
-        var vm = MaaProcessorManager.Instance.Current?.ViewModel;
-        if (vm != null)
-        {
-            MFAAvalonia.Configuration.ConfigurationManager.CurrentInstance.SetValue(
-                MFAAvalonia.Configuration.ConfigurationKeys.TaskItems,
-                vm.TaskItemViewModels.ToList().Select(model => model.InterfaceItem));
-        }
+        // 切换前保存当前实例的任务状态。走统一提交：排除选项行、校验并剔除等于默认的值，
+        // 直接写 TaskItems 会把选项行写成 null，下次读取整队失败。
+        MaaProcessorManager.Instance.Current?.ViewModel?.TrySaveTaskItems();
 
         if (MaaProcessorManager.Instance.SwitchCurrent(processor.InstanceId))
         {

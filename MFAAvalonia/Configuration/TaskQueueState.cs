@@ -20,6 +20,8 @@ public sealed class TaskQueueState
     public bool HasPresetKey { get; set; }
     public string? PresetKey { get; set; }
     public Dictionary<string, object?> ExtraValues { get; set; } = new(StringComparer.Ordinal);
+    /// <summary>读取时跳过的 null 任务项个数，只用于日志，不写回。</summary>
+    public int SkippedNullTasks { get; set; }
 
     public TaskQueueState Clone() => new()
     {

@@ -139,8 +139,8 @@ public sealed class InstanceConfiguration
     }
 
     private static object MaterializeTaskItems(string key, object value) =>
-        key == ConfigurationKeys.TaskItems && value is IEnumerable<MaaInterface.MaaInterfaceTask> tasks
-            ? tasks.ToList()
+        key == ConfigurationKeys.TaskItems && value is IEnumerable<MaaInterface.MaaInterfaceTask?> tasks
+            ? tasks.Where(task => task != null).Select(task => task!).ToList()
             : TaskQueueState.IsExtraKey(key) ? TaskQueueState.CloneExtraValue(key, value)
             : value;
 
@@ -234,11 +234,15 @@ public sealed class InstanceConfiguration
             }
 
             var tasksToken = Field(ConfigurationKeys.TaskItems);
-            if (tasksToken is not JArray tasksArray || tasksArray.Any(task =>
-                    task is not JObject obj || obj["name"]?.Type != JTokenType.String
+            if (tasksToken is not JArray tasksArray)
+                throw new JsonSerializationException("TaskItems 必须是包含有效任务名称的数组");
+            // 旧版本切换实例时会把选项行写成 null 项。null 不带任何数据，跳过后下次保存即清除。
+            var entries = tasksArray.Where(task => task.Type != JTokenType.Null).ToList();
+            if (entries.Any(task => task is not JObject obj || obj["name"]?.Type != JTokenType.String
                     || string.IsNullOrWhiteSpace(obj["name"]!.Value<string>())))
                 throw new JsonSerializationException("TaskItems 必须是包含有效任务名称的数组");
-            state.Tasks = tasksArray.ToObject<List<MaaInterface.MaaInterfaceTask>>(
+            state.SkippedNullTasks = tasksArray.Count - entries.Count;
+            state.Tasks = new JArray(entries).ToObject<List<MaaInterface.MaaInterfaceTask>>(
                 JsonSerializer.Create(DeserializeSettings))!;
             state.IsInitialized = true;
 

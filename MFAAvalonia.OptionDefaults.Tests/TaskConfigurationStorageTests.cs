@@ -96,9 +96,45 @@ public sealed class TaskConfigurationStorageTests
         Assert.Equal(original, File.ReadAllText(fixture.Path));
     }
 
+    [Fact]
+    public void NullTaskEntriesAreSkippedOnReadAndDroppedOnNextCommit()
+    {
+        // 旧版本切换实例时会把选项行写成 null 项；读取跳过，读取本身不写盘，下次提交不再带 null。
+        var original = "{\"TaskItems\":[null,{\"name\":\"A\",\"entry\":\"EntryA\"},null],\"CurrentTasks\":[\"A<|||>EntryA\"]}";
+        using var fixture = new Fixture(original);
+        var config = fixture.Open();
+
+        Assert.True(config.TryReadTaskState(out var state, out var error), error);
+        Assert.Equal("A", Assert.Single(state.Tasks).Name);
+        Assert.Equal(2, state.SkippedNullTasks);
+        Assert.Equal(original, File.ReadAllText(fixture.Path));
+
+        Assert.True(config.TryCommitTaskState(state, out error), error);
+        var written = JObject.Parse(File.ReadAllText(fixture.Path))[ConfigurationKeys.TaskItems] as JArray;
+        Assert.NotNull(written);
+        Assert.DoesNotContain(written, task => task.Type == JTokenType.Null);
+        Assert.True(fixture.Open().TryReadTaskState(out var reread, out error), error);
+        Assert.Equal(0, reread.SkippedNullTasks);
+    }
+
+    [Fact]
+    public void DirectTaskItemsWritesDropNullEntries()
+    {
+        using var fixture = new Fixture();
+        var config = fixture.Open();
+
+        config.SetValue(ConfigurationKeys.TaskItems, new MaaInterface.MaaInterfaceTask?[] { null, Task("A"), null });
+
+        var written = JObject.Parse(File.ReadAllText(fixture.Path))[ConfigurationKeys.TaskItems] as JArray;
+        Assert.NotNull(written);
+        Assert.Equal("A", Assert.Single(written)["name"]?.Value<string>());
+        Assert.True(fixture.Open().TryReadTaskState(out var disk, out var error), error);
+        Assert.Equal(0, disk.SkippedNullTasks);
+    }
+
     [Theory]
     [InlineData("TaskItems", "null")]
-    [InlineData("TaskItems", "[null]")]
+    [InlineData("TaskItems", "[null,{\"entry\":\"A\"}]")]
     [InlineData("TaskItems", "[{\"entry\":\"A\"}]")]
     [InlineData("CurrentTasks", "[17]")]
     [InlineData("DeletedTaskNames", "\"A\"")]

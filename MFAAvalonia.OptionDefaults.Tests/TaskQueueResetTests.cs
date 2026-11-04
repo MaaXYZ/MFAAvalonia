@@ -3,6 +3,7 @@ using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.ValueType;
 using Newtonsoft.Json.Linq;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
@@ -101,6 +102,22 @@ public partial class OptionControlsTests
 
         fixture.Catalogue.Preset = [];
         Assert.Equal(LangKeys.Reset.ToLocalization(), fixture.ViewModel.ResetTasksTip);
+    });
+
+    [Fact]
+    public Task SavingWithOptionRowsNeverWritesNullTasks() => Run(() =>
+    {
+        // 切换实例前的保存走这里；队列顶部的选项行没有任务对象，不得写成 null 项。
+        using var fixture = new TaskEditFixture();
+        var optionRow = new DragItemViewModel(new MaaInterface.MaaInterfaceResource { Name = "__GlobalOption__" });
+        using (fixture.ViewModel.SuppressTaskStateSaving())
+            fixture.ViewModel.TaskItemViewModels.Insert(0, optionRow);
+
+        Assert.True(fixture.ViewModel.TrySaveTaskItems());
+
+        var written = JObject.Parse(File.ReadAllText(fixture.Path))["TaskItems"] as JArray;
+        Assert.NotNull(written);
+        Assert.Equal(new[] { "A" }, written.Select(task => task.Type == JTokenType.Null ? null : task["name"]?.Value<string>()));
     });
 
     private static void SeedResetCatalogue(TaskEditFixture fixture, params MaaInterface.MaaInterfacePreset[] presets)
