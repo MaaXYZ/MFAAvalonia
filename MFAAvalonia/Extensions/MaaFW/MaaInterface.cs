@@ -603,7 +603,7 @@ public partial class MaaInterface
         }
 
         /// <summary>
-        /// 验证所有输入字段
+        /// 验证所有输入字段；没有用户值的字段按当前默认值验证
         /// </summary>
         public (bool IsValid, string? ErrorMessage) ValidateAllInputs(Dictionary<string, string?>? data)
         {
@@ -612,7 +612,9 @@ public partial class MaaInterface
             foreach (var input in Inputs)
             {
                 if (string.IsNullOrEmpty(input.Name)) continue;
-                var value = data != null && data.TryGetValue(input.Name, out var v) ? v ?? string.Empty : string.Empty;
+                var value = data != null && data.TryGetValue(input.Name, out var v) && v != null
+                    ? v
+                    : input.Default ?? string.Empty;
                 var result = ValidateInput(input.Name, value);
                 if (!result.IsValid) return result;
             }

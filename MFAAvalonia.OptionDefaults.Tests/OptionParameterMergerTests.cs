@@ -140,43 +140,87 @@ public class OptionParameterMergerTests
     public void PreTaskJsonRejectsInvalidSavedSelection()
         => Assert.Throws<InvalidOperationException>(() => PreTask(["Mode"], Select("Mode", "Gone")));
 
-    // Baseline behaviour that stage 1 of the option-default layering changes.
+    // Values without a saved selection follow the current default (baseline merged nothing, kept the
+    // placeholder, let null override the default and validated a missing field as empty).
 
     [Fact]
-    public void Baseline_CheckboxWithoutSavedValueMergesNothing()
-        => Assert.Empty(Merge(new MaaInterface.MaaInterfaceSelectOption { Name = "Flags" }));
+    public void CheckboxWithoutSavedValueUsesDefaultCases()
+    {
+        var output = Merge(new MaaInterface.MaaInterfaceSelectOption { Name = "Flags" });
+
+        Assert.Equal(["x", "y"], output.Select(item => ((JObject)item["N"]!).Properties().Single().Name));
+    }
 
     [Fact]
-    public void Baseline_MissingFieldWithEmptyDefaultKeepsPlaceholder()
+    public void SelectWithoutSavedValueUsesDefaultCase()
+        => Assert.Equal("B", Merge(new MaaInterface.MaaInterfaceSelectOption { Name = "Mode" })[0]["N"]!["mode"]!.Value<string>());
+
+    [Fact]
+    public void InputWithoutSavedValueUsesDefaults()
+    {
+        var output = Merge(new MaaInterface.MaaInterfaceSelectOption { Name = "Count" });
+
+        Assert.Equal(3, Assert.Single(output)["N"]!["count"]!.Value<long>());
+        Assert.Equal(string.Empty, output[0]["N"]!["text"]!.Value<string>());
+    }
+
+    [Fact]
+    public void MissingFieldWithEmptyDefaultBecomesEmptyString()
     {
         var output = Merge(Fields("Count", ("count", "5")));
 
-        Assert.Equal("{text}", Assert.Single(output)["N"]!["text"]!.Value<string>());
+        Assert.Equal(string.Empty, Assert.Single(output)["N"]!["text"]!.Value<string>());
     }
 
     [Fact]
-    public void Baseline_PreTaskNullFieldOverridesDefault()
+    public void ExplicitNullFieldMarkerStillProducesJsonNull()
+    {
+        var output = Merge(Fields("Count", ("count", "5"), ("text", MaaInterface.MaaInterfaceOption.ExplicitNullMarker)));
+
+        Assert.Equal(JTokenType.Null, Assert.Single(output)["N"]!["text"]!.Type);
+    }
+
+    [Fact]
+    public void PreTaskNullFieldUsesDefault()
     {
         var output = PreTask(["Count"], Fields("Count", ("count", null)));
 
-        Assert.Equal(JTokenType.Null, output["Count"]!["count"]!.Type);
+        Assert.Equal("3", output["Count"]!["count"]!.Value<string>());
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("7", true)]
+    [InlineData("", false)]
+    [InlineData("x", false)]
+    public void InputValidationChecksTheDefaultForMissingFields(string? saved, bool valid)
+    {
+        var data = saved == null ? new Dictionary<string, string?>() : new Dictionary<string, string?> { ["count"] = saved };
+
+        Assert.Equal(valid, Interface.Option!["Count"].ValidateAllInputs(data).IsValid);
     }
 
     [Fact]
-    public void Baseline_InputValidationTreatsMissingFieldAsEmpty()
-        => Assert.False(Interface.Option!["Count"].ValidateAllInputs(new Dictionary<string, string?>()).IsValid);
-
-    [Fact]
-    public void Baseline_MergingWritesDefaultsIntoSelections()
+    public void MergingDoesNotChangeSavedSelections()
     {
-        var mode = new MaaInterface.MaaInterfaceSelectOption { Name = "Mode" };
-        var count = new MaaInterface.MaaInterfaceSelectOption { Name = "Count" };
+        var options = new[]
+        {
+            new MaaInterface.MaaInterfaceSelectOption { Name = "Mode" },
+            new MaaInterface.MaaInterfaceSelectOption { Name = "Mode", Index = 0 },
+            new MaaInterface.MaaInterfaceSelectOption { Name = "Count" },
+            Fields("Count", ("count", null)),
+            new MaaInterface.MaaInterfaceSelectOption { Name = "Flags" },
+            new MaaInterface.MaaInterfaceSelectOption { Name = "Enabled" }
+        };
+        var before = options.Select(JsonConvert.SerializeObject).ToList();
 
-        Merge(mode);
-        Merge(count);
+        foreach (var option in options)
+        {
+            Merge(option);
+            PreTask([option.Name!], option);
+        }
 
-        Assert.Equal("B", mode.SelectedCase);
-        Assert.Equal("3", count.Data!["count"]);
+        Assert.Equal(before, options.Select(JsonConvert.SerializeObject).ToList());
     }
 
     private static JArray Merge(params MaaInterface.MaaInterfaceSelectOption[] options)

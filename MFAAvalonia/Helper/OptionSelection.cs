@@ -15,37 +15,23 @@ public static class OptionSelection
         selection.SelectionError = null;
         if (definition.IsInput || definition.IsHotkey || definition.IsCheckbox) return true;
 
-        var cases = definition.Cases;
-        if (cases == null || cases.Count == 0 || cases.Any(item => string.IsNullOrEmpty(item.Name))
-            || cases.Select(item => item.Name).Distinct(StringComparer.Ordinal).Count() != cases.Count)
-            return Invalid(selection, LangKeys.OptionCaseDefinitionInvalid);
+        if (!OptionValues.TryGetCaseIndex(definition, selection, out var index, out var error))
+            return Invalid(selection, error!);
 
         if (selection.SelectedCase != null)
         {
-            var namedIndex = cases.FindIndex(item => string.Equals(item.Name, selection.SelectedCase, StringComparison.Ordinal));
-            if (namedIndex < 0)
-                return Invalid(selection, LangKeys.OptionSavedSelectionInvalid);
-            selection.Index = namedIndex;
+            selection.Index = index;
             return true;
         }
 
-        if (selection.HasInvalidIndex)
-            return Invalid(selection, LangKeys.OptionSavedSelectionInvalid);
-
-        if (selection.Index is int legacyIndex)
+        if (selection.Index != null)
         {
-            if (legacyIndex < 0 || legacyIndex >= cases.Count)
-                return Invalid(selection, LangKeys.OptionSavedSelectionInvalid);
             // Compatibility interpretation: without a historical definition the old meaning is unknowable.
-            selection.SelectedCase = cases[legacyIndex].Name;
+            selection.SelectedCase = definition.Cases![index].Name;
             return true;
         }
 
-        var defaultIndex = definition.DefaultCase == null ? 0
-            : cases.FindIndex(item => string.Equals(item.Name, definition.DefaultCase, StringComparison.Ordinal));
-        if (defaultIndex < 0)
-            return Invalid(selection, LangKeys.OptionDefaultCaseUnavailable);
-        return SelectIndex(definition, selection, defaultIndex);
+        return SelectIndex(definition, selection, index);
     }
 
     public static bool SelectIndex(MaaInterface.MaaInterfaceOption definition,

@@ -104,7 +104,7 @@ public static class OptionParameterMerger
             // 处理 checkbox 类型（多选，任务 10）
             if (interfaceOption.IsCheckbox && interfaceOption.Cases != null)
             {
-                var selectedCases = selectOption.SelectedCases ?? new List<string>();
+                var selectedCases = OptionValues.GetSelectedCases(interfaceOption, selectOption);
                 // 按 cases 定义顺序合并所有选中 case 的 pipeline_override
                 foreach (var caseItem in interfaceOption.Cases)
                 {
@@ -124,20 +124,13 @@ public static class OptionParameterMerger
             // 处理 input 类型
             else if (interfaceOption.IsInput)
             {
-                if ((selectOption.Data == null || selectOption.Data.Count == 0) && interfaceOption.Inputs is { Count: > 0 })
-                {
-                    selectOption.Data = interfaceOption.Inputs
-                        .Where(input => !string.IsNullOrEmpty(input.Name))
-                        .ToDictionary(input => input.Name!, input => input.Default ?? string.Empty);
-                }
-
-                // 运行前始终按最新 Data 重建，避免 UI 某些路径未刷新缓存时继续使用旧值。
+                // 运行前始终按当前取值重建，避免 UI 某些路径未刷新缓存时继续使用旧值。
+                // 只更新运行时缓存 PipelineOverride，不改用户保存的 Data。
                 string? pipelineOverride = selectOption.PipelineOverride;
-                if (selectOption.Data != null && interfaceOption.PipelineOverride != null)
+                if (interfaceOption.PipelineOverride != null)
                 {
                     pipelineOverride = interfaceOption.GenerateProcessedPipeline(
-                        selectOption.Data.Where(kv => kv.Value != null)
-                            .ToDictionary(kv => kv.Key, kv => kv.Value!));
+                        OptionValues.GetFieldValues(interfaceOption, selectOption));
                     selectOption.PipelineOverride = pipelineOverride;
                 }
 
@@ -147,13 +140,10 @@ public static class OptionParameterMerger
                     taskModels.Merge(param);
                 }
             }
-            // Resolve the saved case before deriving execution parameters.
-            else if (OptionSelection.Resolve(interfaceOption, selectOption) && selectOption.Index is int index
-                     && interfaceOption.Cases is { } cases
-                     && index >= 0
-                     && index < cases.Count)
+            // 无效的已存选择不合并；外层校验负责跳过任务或阻止执行。
+            else if (OptionValues.TryGetCaseIndex(interfaceOption, selectOption, out var index, out _))
             {
-                var selectedCase = cases[index];
+                var selectedCase = interfaceOption.Cases![index];
 
                 // 合并当前 case 的 pipeline_override
                 if (selectedCase.PipelineOverride != null)
@@ -205,33 +195,17 @@ public static class OptionParameterMerger
 
         if (missingSubOptionNames.Count > 0)
         {
-            var defaultSubOptions = CreateDefaultSelectOptions(maaInterface, missingSubOptionNames);
+            // 没有保存过的子选项只带名字，取值全部跟随当前默认；临时对象不挂回用户的选项树。
+            var defaultSubOptions = missingSubOptionNames.Distinct()
+                .Where(name => !string.IsNullOrWhiteSpace(name) && maaInterface?.Option?.ContainsKey(name) == true)
+                .Select(name => new MaaInterface.MaaInterfaceSelectOption { Name = name })
+                .ToList();
             if (defaultSubOptions.Count > 0)
             {
                 Apply(taskModels, maaInterface, controllerName, resourceName,
                     defaultSubOptions, missingSubOptionNames, processedOptions);
             }
         }
-    }
-
-    private static List<MaaInterface.MaaInterfaceSelectOption> CreateDefaultSelectOptions(
-        MaaInterface? maaInterface, IEnumerable<string> optionNames)
-    {
-        var result = new List<MaaInterface.MaaInterfaceSelectOption>();
-        foreach (var optionName in optionNames.Distinct())
-        {
-            if (string.IsNullOrWhiteSpace(optionName) || maaInterface?.Option?.ContainsKey(optionName) != true)
-                continue;
-
-            var option = new MaaInterface.MaaInterfaceSelectOption
-            {
-                Name = optionName
-            };
-            TaskLoader.SetDefaultOptionValue(maaInterface, option);
-            result.Add(option);
-        }
-
-        return result;
     }
 
     /// <summary>pretask 收到的选项 JSON：键为 option 名，值为该 option 的当前取值。</summary>
@@ -249,23 +223,14 @@ public static class OptionParameterMerger
             if (!MaaInterfaceActivationHelper.IsOptionApplicable(maaInterface, definition, controllerName, resourceName)) continue;
             selected.TryGetValue(name, out var value);
             if (definition.IsCheckbox)
-                result[name] = JToken.FromObject(value?.SelectedCases ?? definition.DefaultCases ?? []);
+                result[name] = JToken.FromObject(OptionValues.GetSelectedCases(definition, value));
             else if (definition.IsInput || definition.IsHotkey)
-            {
-                var data = value?.Data ?? new Dictionary<string, string?>();
-                var defaults = definition.IsHotkey
-                    ? definition.Hotkeys?.ToDictionary(x => x.Name ?? string.Empty, x => x.Default ?? string.Empty)
-                    : definition.Inputs?.ToDictionary(x => x.Name ?? string.Empty, x => x.Default ?? string.Empty);
-                result[name] = JObject.FromObject(defaults == null
-                    ? data
-                    : defaults.Concat(data).GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.Last().Value));
-            }
+                result[name] = JObject.FromObject(OptionValues.GetFieldValues(definition, value));
             else
             {
-                value ??= new MaaInterface.MaaInterfaceSelectOption { Name = name };
-                if (!OptionSelection.Resolve(definition, value))
-                    throw new InvalidOperationException($"{name}: {value.SelectionError.ToLocalization()}");
-                result[name] = value.SelectedCase ?? string.Empty;
+                if (!OptionValues.TryGetCaseIndex(definition, value, out var index, out var error))
+                    throw new InvalidOperationException($"{name}: {error.ToLocalization()}");
+                result[name] = definition.Cases![index].Name;
             }
         }
         return result.ToString(Formatting.None);
