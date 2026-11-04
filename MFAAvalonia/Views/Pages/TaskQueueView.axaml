@@ -1123,7 +1123,7 @@
                                 Height="24"
                                 HorizontalContentAlignment="Center"
                                 VerticalContentAlignment="Center"
-                                ToolTip.Tip="{markup:I18n {x:Static helper:LangKeys.Reset}}">
+                                ToolTip.Tip="{Binding ResetTasksTip}">
                             <Path Data="{StaticResource RefreshGeometry}"
                                   Width="16"
                                   Height="16"

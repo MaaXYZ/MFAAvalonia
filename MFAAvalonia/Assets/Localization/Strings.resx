@@ -2314,6 +2314,7 @@
   <data name="RestoreGroupResourceDefaults" xml:space="preserve"><value>恢复本组默认值</value></data>
   <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>将“{0}”中 {1} 项恢复为默认值，之后随资源的默认设置变化。默认值不是预设方案中的值；子选项的设置会保留。</value></data>
   <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>恢复本组</value></data>
+  <data name="ResetTasksToPreset" xml:space="preserve"><value>重置为预设“{0}”</value></data>
   <data name="ResumeInterruptedQueue" xml:space="preserve"><value>重新启动队列时，从上次未完成的任务继续（自动跳过已成功的任务）</value></data>
   <data name="TaskConfigurationTitle" xml:space="preserve"><value>任务配置</value></data>
   <data name="TaskCleanupPaused" xml:space="preserve"><value>较多任务未在资源中找到，已暂停自动清理，请检查资源包。</value></data>

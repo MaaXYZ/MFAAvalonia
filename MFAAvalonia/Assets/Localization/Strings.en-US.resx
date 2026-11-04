@@ -2304,6 +2304,7 @@ Update using this archive?</value>
   <data name="RestoreGroupResourceDefaults" xml:space="preserve"><value>Restore this group to defaults</value></data>
   <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>Restore {1} item(s) in “{0}” to their defaults; they will then follow the resource's defaults. These are not preset values. Sub-option settings are kept.</value></data>
   <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>Restore group</value></data>
+  <data name="ResetTasksToPreset" xml:space="preserve"><value>Reset to preset “{0}”</value></data>
   <data name="ResumeInterruptedQueue" xml:space="preserve"><value>When restarting the queue, resume from the first unfinished task (succeeded tasks are skipped)</value></data>
   <data name="TaskConfigurationTitle" xml:space="preserve"><value>Task configuration</value></data>
   <data name="TaskCleanupPaused" xml:space="preserve"><value>Many tasks were not found in the resource. Automatic cleanup is paused. Please check the resource package.</value></data>

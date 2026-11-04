@@ -800,13 +800,14 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         return error;
     }
 
-    private static void PrepareOptions(IEnumerable<MaaInterface.MaaInterfaceSelectOption>? options)
+    private static void PrepareOptions(IEnumerable<MaaInterface.MaaInterfaceSelectOption>? options,
+        MaaInterface? @interface)
     {
         if (options == null) return;
 
         foreach (var option in options)
         {
-            TaskLoader.PrepareOption(MaaProcessor.Interface, option);
+            TaskLoader.PrepareOption(@interface, option);
         }
     }
 
@@ -867,6 +868,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         });
         HasPresets = presets is { Count: > 0 };
         _appliedPresets = presets;
+        OnPropertyChanged(nameof(ResetTasksTip));
     }
 
     [RelayCommand]
@@ -880,6 +882,16 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             instanceId: Processor.InstanceId,
             instanceName: InstanceName);
 
+        if (TryApplyTaskEdit(BuildPresetCandidate(preset), resetHistory: true, setPreset: true, presetKey: preset.Name))
+            OnPropertyChanged(nameof(ResetTasksTip));
+    }
+
+    /// <summary>
+    /// 按预设的当前版本构造任务队列，应用预设与按预设重置共用。
+    /// 预设没给的选项值不写，读取时跟随当前默认。
+    /// </summary>
+    private List<DragItemViewModel> BuildPresetCandidate(MaaInterface.MaaInterfacePreset preset)
+    {
         // 1. 根据预设中的任务列表重建任务顺序与数量：
         //    - 只保留预设中出现的任务（例如：默认 ABCD，预设只有 AB，则应用后只显示 AB 两个任务）
         //    - 保留全局资源设置项（IsResourceOptionItem）
@@ -896,7 +908,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         // 使用 TasksSource 作为模板，保证从 interface 原始定义克隆任务。
         // 这里按名称保留模板源，但应用时必须按预设项出现顺序逐个克隆，
         // 不能再按名称回查，否则同名任务（例如多个“自动出征”）会全部落到第一项上。
-        var templateDict = Processor.TasksSource
+        var templateDict = TaskEditing.Templates()
             .Where(t => !string.IsNullOrEmpty(t.InterfaceItem?.Name))
             .GroupBy(t => t.InterfaceItem!.Name!)
             .ToDictionary(g => g.Key, g => g.First());
@@ -910,7 +922,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             candidate.Add(item);
 
         // 再按预设顺序添加任务项，并记录“预设项 -> 新克隆任务项”的一一映射
-        foreach (var presetTask in preset.Task.Where(t => !string.IsNullOrEmpty(t.Name)))
+        foreach (var presetTask in (preset.Task ?? []).Where(t => !string.IsNullOrEmpty(t.Name)))
         {
             if (!templateDict.TryGetValue(presetTask.Name!, out var templateVm)) continue;
 
@@ -953,7 +965,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
                     if (selectOption == null) continue;
 
-                    if (MaaProcessor.Interface?.Option?.TryGetValue(optionName, out var interfaceOption) != true) continue;
+                    if (TaskEditing.Interface()?.Option?.TryGetValue(optionName, out var interfaceOption) != true) continue;
 
                     if (interfaceOption.IsCheckbox)
                     {
@@ -1029,14 +1041,14 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             }
         }
 
-        TryApplyTaskEdit(candidate, resetHistory: true, setPreset: true, presetKey: preset.Name);
+        return candidate;
     }
 
     /// <summary>preset 写入后重建运行时缓存；preset 没给的值不补，读取时跟随当前默认。</summary>
     private void RefreshPresetOptionRuntimeState(MaaInterface.MaaInterfaceSelectOption option)
     {
         if (string.IsNullOrWhiteSpace(option.Name)) return;
-        if (MaaProcessor.Interface?.Option?.TryGetValue(option.Name, out var interfaceOption) != true) return;
+        if (TaskEditing.Interface()?.Option?.TryGetValue(option.Name, out var interfaceOption) != true) return;
 
         if (interfaceOption.IsInput && interfaceOption.PipelineOverride != null)
             option.PipelineOverride = interfaceOption.GenerateProcessedPipeline(
@@ -1080,7 +1092,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         if (string.Equals(currentOption.Name, targetOptionName, StringComparison.Ordinal))
             return currentOption;
 
-        if (MaaProcessor.Interface?.Option?.TryGetValue(currentOption.Name, out var currentOptionDef) != true ||
+        if (TaskEditing.Interface()?.Option?.TryGetValue(currentOption.Name, out var currentOptionDef) != true ||
             currentOptionDef.Cases == null)
             return null;
 
@@ -1101,7 +1113,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 if (childOption == null)
                 {
                     childOption = new MaaInterface.MaaInterfaceSelectOption { Name = childOptionName };
-                    TaskLoader.PrepareOption(MaaProcessor.Interface, childOption);
+                    TaskLoader.PrepareOption(TaskEditing.Interface(), childOption);
                     currentOption.SubOptions.Add(childOption);
                 }
 
@@ -1122,7 +1134,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         if (string.Equals(currentOptionName, targetOptionName, StringComparison.Ordinal)) return true;
         if (!visited.Add(currentOptionName)) return false;
 
-        if (MaaProcessor.Interface?.Option?.TryGetValue(currentOptionName, out var currentOptionDef) != true ||
+        if (TaskEditing.Interface()?.Option?.TryGetValue(currentOptionName, out var currentOptionDef) != true ||
             currentOptionDef.Cases == null)
             return false;
 
@@ -1144,6 +1156,27 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     private void ResetTasks()
     {
         using var _ = BeginUiLogScope("ResetTasks");
+        if (!TryResetTaskQueue(out var preset, out var staleKey)) return;
+        UpdateTasksForResource(CurrentResource);
+        OnPropertyChanged(nameof(ResetTasksTip));
+        if (staleKey != null)
+            LoggerHelper.Info($"实例记录的预设“{staleKey}”已不在当前资源中，已按任务列表重置并清除该记录");
+        LoggerHelper.UserAction(preset == null ? "重置任务列表" : "按预设重置任务列表",
+            preset == null ? $"taskCount={TaskItemViewModels.Count}" : $"preset={preset.Name}, taskCount={TaskItemViewModels.Count}",
+            operation: "ResetTasks", instanceId: Processor.InstanceId, instanceName: InstanceName);
+    }
+
+    /// <summary>
+    /// 重置任务队列。实例记着的预设仍在当前 interface 里时，按该预设的当前版本重建并保留记录，等同重新应用一次；
+    /// 没有记录或预设已不存在时，按 interface 的任务列表重建并清除记录。
+    /// 两种情况都保留资源选项项与特殊任务，不动全局、资源、控制器选项。
+    /// </summary>
+    public bool TryResetTaskQueue(out MaaInterface.MaaInterfacePreset? preset, out string? staleKey)
+    {
+        preset = FindInstancePreset(out staleKey);
+        if (preset != null)
+            return TryApplyTaskEdit(BuildPresetCandidate(preset), resetHistory: true, setPreset: true, presetKey: preset.Name);
+
         // 保留特殊任务（倒计时、系统通知等用户手动添加的自定义 Action 任务）
         var specialTasks = TaskItemViewModels
             .Where(t => !string.IsNullOrWhiteSpace(t.InterfaceItem?.Entry)
@@ -1153,12 +1186,12 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         var candidate = TaskItemViewModels.Where(item => item.IsResourceOptionItem).ToList();
 
         // 从 TasksSource 重新填充任务（TasksSource 包含 interface 中定义的原始任务）
-        foreach (var item in Processor.TasksSource)
+        foreach (var item in TaskEditing.Templates())
         {
             // 克隆任务以避免引用问题
             var resetItem = item.Clone();
             resetItem.OwnerViewModel = null;
-            PrepareOptions(resetItem.InterfaceItem?.Option);
+            PrepareOptions(resetItem.InterfaceItem?.Option, TaskEditing.Interface());
             candidate.Add(resetItem);
         }
 
@@ -1168,10 +1201,33 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             candidate.Add(special);
         }
 
-        if (!TryApplyTaskEdit(candidate, resetHistory: true, setPreset: true)) return;
-        UpdateTasksForResource(CurrentResource);
-        LoggerHelper.UserAction("重置任务列表", $"taskCount={TaskItemViewModels.Count}",
-            operation: "ResetTasks", instanceId: Processor.InstanceId, instanceName: InstanceName);
+        return TryApplyTaskEdit(candidate, resetHistory: true, setPreset: true);
+    }
+
+    /// <summary>实例记着的预设；没有记录时返回 null，记录的预设已不在当前 interface 里时由 staleKey 给出。</summary>
+    private MaaInterface.MaaInterfacePreset? FindInstancePreset(out string? staleKey)
+    {
+        staleKey = null;
+        if (!TaskEditing.Configuration().TryReadTaskState(out var state, out _)
+            || string.IsNullOrWhiteSpace(state.PresetKey))
+            return null;
+
+        var preset = TaskEditing.Interface()?.Preset?.FirstOrDefault(candidate => candidate.Name == state.PresetKey);
+        if (preset == null) staleKey = state.PresetKey;
+        return preset;
+    }
+
+    /// <summary>重置按钮提示：实例记着有效预设时写明会重置成哪个预设。</summary>
+    public string ResetTasksTip
+    {
+        get
+        {
+            var preset = FindInstancePreset(out _);
+            return preset == null
+                ? LangKeys.Reset.ToLocalization()
+                : LangKeys.ResetTasksToPreset.ToLocalizationFormatted(false,
+                    LanguageHelper.GetLocalizedDisplayName(preset.Label, preset.Name));
+        }
     }
 
     #endregion
@@ -1676,6 +1732,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         {
             OnPropertyChanged(nameof(CurrentDevicePlaceholderText));
             OnPropertyChanged(nameof(CurrentDeviceTooltipText));
+            OnPropertyChanged(nameof(ResetTasksTip));
 
             if (Devices.Count == 1 && Devices[0] is EmptyDevicePlaceholder)
             {

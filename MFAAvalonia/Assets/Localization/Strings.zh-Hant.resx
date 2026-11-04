@@ -2292,6 +2292,7 @@
   <data name="RestoreGroupResourceDefaults" xml:space="preserve"><value>還原本組預設值</value></data>
   <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>將「{0}」中 {1} 項還原為預設值，之後隨資源的預設設定變化。預設值不是預設方案中的值；子選項的設定會保留。</value></data>
   <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>還原本組</value></data>
+  <data name="ResetTasksToPreset" xml:space="preserve"><value>重置為預設「{0}」</value></data>
   <data name="ResumeInterruptedQueue" xml:space="preserve"><value>重新啟動任務清單時，從上次未完成的任務繼續（自動跳過已成功的任務）</value></data>
   <data name="TaskConfigurationTitle" xml:space="preserve"><value>任務配置</value></data>
   <data name="TaskCleanupPaused" xml:space="preserve"><value>資源中找不到多個任務，已暫停自動清理，請檢查資源包。</value></data>

@@ -177,6 +177,8 @@ public partial class OptionControlsTests
         public InstanceConfiguration Configuration { get; }
         public TaskQueueViewModel ViewModel { get; }
         public List<string?> Errors { get; } = [];
+        public MaaInterface Catalogue { get; }
+        public List<DragItemViewModel> Templates { get; } = [];
 
         public TaskEditFixture(string? content = null)
         {
@@ -185,7 +187,7 @@ public partial class OptionControlsTests
             Configuration = OpenConfiguration();
             ViewModel = (TaskQueueViewModel)RuntimeHelpers.GetUninitializedObject(typeof(TaskQueueViewModel));
             ViewModel.IsTaskConfigurationValid = true;
-            var catalogue = new MaaInterface
+            var catalogue = Catalogue = new MaaInterface
             {
                 Option = new()
                 {
@@ -204,7 +206,8 @@ public partial class OptionControlsTests
                 (Action<DragItemViewModel>)(_ => { }),
                 (Action<string?>)(message => Errors.Add(message)),
                 (Func<MaaInterface.MaaInterfaceTask, DragItemViewModel>)CreateRow,
-                (Action<DragItemViewModel, MaaInterface.MaaInterfaceTask>)UpdateRow);
+                (Action<DragItemViewModel, MaaInterface.MaaInterfaceTask>)UpdateRow,
+                (Func<IEnumerable<DragItemViewModel>>)(() => Templates));
             typeof(TaskQueueViewModel).GetField("_taskStateEditingContext", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .SetValue(ViewModel, context);
             var item = CreateRow(new MaaInterface.MaaInterfaceTask { Name = "A", Entry = "EntryA", Check = true });

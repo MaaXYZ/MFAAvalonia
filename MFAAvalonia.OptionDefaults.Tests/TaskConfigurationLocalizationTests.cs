@@ -30,6 +30,7 @@ public sealed class TaskConfigurationLocalizationTests
         LangKeys.OptionDefaultCaseUnavailable,
         LangKeys.TaskExecutionBlockedByOptions,
         LangKeys.TaskSkippedInvalidOptions,
+        LangKeys.ResetTasksToPreset,
     ];
 
     [Theory]

@@ -2260,6 +2260,7 @@
   <data name="RestoreGroupResourceDefaults" xml:space="preserve"><value>이 그룹을 기본값으로 복원</value></data>
   <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>“{0}”의 {1}개 항목을 기본값으로 복원하며, 이후 리소스의 기본값을 따릅니다. 프리셋 값이 아닙니다. 하위 옵션 설정은 유지됩니다.</value></data>
   <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>그룹 복원</value></data>
+  <data name="ResetTasksToPreset" xml:space="preserve"><value>프리셋 “{0}”(으)로 초기화</value></data>
   <data name="ResumeInterruptedQueue" xml:space="preserve"><value>대기열을 다시 시작할 때 완료되지 않은 첫 작업부터 재개 (성공한 작업은 건너뜀)</value></data>
   <data name="TaskConfigurationTitle" xml:space="preserve"><value>작업 설정</value></data>
   <data name="TaskCleanupPaused" xml:space="preserve"><value>리소스에서 여러 작업을 찾을 수 없어 자동 정리를 일시 중지했습니다. 리소스 패키지를 확인해 주세요.</value></data>

@@ -20,7 +20,8 @@ public partial class TaskQueueViewModel
         Action<DragItemViewModel> RefreshSupport,
         Action<string?> ReportError,
         Func<MaaInterface.MaaInterfaceTask, DragItemViewModel> CreateRow,
-        Action<DragItemViewModel, MaaInterface.MaaInterfaceTask> UpdateRow);
+        Action<DragItemViewModel, MaaInterface.MaaInterfaceTask> UpdateRow,
+        Func<IEnumerable<DragItemViewModel>> Templates);
 
     private TaskStateEditingContext? _taskStateEditingContext;
     private TaskStateEditingContext TaskEditing => _taskStateEditingContext ??= new(
@@ -30,7 +31,8 @@ public partial class TaskQueueViewModel
         RefreshTaskSupportForCurrentContext,
         ReportTaskSaveFailure,
         task => new DragItemViewModel(task),
-        (item, task) => item.InterfaceItem = task);
+        (item, task) => item.InterfaceItem = task,
+        () => Processor.TasksSource);
 
     private int _taskStateSaveSuppressionDepth;
     public bool IsPublishingTaskState => _taskStateSaveSuppressionDepth > 0;

@@ -2299,6 +2299,7 @@
   <data name="RestoreGroupResourceDefaults" xml:space="preserve"><value>このグループを既定値に戻す</value></data>
   <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>「{0}」の {1} 項目を既定値に戻し、以後はリソースの既定値に従います。プリセットの値ではありません。サブオプションの設定は保持されます。</value></data>
   <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>グループを戻す</value></data>
+  <data name="ResetTasksToPreset" xml:space="preserve"><value>プリセット「{0}」にリセット</value></data>
   <data name="ResumeInterruptedQueue" xml:space="preserve"><value>キューを再開するとき、前回未完了のタスクから再開（成功済みタスクはスキップ）</value></data>
   <data name="TaskConfigurationTitle" xml:space="preserve"><value>タスク設定</value></data>
   <data name="TaskCleanupPaused" xml:space="preserve"><value>リソース内に多くのタスクが見つからないため、自動削除を一時停止しました。リソースパッケージを確認してください。</value></data>
