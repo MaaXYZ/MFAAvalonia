@@ -1,5 +1,6 @@
 using MFAAvalonia.Configuration;
 using MFAAvalonia.Extensions.MaaFW;
+using MFAAvalonia.Helper;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
@@ -34,18 +35,26 @@ public sealed class TaskConfigurationCharacterizationTests
     {
         var schema = Schema("A", "B", "C");
         schema.Option!["choice"].DefaultCases = new() { "B" };
-        var selection = new MaaInterface.MaaInterfaceSelectOption { Name = "choice" };
-        TaskLoader.SetDefaultOptionValue(schema, selection);
-        Assert.Equal(1, selection.Index);
+        var chosen = new MaaInterface.MaaInterfaceSelectOption { Name = "choice" };
+        OptionSelection.SelectIndex(schema.Option["choice"], chosen, 2);
+        var following = new MaaInterface.MaaInterfaceSelectOption { Name = "choice" };
+        TaskLoader.PrepareOption(schema, chosen);
+        TaskLoader.PrepareOption(schema, following);
+        Assert.Null(following.Index);
 
-        var restored = JsonConvert.DeserializeObject<MaaInterface.MaaInterfaceSelectOption>(
-            JsonConvert.SerializeObject(selection))!;
-        var updated = Schema("B", "A", "C");
+        var updated = Schema("B", "C", "A");
         updated.Option!["choice"].DefaultCases = new() { "B" };
-        TaskLoader.SetDefaultOptionValue(updated, restored);
+        var restoredChosen = JsonConvert.DeserializeObject<MaaInterface.MaaInterfaceSelectOption>(
+            JsonConvert.SerializeObject(chosen))!;
+        var restoredFollowing = JsonConvert.DeserializeObject<MaaInterface.MaaInterfaceSelectOption>(
+            JsonConvert.SerializeObject(following))!;
+        TaskLoader.PrepareOption(updated, restoredChosen);
+        TaskLoader.PrepareOption(updated, restoredFollowing);
 
-        Assert.Equal(0, restored.Index);
-        Assert.Equal("B", updated.Option["choice"].Cases![restored.Index!.Value].Name);
+        Assert.Equal("C", restoredChosen.SelectedCase);
+        Assert.Equal(1, restoredChosen.Index);
+        Assert.True(OptionValues.TryGetCaseIndex(updated.Option["choice"], restoredFollowing, out var index, out _));
+        Assert.Equal("B", updated.Option["choice"].Cases![index].Name);
     }
 
     [Fact]
@@ -59,7 +68,7 @@ public sealed class TaskConfigurationCharacterizationTests
             JsonConvert.SerializeObject(selection))!;
         var updated = Schema("B", "A", "C");
         updated.Option!["choice"].Type = "checkbox";
-        TaskLoader.SetDefaultOptionValue(updated, restored);
+        TaskLoader.PrepareOption(updated, restored);
 
         Assert.Equal(new[] { "B" }, restored.SelectedCases);
     }
@@ -108,7 +117,9 @@ public sealed class TaskConfigurationCharacterizationTests
 
         var current = Assert.Single(oldTask.Option!);
         Assert.Equal("new_key", current.Name);
-        Assert.Equal("42", current.Data!["amount"]);
+        // The renamed key is a new option: nothing is saved and it follows the current default.
+        Assert.Null(current.Data);
+        Assert.Equal("42", OptionValues.GetFieldValues(schema.Option["new_key"], current)["amount"]);
         Assert.DoesNotContain("old_key", JsonConvert.SerializeObject(oldTask));
     }
 

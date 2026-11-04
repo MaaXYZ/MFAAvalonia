@@ -22,8 +22,9 @@ public static class OptionDefaultReset
         MaaInterface.MaaInterfaceOptionInput input)
     {
         if (!HasInputDefault(input)) return false;
+        // A field without a saved value already follows the current default.
         if (option.Data?.TryGetValue(input.Name!, out var value) != true || value == null)
-            return true;
+            return false;
 
         // Boolean defaults may deserialize as "True", while the switch stores "true".
         // Only compare valid Boolean values semantically; invalid values must remain restorable.

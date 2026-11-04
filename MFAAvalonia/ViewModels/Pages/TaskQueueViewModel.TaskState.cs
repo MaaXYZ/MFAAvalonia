@@ -117,6 +117,7 @@ public partial class TaskQueueViewModel
                 items.Where(item => !item.IsResourceOptionItem && item.InterfaceItem != null)
                     .Select(item => item.InterfaceItem!), deletedName, resetHistory, setPreset, presetKey);
             CaptureOptionState(next, items);
+            NormalizeOptionState(next, TaskEditing.Interface());
             if (configuration.TryCommitTaskState(next, out error))
                 return true;
         }
@@ -155,6 +156,25 @@ public partial class TaskQueueViewModel
                 state.ExtraValues[key] = buckets;
             }
             buckets[isController ? resource.Name![controllerPrefix.Length..] : resource.Name ?? string.Empty] = selections;
+        }
+    }
+
+    /// <summary>
+    /// 写盘前把快照里等于当前默认的值改为跟随默认。快照已与界面对象分离，这里不改动界面持有的选项。
+    /// 定义未加载时原样保存。
+    /// </summary>
+    private static void NormalizeOptionState(TaskQueueState state, MaaInterface? catalogue)
+    {
+        if (catalogue?.Option == null) return;
+        foreach (var option in state.Tasks.SelectMany(task => task.Option ?? []))
+            OptionValues.Normalize(catalogue.Option, option);
+        foreach (var value in state.ExtraValues.Values)
+        {
+            if (value is IEnumerable<MaaInterface.MaaInterfaceSelectOption> options)
+                foreach (var option in options) OptionValues.Normalize(catalogue.Option, option);
+            else if (value is IDictionary<string, List<MaaInterface.MaaInterfaceSelectOption>> buckets)
+                foreach (var option in buckets.Values.SelectMany(items => items))
+                    OptionValues.Normalize(catalogue.Option, option);
         }
     }
 
@@ -197,7 +217,7 @@ public partial class TaskQueueViewModel
         resource.SelectOptions = selections != null ? CloneOptions(selections)
             : names?.Select(name => new MaaInterface.MaaInterfaceSelectOption { Name = name }).ToList();
         foreach (var option in resource.SelectOptions ?? [])
-            TaskLoader.SetDefaultOptionValue(catalogue, option);
+            TaskLoader.PrepareOption(catalogue, option);
         if (resource.Name == "__GlobalOption__" && catalogue != null)
             catalogue.GlobalSelectOptions = resource.SelectOptions;
         else if (resource.Name?.StartsWith(controllerPrefix, StringComparison.Ordinal) == true)

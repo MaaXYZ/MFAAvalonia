@@ -42,8 +42,8 @@ public class OptionInputTests
             Name = "login", Data = new() { ["credential"] = secret, ["user"] = "alice" },
             SubOptions = [new() { Name = "nested", Data = new() { ["credential"] = secret } }]
         };
-        option.InitializeInputData(definition);
-        option.SubOptions[0].InitializeInputData(definition);
+        option.MarkPasswordFields(definition);
+        option.SubOptions[0].MarkPasswordFields(definition);
         var json = JsonConvert.SerializeObject(option);
         var token = JObject.Parse(json);
         Assert.Equal(JTokenType.Object, token["data"]!["credential"]!.Type);
@@ -73,8 +73,9 @@ public class OptionInputTests
                 ["login"] = new() { Type = "input", Inputs = [new() { Name = "key", Password = true }] }
             }
         };
-        TaskLoader.SetDefaultOptionValue(definition, parent);
-        Assert.Equal(0, parent.Index);
+        TaskLoader.PrepareOption(definition, parent);
+        // Index 0 is the first case, which is also the default, so it now follows the default.
+        Assert.Null(parent.Index);
         Assert.Equal("legacy-secret", parent.SubOptions![0].Data!["key"]);
         Assert.DoesNotContain("legacy-secret", JsonConvert.SerializeObject(parent));
     }
@@ -83,7 +84,7 @@ public class OptionInputTests
     public void ClonedInactiveSubOptionsKeepPasswordProtection()
     {
         var child = new MaaInterface.MaaInterfaceSelectOption { Name = "login", Data = new() { ["key"] = "secret" } };
-        child.InitializeInputData(new() { Type = "input", Inputs = [new() { Name = "key", Password = true }] });
+        child.MarkPasswordFields(new() { Type = "input", Inputs = [new() { Name = "key", Password = true }] });
         var parent = new MaaInterface.MaaInterfaceSelectOption { Name = "inactive", SubOptions = [child] };
         var clone = (List<MaaInterface.MaaInterfaceSelectOption>)typeof(TaskLoader)
             .GetMethod("CloneSubOptions", BindingFlags.NonPublic | BindingFlags.Static)!
@@ -110,8 +111,10 @@ public class OptionInputTests
         {
             var input = JsonConvert.DeserializeObject<MaaInterface.MaaInterfaceOptionInput>(json)!;
             var fresh = new MaaInterface.MaaInterfaceSelectOption();
-            fresh.InitializeInputData(new() { Type = "input", Inputs = [input] });
-            Assert.Equal(string.Empty, fresh.Data!["credential"]);
+            var definition = new MaaInterface.MaaInterfaceOption { Type = "input", Inputs = [input] };
+            fresh.MarkPasswordFields(definition);
+            Assert.Null(fresh.Data);
+            Assert.Equal(string.Empty, OptionValues.GetFieldValues(definition, fresh)["credential"]);
         }
     }
 

@@ -98,9 +98,12 @@ public sealed class OptionSelectionTests
             new MaaInterfaceSelectOptionConverter(true))!;
         var option = Assert.Single(task.Option!);
         Assert.Null(option.Index);
-        TaskLoader.SetDefaultOptionValue(definitions, option);
-        Assert.Equal(1, option.Index);
-        Assert.Equal("B", option.SelectedCase);
+        TaskLoader.PrepareOption(definitions, option);
+        // Nothing is written: the option follows the declared default "B".
+        Assert.Null(option.Index);
+        Assert.Null(option.SelectedCase);
+        Assert.True(OptionValues.TryGetCaseIndex(definitions.Option["choice"], option, out var index, out _));
+        Assert.Equal(1, index);
         var pi = JObject.Parse(JsonConvert.SerializeObject(task, new MaaInterfaceSelectOptionConverter(true)));
         Assert.Equal("choice", pi["option"]![0]!.Value<string>());
         Assert.DoesNotContain("selected_case", pi.ToString());
@@ -121,8 +124,9 @@ public sealed class OptionSelectionTests
             Name = "parent", SelectedCase = "off", Index = 0,
             SubOptions = [new() { Name = "child", SelectedCase = "removed", Index = 0 }]
         };
-        OptionSelection.ResolveTree(definitions, [parent]);
-        Assert.NotNull(parent.SubOptions[0].SelectionError);
+        TaskLoader.PrepareOption(new MaaInterface { Option = definitions }, parent);
+        Assert.Equal("removed", parent.SubOptions[0].SelectedCase);
+        Assert.False(OptionValues.TryGetCaseIndex(definitions["child"], parent.SubOptions[0], out _, out _));
         Assert.True(OptionSelection.ValidateActive(definitions, [parent], out _));
         OptionSelection.SelectIndex(definition, parent, 1);
         Assert.False(OptionSelection.ValidateActive(definitions, [parent], out var error));
@@ -225,7 +229,7 @@ public sealed class OptionSelectionTests
             Name = "password", Data = new() { ["secret"] = "do-not-export-plaintext" },
             SubOptions = [new() { Name = "check", SelectedCases = [] }]
         };
-        option.InitializeInputData(new() { Type = "input", Inputs = [new() { Name = "secret", Password = true }] });
+        option.MarkPasswordFields(new() { Type = "input", Inputs = [new() { Name = "secret", Password = true }] });
         var json = JsonConvert.SerializeObject(new List<MaaInterface.MaaInterfaceSelectOption> { option },
             new MaaInterfaceSelectOptionConverter(false));
         Assert.DoesNotContain("do-not-export-plaintext", json);

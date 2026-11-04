@@ -150,16 +150,20 @@ public class OptionDefaultResetTests
             """);
         var option = InputOption(("text", "changed"), ("empty", "changed"), ("amount", "55"), ("enabled", "false"));
         var newTask = new MaaInterface.MaaInterfaceSelectOption { Name = "settings" };
-        TaskLoader.SetDefaultOptionValue(new MaaInterface
+        TaskLoader.PrepareOption(new MaaInterface
         {
             Option = new Dictionary<string, MaaInterface.MaaInterfaceOption> { ["settings"] = definition }
         }, newTask);
 
+        // A new task saves nothing and follows the defaults; restoring reaches the same values.
+        Assert.Null(newTask.Data);
         Assert.Equal(4, OptionDefaultReset.RestoreInputs(option, definition));
         foreach (var input in definition.Inputs!)
             Assert.Equal(input.Default, option.Data![input.Name!]);
-        Assert.Equal(newTask.Data, option.Data);
-        Assert.True(JToken.DeepEquals(Generate(definition, newTask), Generate(definition, option)));
+        Assert.Equal(OptionValues.GetFieldValues(definition, newTask), OptionValues.GetFieldValues(definition, option));
+        Assert.True(JToken.DeepEquals(
+            JObject.Parse(definition.GenerateProcessedPipeline(OptionValues.GetFieldValues(definition, newTask))),
+            Generate(definition, option)));
     }
 
     [Fact]

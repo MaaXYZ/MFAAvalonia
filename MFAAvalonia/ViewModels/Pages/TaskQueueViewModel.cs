@@ -742,7 +742,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 : task.InterfaceItem?.Option;
             if (options == null) continue;
 
-            EnsureDefaultOptionValues(options);
+            // 校验读当前取值，没有用户值的项按资源默认校验，不再把默认值写进选项。
             var error = ValidateOptionsRecursive(options);
             if (error != null)
             {
@@ -800,13 +800,13 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         return error;
     }
 
-    private static void EnsureDefaultOptionValues(IEnumerable<MaaInterface.MaaInterfaceSelectOption>? options)
+    private static void PrepareOptions(IEnumerable<MaaInterface.MaaInterfaceSelectOption>? options)
     {
         if (options == null) return;
 
         foreach (var option in options)
         {
-            TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, option);
+            TaskLoader.PrepareOption(MaaProcessor.Interface, option);
         }
     }
 
@@ -1032,33 +1032,15 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         TryApplyTaskEdit(candidate, resetHistory: true, setPreset: true, presetKey: preset.Name);
     }
 
+    /// <summary>preset 写入后重建运行时缓存；preset 没给的值不补，读取时跟随当前默认。</summary>
     private void RefreshPresetOptionRuntimeState(MaaInterface.MaaInterfaceSelectOption option)
     {
         if (string.IsNullOrWhiteSpace(option.Name)) return;
         if (MaaProcessor.Interface?.Option?.TryGetValue(option.Name, out var interfaceOption) != true) return;
 
-        if (interfaceOption.IsInput && interfaceOption.Inputs != null)
-        {
-            option.Data ??= new Dictionary<string, string?>();
-            foreach (var input in interfaceOption.Inputs)
-            {
-                if (!string.IsNullOrWhiteSpace(input.Name) && !option.Data.ContainsKey(input.Name))
-                    option.Data[input.Name] = input.Default ?? string.Empty;
-            }
-
-            if (interfaceOption.PipelineOverride != null)
-            {
-                option.PipelineOverride = interfaceOption.GenerateProcessedPipeline(
-                    option.Data
-                        .Where(kv => kv.Value != null)
-                        .ToDictionary(kv => kv.Key, kv => kv.Value!));
-            }
-        }
-
-        if (interfaceOption.IsCheckbox)
-            option.SelectedCases ??= new List<string>(interfaceOption.DefaultCases ?? new List<string>());
-        else if (!interfaceOption.IsInput)
-            OptionSelection.Resolve(interfaceOption, option);
+        if (interfaceOption.IsInput && interfaceOption.PipelineOverride != null)
+            option.PipelineOverride = interfaceOption.GenerateProcessedPipeline(
+                OptionValues.GetFieldValues(interfaceOption, option));
 
         if (option.SubOptions == null) return;
 
@@ -1119,7 +1101,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 if (childOption == null)
                 {
                     childOption = new MaaInterface.MaaInterfaceSelectOption { Name = childOptionName };
-                    TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, childOption);
+                    TaskLoader.PrepareOption(MaaProcessor.Interface, childOption);
                     currentOption.SubOptions.Add(childOption);
                 }
 
@@ -1176,7 +1158,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             // 克隆任务以避免引用问题
             var resetItem = item.Clone();
             resetItem.OwnerViewModel = null;
-            EnsureDefaultOptionValues(resetItem.InterfaceItem?.Option);
+            PrepareOptions(resetItem.InterfaceItem?.Option);
             candidate.Add(resetItem);
         }
 
@@ -3356,7 +3338,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         {
             if (existingDict.TryGetValue(optionName, out var existing))
             {
-                TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, existing);
+                TaskLoader.PrepareOption(MaaProcessor.Interface, existing);
                 return existing;
             }
             if (savedDict?.TryGetValue(optionName, out var saved) == true)
@@ -3369,11 +3351,11 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 };
                 savedOption.CopySelectionFrom(saved);
                 savedOption.CopyInputDataFrom(saved);
-                TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, savedOption);
+                TaskLoader.PrepareOption(MaaProcessor.Interface, savedOption);
                 return savedOption;
             }
             var opt = new MaaInterface.MaaInterfaceSelectOption { Name = optionName };
-            TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, opt);
+            TaskLoader.PrepareOption(MaaProcessor.Interface, opt);
             return opt;
         }).ToList();
     }
@@ -3436,7 +3418,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 // 优先使用已有的值（保留运行时的修改）
                 if (existingDict.TryGetValue(optionName, out var existingOpt))
                 {
-                    TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, existingOpt);
+                    TaskLoader.PrepareOption(MaaProcessor.Interface, existingOpt);
                     return existingOpt;
                 }
 
@@ -3452,16 +3434,16 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                     };
                     clonedOpt.CopySelectionFrom(savedOpt);
                     clonedOpt.CopyInputDataFrom(savedOpt);
-                    TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, clonedOpt);
+                    TaskLoader.PrepareOption(MaaProcessor.Interface, clonedOpt);
                     return clonedOpt;
                 }
 
-                // 最后创建新的并设置默认值
+                // 最后创建新的，只带名字，取值跟随当前默认
                 var selectOption = new MaaInterface.MaaInterfaceSelectOption
                 {
                     Name = optionName
                 };
-                TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, selectOption);
+                TaskLoader.PrepareOption(MaaProcessor.Interface, selectOption);
                 return selectOption;
             }).ToList();
     }

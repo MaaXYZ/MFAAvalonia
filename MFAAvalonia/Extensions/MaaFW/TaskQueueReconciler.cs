@@ -10,8 +10,9 @@ public static class TaskQueueReconciler
 {
     public const string HistorySeparator = "<|||>";
 
+    /// <param name="FollowingDefaultCount">已存值中等于当前默认、改为跟随默认的个数。</param>
     public sealed record Result(TaskQueueState State, HashSet<string> MissingNames,
-        List<string> RemovedNames, bool CircuitBroken);
+        List<string> RemovedNames, bool CircuitBroken, int FollowingDefaultCount = 0);
 
     public static string HistoryKey(MaaInterface.MaaInterfaceTask task)
         => $"{task.Name}{HistorySeparator}{task.Entry}";
@@ -57,6 +58,7 @@ public static class TaskQueueReconciler
         var missing = missingRows.Where(task => task.Name != null).Select(task => task.Name!).ToHashSet(StringComparer.Ordinal);
         var circuitBroken = missing.Count >= 3 && missingRows.Count * 2 >= resourceRows.Count;
         var removed = new List<string>();
+        var followingDefault = 0;
 
         foreach (var name in state.MissingTaskSessions.Keys.ToList())
             if (definitions.ContainsKey(name) || !savedNames.Contains(name)) state.MissingTaskSessions.Remove(name);
@@ -72,7 +74,7 @@ public static class TaskQueueReconciler
             var name = task.Name ?? string.Empty;
             if (definitions.TryGetValue(name, out var definition))
             {
-                retained.Add(MergeDefinition(task, definition, catalogue));
+                retained.Add(MergeDefinition(task, definition, catalogue, ref followingDefault));
                 continue;
             }
             if (!circuitBroken)
@@ -114,7 +116,7 @@ public static class TaskQueueReconciler
                 var name = definition.Name!;
                 if (present.Contains(name) || seen.Contains(name) || state.DeletedTaskNames.Contains(name)
                     || (allowed != null && !allowed.Contains(name))) continue;
-                var newTask = MergeDefinition(null, definition, catalogue);
+                var newTask = MergeDefinition(null, definition, catalogue, ref followingDefault);
                 // Automatic seeding still adds one row per name, at its first preset occurrence.
                 var presetIndex = presetOrder?.IndexOf(name) ?? -1;
                 InsertBesideNeighbour(state.Tasks, newTask,
@@ -134,13 +136,13 @@ public static class TaskQueueReconciler
         foreach (var value in state.ExtraValues.Values)
         {
             if (value is IEnumerable<MaaInterface.MaaInterfaceSelectOption> options)
-                foreach (var option in options) TaskLoader.SetDefaultOptionValue(catalogue, option);
+                foreach (var option in options) followingDefault += TaskLoader.PrepareOption(catalogue, option);
             else if (value is IDictionary<string, List<MaaInterface.MaaInterfaceSelectOption>> buckets)
                 foreach (var option in buckets.Values.SelectMany(items => items))
-                    TaskLoader.SetDefaultOptionValue(catalogue, option);
+                    followingDefault += TaskLoader.PrepareOption(catalogue, option);
         }
         missing.ExceptWith(removed);
-        return new Result(state, missing, removed, circuitBroken);
+        return new Result(state, missing, removed, circuitBroken, followingDefault);
     }
 
     private static void InsertBesideNeighbour(List<MaaInterface.MaaInterfaceTask> queue,
@@ -183,6 +185,13 @@ public static class TaskQueueReconciler
     public static MaaInterface.MaaInterfaceTask MergeDefinition(MaaInterface.MaaInterfaceTask? saved,
         MaaInterface.MaaInterfaceTask definition, MaaInterface catalogue)
     {
+        var followingDefault = 0;
+        return MergeDefinition(saved, definition, catalogue, ref followingDefault);
+    }
+
+    private static MaaInterface.MaaInterfaceTask MergeDefinition(MaaInterface.MaaInterfaceTask? saved,
+        MaaInterface.MaaInterfaceTask definition, MaaInterface catalogue, ref int followingDefault)
+    {
         var task = definition.Clone();
         if (saved != null)
         {
@@ -202,7 +211,7 @@ public static class TaskQueueReconciler
             var previous = saved?.Clone().Option;
             task.Option = task.Option.Select(option => previous?.FirstOrDefault(item => item.Name == option.Name)
                 ?? new MaaInterface.MaaInterfaceSelectOption { Name = option.Name }).ToList();
-            foreach (var option in task.Option) TaskLoader.SetDefaultOptionValue(catalogue, option);
+            foreach (var option in task.Option) followingDefault += TaskLoader.PrepareOption(catalogue, option);
         }
         return task;
     }

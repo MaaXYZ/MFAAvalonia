@@ -89,4 +89,85 @@ public static class OptionValues
                 if (value != null) values[key] = value;
         return values;
     }
+
+    /// <summary>
+    /// Removes saved values that equal the current default so they follow future default changes, and
+    /// writes a legal legacy index back as its case name. Applies to the option and all retained children,
+    /// active or hidden. Values without a definition, invalid values and password fields are kept as they are.
+    /// </summary>
+    /// <returns>The number of saved values that now follow the default.</returns>
+    public static int Normalize(IReadOnlyDictionary<string, MaaInterface.MaaInterfaceOption> definitions,
+        MaaInterface.MaaInterfaceSelectOption selection)
+    {
+        var removed = 0;
+        if (selection.Name != null && definitions.TryGetValue(selection.Name, out var definition))
+            removed += NormalizeValue(definition, selection);
+        foreach (var child in selection.SubOptions ?? [])
+            removed += Normalize(definitions, child);
+        return removed;
+    }
+
+    private static int NormalizeValue(MaaInterface.MaaInterfaceOption definition, MaaInterface.MaaInterfaceSelectOption selection)
+    {
+        if (definition.IsCheckbox)
+        {
+            if (selection.SelectedCases == null) return 0;
+            var valid = new HashSet<string>(definition.Cases?.Select(item => item.Name).OfType<string>() ?? [], StringComparer.Ordinal);
+            var saved = new HashSet<string>(selection.SelectedCases.Where(valid.Contains), StringComparer.Ordinal);
+            if (!saved.SetEquals((definition.DefaultCases ?? []).Where(valid.Contains))) return 0;
+            selection.SelectedCases = null;
+            return 1;
+        }
+
+        if (definition.IsInput || definition.IsHotkey)
+        {
+            if (selection.Data == null) return 0;
+            var removed = 0;
+            foreach (var (key, value) in selection.Data.ToList())
+            {
+                if (value == null)
+                    selection.Data.Remove(key);
+                else if (IsDefaultField(definition, key, value))
+                {
+                    selection.Data.Remove(key);
+                    removed++;
+                }
+            }
+            if (selection.Data.Count == 0) selection.Data = null;
+            return removed;
+        }
+
+        if ((selection.SelectedCase == null && selection.Index == null)
+            || !TryGetCaseIndex(definition, selection, out var index, out _))
+            return 0;
+        if (TryGetCaseIndex(definition, null, out var defaultIndex, out _) && index == defaultIndex)
+        {
+            selection.SelectedCase = null;
+            selection.Index = null;
+            return 1;
+        }
+        // Keep the choice by name; the derived index stays for older readers.
+        selection.SelectedCase = definition.Cases![index].Name;
+        selection.Index = index;
+        return 0;
+    }
+
+    private static bool IsDefaultField(MaaInterface.MaaInterfaceOption definition, string name, string value)
+    {
+        if (definition.IsHotkey)
+        {
+            var hotkey = definition.Hotkeys?.FirstOrDefault(item => item.Name == name);
+            return hotkey != null && string.Equals(value, hotkey.Default ?? string.Empty, StringComparison.Ordinal);
+        }
+
+        var input = definition.Inputs?.FirstOrDefault(item => item.Name == name);
+        if (input == null || input.IsPassword) return false;
+        var defaultValue = input.Default ?? string.Empty;
+        // Boolean defaults may deserialize as "True" while the switch stores "true"; compare valid booleans by meaning.
+        if (string.Equals(input.PipelineType, "bool", StringComparison.OrdinalIgnoreCase)
+            && bool.TryParse(value, out var current) && bool.TryParse(defaultValue, out var expected))
+            return current == expected;
+        // Keep integer formatting such as "007" and the explicit null marker as user values.
+        return string.Equals(value, defaultValue, StringComparison.Ordinal);
+    }
 }

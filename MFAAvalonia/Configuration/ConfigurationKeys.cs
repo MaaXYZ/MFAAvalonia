@@ -30,6 +30,8 @@ public static class ConfigurationKeys
     public const string GlobalOptionItems = "GlobalOptionItems";
     public const string ControllerOptionItems = "ControllerOptionItems";
     public const string InstancePresetKey = "InstancePresetKey";
+    /// <summary>选项值存储格式：2 = 只保存与资源默认不同的值。仅作诊断与将来升级用，读取不依赖它。</summary>
+    public const string OptionStorageVersion = "OptionStorageVersion";
 
     #endregion
 

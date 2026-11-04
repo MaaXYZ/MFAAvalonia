@@ -320,6 +320,7 @@ public sealed class InstanceConfiguration
                 [ConfigurationKeys.DeletedTaskNames] = detached.DeletedTaskNames,
                 [ConfigurationKeys.MissingTaskSessions] = detached.MissingTaskSessions,
                 [ConfigurationKeys.KeepEmptyTaskQueue] = detached.KeepEmpty,
+                [ConfigurationKeys.OptionStorageVersion] = 2,
             };
             if (detached.HasPresetKey)
                 candidate[ConfigurationKeys.InstancePresetKey] = detached.PresetKey!;

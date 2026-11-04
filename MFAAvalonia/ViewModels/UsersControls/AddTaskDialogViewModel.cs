@@ -117,7 +117,7 @@ public partial class AddTaskDialogViewModel : ViewModelBase, IDisposable
                 var output = item.Source.Clone();
                 if (output.InterfaceItem.Option != null)
                     output.InterfaceItem.Option.ForEach(option =>
-                        TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, option));
+                        TaskLoader.PrepareOption(MaaProcessor.Interface, option));
                 output.OwnerViewModel = null;
                 vm.RefreshTaskSupportForCurrentContext(output);
                 candidate.Add(output);

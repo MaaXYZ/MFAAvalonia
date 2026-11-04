@@ -34,6 +34,17 @@ public static class OptionSelection
         return SelectIndex(definition, selection, index);
     }
 
+    /// <summary>
+    /// Effective case for display, without writing a selection; only the runtime <c>SelectionError</c> is updated.
+    /// </summary>
+    public static bool Evaluate(MaaInterface.MaaInterfaceOption definition,
+        MaaInterface.MaaInterfaceSelectOption selection, out int index)
+    {
+        var valid = OptionValues.TryGetCaseIndex(definition, selection, out index, out var error);
+        selection.SelectionError = valid ? null : error;
+        return valid;
+    }
+
     public static bool SelectIndex(MaaInterface.MaaInterfaceOption definition,
         MaaInterface.MaaInterfaceSelectOption selection, int index)
     {
@@ -43,18 +54,6 @@ public static class OptionSelection
         selection.SelectedCase = definition.Cases[index].Name;
         selection.SelectionError = null;
         return true;
-    }
-
-    /// <summary>Initializes every retained branch, including currently hidden selections.</summary>
-    public static void ResolveTree(IReadOnlyDictionary<string, MaaInterface.MaaInterfaceOption> definitions,
-        IEnumerable<MaaInterface.MaaInterfaceSelectOption>? selections)
-    {
-        foreach (var selection in selections ?? [])
-        {
-            if (selection.Name != null && definitions.TryGetValue(selection.Name, out var definition))
-                Resolve(definition, selection);
-            ResolveTree(definitions, selection.SubOptions);
-        }
     }
 
     /// <summary>Checks only active branches, without changing stored selections or creating controls.</summary>

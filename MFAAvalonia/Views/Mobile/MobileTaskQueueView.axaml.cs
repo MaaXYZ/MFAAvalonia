@@ -448,7 +448,7 @@ public partial class MobileTaskQueueView : UserControl
             return;
 
         var output = source.Clone();
-        output.InterfaceItem.Option?.ForEach(option => TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, option));
+        output.InterfaceItem.Option?.ForEach(option => TaskLoader.PrepareOption(MaaProcessor.Interface, option));
         output.OwnerViewModel = viewModel;
         viewModel.RefreshTaskSupportForCurrentContext(output);
         var index = viewModel.TaskItemViewModels.IndexOf(selected);

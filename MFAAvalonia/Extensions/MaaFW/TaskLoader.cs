@@ -63,6 +63,8 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
             }
             failureKey = LangKeys.TaskConfigurationSyncFailed;
             taskQueueViewModel.IsTaskConfigurationValid = true;
+            if (result.FollowingDefaultCount > 0)
+                LoggerHelper.Info($"选项值等于当前资源默认，已改为跟随默认：{result.FollowingDefaultCount} 项");
 
             if (firstTask)
             {
@@ -175,16 +177,16 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
                 };
                 savedOption.CopySelectionFrom(saved);
                 savedOption.CopyInputDataFrom(saved);
-                SetDefaultOptionValue(maaInterface, savedOption);
+                PrepareOption(maaInterface, savedOption);
                 return savedOption;
             }
             if (existingDict.TryGetValue(optionName, out var existing))
             {
-                SetDefaultOptionValue(maaInterface, existing);
+                PrepareOption(maaInterface, existing);
                 return existing;
             }
             var opt = new MaaInterface.MaaInterfaceSelectOption { Name = optionName };
-            SetDefaultOptionValue(maaInterface, opt);
+            PrepareOption(maaInterface, opt);
             return opt;
         }).ToList();
     }
@@ -257,20 +259,20 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
                     };
                     clonedOpt.CopySelectionFrom(savedOpt);
                     clonedOpt.CopyInputDataFrom(savedOpt);
-                    SetDefaultOptionValue(maaInterface, clonedOpt);
+                    PrepareOption(maaInterface, clonedOpt);
                     return clonedOpt;
                 }
                 if (existingDict.TryGetValue(optionName, out var existingOpt))
                 {
-                    SetDefaultOptionValue(maaInterface, existingOpt);
+                    PrepareOption(maaInterface, existingOpt);
                     return existingOpt;
                 }
-                // 最后创建新的并设置默认值
+                // 最后创建新的，只带名字，取值跟随当前默认
                 var selectOption = new MaaInterface.MaaInterfaceSelectOption
                 {
                     Name = optionName
                 };
-                SetDefaultOptionValue(maaInterface, selectOption);
+                PrepareOption(maaInterface, selectOption);
                 return selectOption;
             }).ToList();
     }
@@ -339,108 +341,16 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
         }).ToList();
     }
 
-    public static void SetDefaultOptionValue(MaaInterface? @interface, MaaInterface.MaaInterfaceSelectOption option)
+    /// <summary>
+    /// 准备一个已保存或新建的选项：登记密码字段，并按当前定义把等于默认的值改为跟随默认、把合法旧序号补写为名称。
+    /// 不写入任何默认值，也不预建子选项；没有用户值的项在读取时由 OptionValues 取当前默认。
+    /// </summary>
+    /// <returns>改为跟随默认的已存值个数。</returns>
+    public static int PrepareOption(MaaInterface? @interface, MaaInterface.MaaInterfaceSelectOption option)
     {
-        // Migrate saved passwords in inactive branches without activating those branches.
-        if (@interface?.Option != null) option.ProtectInputData(@interface.Option);
-        if (@interface?.Option != null) OptionSelection.ResolveTree(@interface.Option, [option]);
-        SetDefaultOptionValue(@interface, option, new HashSet<string>(StringComparer.Ordinal));
-    }
-
-    private static void SetDefaultOptionValue(
-        MaaInterface? @interface,
-        MaaInterface.MaaInterfaceSelectOption option,
-        HashSet<string> optionPath)
-    {
-        if (!(@interface?.Option?.TryGetValue(option.Name ?? string.Empty, out var io) ?? false)) return;
-        var hasName = !string.IsNullOrEmpty(option.Name);
-        if (hasName && !optionPath.Add(option.Name!))
-        {
-            LoggerHelper.Warning($"检测到循环嵌套的 option，已跳过默认子选项展开：{string.Join(" -> ", optionPath)} -> {option.Name}");
-            return;
-        }
-
-        try
-        {
-            if (!OptionSelection.Resolve(io, option)) return;
-            if (io.IsInput && io.Inputs != null)
-            {
-                option.InitializeInputData(io);
-            }
-            if (io.IsHotkey && io.Hotkeys != null)
-            {
-                option.Data ??= new Dictionary<string, string?>();
-                foreach (var hotkey in io.Hotkeys)
-                    if (!string.IsNullOrEmpty(hotkey.Name) && !option.Data.ContainsKey(hotkey.Name))
-                        option.Data[hotkey.Name] = hotkey.Default ?? string.Empty;
-            }
-            // checkbox 类型：从 DefaultCases 初始化 SelectedCases
-            if (io.IsCheckbox)
-            {
-                option.SelectedCases ??= new List<string>(io.DefaultCases ?? new List<string>());
-            }
-
-            EnsureDefaultSubOptions(@interface, option, io, optionPath);
-        }
-        finally
-        {
-            if (hasName)
-            {
-                optionPath.Remove(option.Name!);
-            }
-        }
-    }
-
-    private static void EnsureDefaultSubOptions(
-        MaaInterface? @interface,
-        MaaInterface.MaaInterfaceSelectOption option,
-        MaaInterface.MaaInterfaceOption interfaceOption,
-        HashSet<string> optionPath)
-    {
-        if (@interface?.Option == null || interfaceOption.Cases == null || interfaceOption.Cases.Count == 0)
-            return;
-
-        option.SubOptions ??= new List<MaaInterface.MaaInterfaceSelectOption>();
-
-        IEnumerable<string> activeSubOptionNames = Array.Empty<string>();
-        if (interfaceOption.IsCheckbox)
-        {
-            var selectedCases = option.SelectedCases ?? new List<string>();
-            activeSubOptionNames = interfaceOption.Cases
-                .Where(caseItem => !string.IsNullOrEmpty(caseItem.Name) && selectedCases.Contains(caseItem.Name!))
-                .SelectMany(caseItem => caseItem.Option ?? Enumerable.Empty<string>());
-        }
-        else if (option.Index is int index && index >= 0 && index < interfaceOption.Cases.Count)
-        {
-            activeSubOptionNames = interfaceOption.Cases[index].Option ?? Enumerable.Empty<string>();
-        }
-
-        foreach (var subOptionName in activeSubOptionNames.Distinct())
-        {
-            if (string.IsNullOrEmpty(subOptionName))
-            {
-                continue;
-            }
-
-            if (optionPath.Contains(subOptionName))
-            {
-                LoggerHelper.Warning($"检测到循环嵌套的 option，已跳过默认子选项展开：{string.Join(" -> ", optionPath)} -> {subOptionName}");
-                option.SubOptions.RemoveAll(o => o.Name == subOptionName);
-                continue;
-            }
-
-            var subOption = option.SubOptions.FirstOrDefault(o => o.Name == subOptionName);
-            if (subOption == null)
-            {
-                subOption = new MaaInterface.MaaInterfaceSelectOption
-                {
-                    Name = subOptionName
-                };
-                option.SubOptions.Add(subOption);
-            }
-
-            SetDefaultOptionValue(@interface, subOption, optionPath);
-        }
+        if (@interface?.Option == null) return 0;
+        option.ProtectInputData(@interface.Option);
+        return OptionValues.Normalize(@interface.Option, option);
     }
 
     private void UpdateViewModels(IList<DragItemViewModel> drags, List<MaaInterface.MaaInterfaceTask> tasks, ObservableCollection<DragItemViewModel> tasksSource)
@@ -450,7 +360,7 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
         foreach (var item in newItems)
         {
             if (item.InterfaceItem?.Option != null && !drags.Any())
-                item.InterfaceItem.Option.ForEach(option => SetDefaultOptionValue(maaInterface, option));
+                item.InterfaceItem.Option.ForEach(option => PrepareOption(maaInterface, option));
         }
 
         // 检查当前资源是否有全局选项配置
@@ -530,7 +440,7 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
         var options = setting.Option.Select(name =>
         {
             var value = savedOptions?.GetValueOrDefault(name) ?? new MaaInterface.MaaInterfaceSelectOption { Name = name };
-            SetDefaultOptionValue(maaInterface, value);
+            PrepareOption(maaInterface, value);
             return value;
         }).ToList();
         var synthetic = new MaaInterface.MaaInterfaceResource
@@ -625,16 +535,16 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
                 };
                 savedOption.CopySelectionFrom(saved);
                 savedOption.CopyInputDataFrom(saved);
-                SetDefaultOptionValue(maaInterface, savedOption);
+                PrepareOption(maaInterface, savedOption);
                 return savedOption;
             }
             if (existingDict.TryGetValue(optionName, out var existing))
             {
-                SetDefaultOptionValue(maaInterface, existing);
+                PrepareOption(maaInterface, existing);
                 return existing;
             }
             var opt = new MaaInterface.MaaInterfaceSelectOption { Name = optionName };
-            SetDefaultOptionValue(maaInterface, opt);
+            PrepareOption(maaInterface, opt);
             return opt;
         }).ToList();
     }
@@ -709,7 +619,7 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
                         opt.CopyInputDataFrom(savedOpt);
                         opt.SubOptions = savedOpt.SubOptions == null ? null : CloneSubOptions(savedOpt.SubOptions);
                         opt.SelectedCases = savedOpt.SelectedCases != null ? new List<string>(savedOpt.SelectedCases) : null;
-                        SetDefaultOptionValue(maaInterface, opt);
+                        PrepareOption(maaInterface, opt);
                     }
                 }
             }
@@ -747,7 +657,7 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
                 newOpt.CopyInputDataFrom(existingOpt);
                 newOpt.SelectedCases = existingOpt.SelectedCases == null ? null : new(existingOpt.SelectedCases);
                 newOpt.SubOptions = existingOpt.SubOptions == null ? null : CloneSubOptions(existingOpt.SubOptions);
-                SetDefaultOptionValue(maaInterface, newOpt);
+                PrepareOption(maaInterface, newOpt);
             }
             return newOpt;
         }).ToList();

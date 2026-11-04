@@ -344,7 +344,7 @@ public partial class TaskQueueView : UserControl
         var output = source.Clone();
         if (output.InterfaceItem?.Option != null)
         {
-            output.InterfaceItem.Option.ForEach(option => TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, option));
+            output.InterfaceItem.Option.ForEach(option => TaskLoader.PrepareOption(MaaProcessor.Interface, option));
         }
         output.OwnerViewModel = vm;
         vm.RefreshTaskSupportForCurrentContext(output);
@@ -2117,7 +2117,7 @@ public partial class TaskQueueView : UserControl
         {
             Name = optionName
         };
-        TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, selectOption);
+        TaskLoader.PrepareOption(MaaProcessor.Interface, selectOption);
         return selectOption;
     }
 
