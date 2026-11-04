@@ -133,10 +133,10 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
         if (taskQueueViewModel.CurrentResources.Count > 0 && taskQueueViewModel.CurrentResources.All(r => r.Name != taskQueueViewModel.CurrentResource))
             taskQueueViewModel.CurrentResource = taskQueueViewModel.CurrentResources[0].Name ?? "Default";
 
-        // 初始化 global_option 的 SelectOptions（同时填充 Interface.GlobalSelectOptions 供 MergeGlobalOptionParams 使用）
+        // 初始化 global_option 的 SelectOptions（同时填充 Interface.GlobalSelectOptions 供 OptionParameterMerger.MergeScopes 使用）
         InitializeGlobalSelectOptions();
 
-        // 初始化当前控制器的 SelectOptions（供 MergeControllerOptionParams 使用）
+        // 初始化当前控制器的 SelectOptions（供 OptionParameterMerger.MergeScopes 使用）
         InitializeControllerSelectOptions();
     }
 
@@ -589,7 +589,7 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
     }
 
     /// <summary>
-    /// 初始化当前控制器的 SelectOptions，供 MergeControllerOptionParams 使用
+    /// 初始化当前控制器的 SelectOptions，供 OptionParameterMerger.MergeScopes 使用
     /// </summary>
     private void InitializeControllerSelectOptions()
     {
