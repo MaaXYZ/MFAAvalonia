@@ -255,13 +255,13 @@
 
     <Grid RowDefinitions="Auto,*">
         <!-- Row 0: 标签栏 = [展开按钮(固定左)] [标签页+添加按钮] -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*">
-            <Border Grid.ColumnSpan="2"
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
+            <Border Grid.ColumnSpan="3"
                     IsVisible="{Binding HasBackgroundImage, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
                     Background="{DynamicResource ScenicChromeBackground}" />
             <!-- TabBarBackground 铺满整个标签栏（包括下拉按钮区域），选中标签区域会被 Clip 挖掉 -->
             <Border x:Name="TabBarBackgroundBorder"
-                    Grid.ColumnSpan="2"
+                    Grid.ColumnSpan="3"
                     Background="{DynamicResource TabBarBackground}" />
 
             <!-- 展开按钮（固定最左边） -->
@@ -306,12 +306,52 @@
                     </DataTemplate>
                 </controls:InstanceTabsControl.ItemTemplate>
             </controls:InstanceTabsControl>
+
+            <!-- 多开批量操作：全部开始 / 全部停止 -->
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center"
+                        Margin="4,0,10,0"
+                        Spacing="6">
+                <Button Command="{Binding DetachActiveTabCommand}"
+                        Padding="8,5"
+                        ToolTip.Tip="把当前标签页弹成独立窗口（任务继续运行，关闭窗口即收回）">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <fluent:FluentIcon Icon="ArrowExpand" IconSize="Size16" VerticalAlignment="Center" />
+                        <TextBlock Text="弹出标签" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding StartAllInstancesCommand}"
+                        Padding="8,5">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <fluent:FluentIcon Icon="Play" IconSize="Size16" VerticalAlignment="Center" />
+                        <TextBlock Text="全部开始" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding StopAllInstancesCommand}"
+                        Padding="8,5">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <fluent:FluentIcon Icon="Stop" IconSize="Size16" VerticalAlignment="Center" />
+                        <TextBlock Text="全部停止" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </Grid>
 
         <!-- Row 1: 内容区域 -->
+        <!-- 用 HostedView：标签页被"撕"成独立窗口时它返回 null，这里才能释放控件 -->
         <ContentControl Grid.Row="1"
-                        Content="{Binding ActiveTab.View}"
+                        Content="{Binding ActiveTab.HostedView}"
                         Margin="0" />
+        <TextBlock Grid.Row="1"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Opacity="0.7"
+                   TextWrapping="Wrap"
+                   MaxWidth="420"
+                   TextAlignment="Center"
+                   IsVisible="{Binding ActiveTab.IsDetached}"
+                   Text="该标签页已弹到独立窗口显示，任务仍在继续运行。关闭那个窗口即可收回这里。" />
         <!-- 新建实例菜单 Popup，PlacementTarget 由 code-behind 动态设为 PART_AddItemButton -->
         <Popup x:Name="PresetMenuPopup"
                IsOpen="{Binding IsAddMenuOpen, Mode=TwoWay}"

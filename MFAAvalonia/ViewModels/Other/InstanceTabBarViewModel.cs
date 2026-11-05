@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Avalonia.Controls;
+using Avalonia.Threading;
 using MFAAvalonia.Configuration;
 using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Extensions;
@@ -7,6 +9,7 @@ using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.ValueType;
 using MFAAvalonia.ViewModels.Pages;
 using MFAAvalonia.ViewModels.UsersControls.Settings;
+using MFAAvalonia.Views.Windows;
 using SukiUI.Controls;
 using SukiUI.Dialogs;
 using SukiUI.MessageBox;
@@ -34,6 +37,61 @@ public partial class InstanceTabBarViewModel : ViewModelBase
 
     private bool _isReloading;
     private readonly HashSet<string> _closingInstanceIds = new(StringComparer.Ordinal);
+
+    /// <summary>已被"撕"成独立窗口的实例：InstanceId → 窗口。</summary>
+    private readonly Dictionary<string, DetachedTabWindow> _detachedWindows = new(StringComparer.Ordinal);
+
+    public bool HasDetachedTabs => _detachedWindows.Count > 0;
+
+    // ---------------- 标签页撕出 / 收回 ----------------
+
+    /// <summary>把当前标签页弹成独立窗口（任务继续跑）。</summary>
+    [RelayCommand]
+    private void DetachActiveTab()
+    {
+        if (ActiveTab is { } tab)
+            DetachTab(tab);
+    }
+
+    /// <summary>
+    /// 把某个标签页弹成独立窗口。
+    /// 关键点：业务状态全在 TaskQueueViewModel / MaaProcessor 上，这里只搬 UI 控件，
+    /// 所以任务、计时器、日志都不会中断。
+    /// </summary>
+    public void DetachTab(InstanceTabViewModel tab)
+    {
+        if (_detachedWindows.TryGetValue(tab.InstanceId, out var existing))
+        {
+            existing.Activate();
+            return;
+        }
+
+        var view = tab.View;
+        var window = new DetachedTabWindow($"{tab.Name} — 独立窗口（关闭即收回）", view, () =>
+        {
+            _detachedWindows.Remove(tab.InstanceId);
+            tab.IsDetached = false;              // HostedView 变回 View，主窗口重新承载
+            OnPropertyChanged(nameof(HasDetachedTabs));
+        });
+
+        // 先让主窗口的 ContentControl 释放控件（HostedView → null），再交给新窗口，
+        // 同一个 Control 不能同时挂在两个父级上。
+        tab.IsDetached = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (view.Parent != null)
+            {
+                tab.IsDetached = false;
+                LoggerHelper.Warning("撕出标签失败：控件仍被主窗口持有");
+                return;
+            }
+
+            window.AttachContent();
+            _detachedWindows[tab.InstanceId] = window;
+            OnPropertyChanged(nameof(HasDetachedTabs));
+            window.Show();
+        }, DispatcherPriority.Background);
+    }
 
     [ObservableProperty] private InstanceTabViewModel? _activeTab;
     [ObservableProperty] private bool _isDropdownOpen;
@@ -394,8 +452,72 @@ public partial class InstanceTabBarViewModel : ViewModelBase
             {
                 SyncConnectSettingsForCurrentInstance();
             }
+
+            // 该实例已被撕成独立窗口：切到它时把窗口提到前面，避免"点了没反应"
+            if (newValue.IsDetached && _detachedWindows.TryGetValue(newValue.InstanceId, out var detachedWindow))
+                detachedWindow.Activate();
         }
     }
+    [RelayCommand]
+    private async Task StartAllInstancesAsync()
+    {
+        foreach (var tab in Tabs.ToList())
+        {
+            var vm = tab.TaskQueueViewModel;
+            if (vm == null || vm.IsRunning)
+                continue;
+
+            // 切到目标 Tab，让该实例自己的设备选择/控制器先完成初始化。
+            ActiveTab = tab;
+
+            // 等待该实例的设备真正就绪（最多 10 秒），避免用空 serial 启动。
+            for (var i = 0; i < 20; i++)
+            {
+                if (vm.CurrentDevice is MaaFramework.Binding.AdbDeviceInfo adb
+                    && !string.IsNullOrWhiteSpace(adb.AdbSerial))
+                {
+                    break;
+                }
+                await Task.Delay(500);
+            }
+
+            try
+            {
+                if (vm.CurrentDevice is MaaFramework.Binding.AdbDeviceInfo ready
+                    && !string.IsNullOrWhiteSpace(ready.AdbSerial))
+                {
+                    vm.StartTask();
+                }
+                else
+                {
+                    LoggerHelper.Warning($"[多开] 跳过实例：{tab.Name}，设备未就绪");
+                }
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Warning($"[多开] 启动实例失败：{tab.Name}，原因={ex.Message}");
+            }
+
+            await Task.Delay(1500);
+        }
+    }
+
+    [RelayCommand]
+    private void StopAllInstances()
+    {
+        foreach (var tab in Tabs.ToList())
+        {
+            try
+            {
+                tab.TaskQueueViewModel?.StopTask();
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Warning($"[多开] 停止实例失败：{tab.Name}，原因={ex.Message}");
+            }
+        }
+    }
+
     private void SwitchToInstance(MaaProcessor processor)
     {
         using var _ = BeginInstanceLogScope(
@@ -423,7 +545,9 @@ public partial class InstanceTabBarViewModel : ViewModelBase
 
                 // 运行中的实例切回前台时，不要重建控制器/资源状态。
                 // 这些初始化链路可能触发 SetTasker，进而打断正在执行的任务。
-                if (taskViewModel.IsRunning)
+                if (taskViewModel.IsRunning
+                    || taskViewModel.Processor.IsTaskRunActive
+                    || taskViewModel.Processor.TaskQueue.Count > 0)
                 {
                     return;
                 }
@@ -636,6 +760,10 @@ public partial class InstanceTabBarViewModel : ViewModelBase
     {
         if (tab == null) return;
         using var _ = BeginInstanceLogScope("CloseInstance", tab.InstanceId, tab.Name);
+
+        // 该实例若还被独立窗口持有，先关窗口（关闭回调会把控件收回主窗口），再走正常关闭流程
+        if (_detachedWindows.TryGetValue(tab.InstanceId, out var detachedWindow))
+            detachedWindow.Close();
 
         if (!_closingInstanceIds.Add(tab.InstanceId))
             return;

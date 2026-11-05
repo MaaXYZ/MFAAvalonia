@@ -37,6 +37,20 @@ public partial class InstanceTabViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// 该标签页是否已被"撕"成独立窗口。
+    /// 撕出后主窗口不再承载这个控件，但 TaskQueueViewModel / MaaProcessor 完全没变，任务继续跑。
+    /// </summary>
+    [ObservableProperty] private bool _isDetached;
+
+    /// <summary>主窗口 ContentControl 绑定的目标：撕出时返回 null，让主窗口先释放控件。</summary>
+    public Control? HostedView => IsDetached ? null : View;
+
+    partial void OnIsDetachedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(HostedView));
+    }
+
     public InstanceTabViewModel(MaaProcessor processor)
     {
         Processor = processor;
