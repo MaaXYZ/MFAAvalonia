@@ -522,6 +522,7 @@ public class MaaProcessor
 
     public void Dispose()
     {
+        DeviceAssignmentRegistry.Release(InstanceId);
         _isClosed = true;
         DetachScreenshotTasker(requireStopped: true);
         _detachedScreenshotCleanupCancellationTokenSource?.Cancel();
@@ -1240,7 +1241,9 @@ public class MaaProcessor
 
     private MaaController? GetScreenshotController(bool test)
     {
-        if (test && !_isClosed)
+        // 实时视图在空闲时也要主动建立主任务器，否则第二个实例没开始任务时
+        // GetScreenshotTasker 返回 null，实时视图会一直空白。
+        if (!_isClosed && (test || ViewModel?.EnableLiveView == true))
             _ = TryConnectForLiveViewAsync();
 
         return GetScreenshotTasker(CancellationToken.None)?.Controller;
@@ -1482,7 +1485,14 @@ public class MaaProcessor
     public MaaImageBuffer? GetLiveViewBuffer(bool test = true)
     {
         var controller = GetScreenshotController(test);
-        return GetImage(controller, false);
+        var buffer = GetImage(controller, false);
+        if (buffer == null && MaaTasker?.Controller != null)
+        {
+            // 独立截图任务器取不到画面时，回退到主任务器最近一帧缓存，
+            // 避免第二个实例实时视图空白或显示旧画面。
+            buffer = GetImage(MaaTasker.Controller, false);
+        }
+        return buffer;
     }
 
     /// <summary>
@@ -3093,14 +3103,10 @@ public class MaaProcessor
 
     private AdbScreencapMethods ConfigureAdbScreenCapTypes()
     {
-        var screenCapType = InstanceConfiguration.GetValue(ConfigurationKeys.AdbControlScreenCapType,
-            AdbScreencapMethods.None, [AdbScreencapMethods.All, AdbScreencapMethods.Default],
-            new UniversalEnumConverter<AdbScreencapMethods>());
-        return screenCapType switch
-        {
-            AdbScreencapMethods.None => Config.AdbDevice.Info?.ScreencapMethods ?? AdbScreencapMethods.Default,
-            _ => screenCapType
-        };
+        // 截图方式固定为 RawWithGzip（见 InitializeController 里的说明：
+        // EncodeToFileAndPull 在 MuMu 12 / Android 15 实例上会返回空帧）。
+        // 这里不再读实例配置，保证 UI、ScreenshotType() 日志与实际使用的方式一致。
+        return AdbScreencapMethods.RawWithGzip;
     }
 
     private void ConfigureMaaProcessorForWin32(bool logConfig)
@@ -3554,9 +3560,28 @@ public class MaaProcessor
         });
     }
 
+    /// <summary>
+    /// 如果切换账号任务不在末尾，自动移到末尾：
+    /// 先跑当前区/当前账号的任务，再切换，再由 ExecuteTasks 从任务列表开头重放。
+    /// </summary>
+    private static List<DragItemViewModel> MoveSwitchAccountToEnd(List<DragItemViewModel> tasks)
+    {
+        var switchIndex = tasks.FindIndex(task =>
+            string.Equals(task.InterfaceItem?.Entry, "switch_account", StringComparison.OrdinalIgnoreCase));
+        if (switchIndex < 0 || switchIndex == tasks.Count - 1)
+            return tasks;
+
+        var switchTask = tasks[switchIndex];
+        var ordered = tasks.Where((_, index) => index != switchIndex).ToList();
+        ordered.Add(switchTask);
+        LoggerHelper.Info($"[任务顺序] 检测到切换账号任务不在末尾，已从第 {switchIndex + 1} 位移到末尾，先执行当前区任务。");
+        return ordered;
+    }
+
     private async Task RunTaskChainAsync(List<DragItemViewModel> tasks, bool onlyStart, bool checkUpdate,
         bool retainCompletedStates = false, IReadOnlyCollection<DragItemViewModel>? retainedCompletedTasks = null)
     {
+        tasks = MoveSwitchAccountToEnd(tasks);
         try
         {
             await StartTask(tasks, onlyStart, checkUpdate, retainCompletedStates, retainedCompletedTasks);
@@ -3739,30 +3764,66 @@ public class MaaProcessor
 
     async private Task<TaskQueueResult> ExecuteTasks(CancellationToken token)
     {
+        var initialTasks = TaskQueue.Snapshot().ToList();
+        var switchTask = initialTasks.FirstOrDefault(IsSwitchAccountTask);
+        var replayTasks = switchTask != null
+            ? initialTasks.TakeWhile(task => !ReferenceEquals(task, switchTask))
+                .Where(task => !IsSwitchAccountTask(task)
+                    && task.Name != null
+                    && !task.Name.Contains("启动附加", StringComparison.Ordinal)
+                    && !task.Name.Contains("连接", StringComparison.Ordinal))
+                .ToList()
+            : new List<MFATask>();
+        LoggerHelper.Info($"[切换账号] 初始任务 {initialTasks.Count} 个，切换任务={(switchTask?.Name ?? "<none>")}，待重放任务 {replayTasks.Count} 个。");
+        var switchCompleted = false;
+        var replayedAfterSwitch = false;
         var completedWithFailures = false;
-        while (!token.IsCancellationRequested && TaskQueue.TryDequeue(out var task))
+
+        while (true)
         {
-            // 等待 modal 弹窗确认（display=modal 时任务队列暂停推进）
-            while (_isWaitingForModal && !token.IsCancellationRequested)
+            while (!token.IsCancellationRequested && TaskQueue.TryDequeue(out var task))
             {
-                await Task.Delay(100, token);
-            }
-            if (token.IsCancellationRequested) break;
+                // 等待 modal 弹窗确认（display=modal 时任务队列暂停推进）
+                while (_isWaitingForModal && !token.IsCancellationRequested)
+                {
+                    await Task.Delay(100, token);
+                }
+                if (token.IsCancellationRequested) break;
 
-            var result = await task.Run(token);
-            if (result.Status == MFATask.MFATaskStatus.FAILED)
-            {
-                completedWithFailures = true;
-                if (result.ContinueQueue)
-                    continue;
+                var result = await task.Run(token);
+                if (result.Status == MFATask.MFATaskStatus.SUCCEEDED && IsSwitchAccountTask(task))
+                    switchCompleted = true;
+
+                if (result.Status == MFATask.MFATaskStatus.FAILED)
+                {
+                    completedWithFailures = true;
+                    if (result.ContinueQueue)
+                        continue;
+                }
+
+                if (result.Status != MFATask.MFATaskStatus.SUCCEEDED)
+                {
+                    Status = result.Status;
+                    return new TaskQueueResult(false);
+                }
             }
 
-            if (result.Status != MFATask.MFATaskStatus.SUCCEEDED)
+            if (token.IsCancellationRequested)
+                break;
+
+            if (!replayedAfterSwitch && switchCompleted && !completedWithFailures && replayTasks.Count > 0)
             {
-                Status = result.Status;
-                return new TaskQueueResult(false);
+                replayedAfterSwitch = true;
+                foreach (var replayTask in replayTasks)
+                    TaskQueue.Enqueue(replayTask);
+
+                LoggerHelper.Info($"[切换账号] 换区/换号完成，从任务列表开头重新执行 {replayTasks.Count} 个任务。");
+                continue;
             }
+
+            break;
         }
+
         if (Status == MFATask.MFATaskStatus.NOT_STARTED)
             Status = token.IsCancellationRequested
                 ? MFATask.MFATaskStatus.STOPPED
@@ -3771,6 +3832,12 @@ public class MaaProcessor
                     : MFATask.MFATaskStatus.SUCCEEDED;
 
         return new TaskQueueResult(!token.IsCancellationRequested);
+    }
+
+    private static bool IsSwitchAccountTask(MFATask task)
+    {
+        return string.Equals(task.SourceItem?.InterfaceItem?.Entry, "switch_account", StringComparison.OrdinalIgnoreCase)
+            || task.Name?.Contains("切换账号", StringComparison.Ordinal) == true;
     }
 
     public class NodeAndParam

@@ -55,6 +55,14 @@ public partial class ObservableQueue<T> : ObservableObject
         }
     }
 
+    public T[] Snapshot()
+    {
+        lock (_lock)
+        {
+            return _queue.ToArray();
+        }
+    }
+
     public void Clear()
     {
         lock (_lock)

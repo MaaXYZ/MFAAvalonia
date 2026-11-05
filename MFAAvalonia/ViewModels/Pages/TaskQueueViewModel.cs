@@ -22,6 +22,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SukiUI.Dialogs;
 using System;
+using System.IO;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -350,6 +351,12 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     private bool _suppressAutoConnect = false;
     private bool _lockCurrentAdbSelectionDuringRecovery = false;
     private bool _suppressDeviceSelectionToast = false;
+
+    /// <summary>
+    /// P0.2：自动检测选出的设备与“实例已保存的 serial”不一致时为 true，
+    /// 本次选中只用于连接，不写回实例配置，避免把用户保存的模拟器静默改成别的实例那台。
+    /// </summary>
+    private bool _suppressDeviceConfigPersistence = false;
 
     /// <summary>
     /// 记录已应用过 interface.json 控制器设置的控制器类型和名称，
@@ -699,6 +706,16 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         {
             ToastHelper.Warn(LangKeys.CannotStart.ToLocalization(), LangKeys.ResourceNotSelected.ToLocalization());
             LogStartBlocked("启动任务被拒绝：未选择有效资源");
+            return;
+        }
+
+        // ADB 多开：设备未真正选中/序列号为空时禁止启动，避免用空 serial 初始化控制器。
+        if (CurrentController == MaaControllerTypes.Adb
+            && (CurrentDevice is not AdbDeviceInfo readyDevice
+                || string.IsNullOrWhiteSpace(readyDevice.AdbSerial)))
+        {
+            ToastHelper.Warn(LangKeys.CannotStart.ToLocalization(), LangKeys.DeviceNotSelected.ToLocalization());
+            LogStartBlocked("启动任务被拒绝：ADB 设备尚未就绪");
             return;
         }
 
@@ -1527,6 +1544,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
     private void SetEmptyDeviceState(MaaControllerTypes? controllerType = null)
     {
+        DeviceAssignmentRegistry.Release(Processor.InstanceId);
         var resolvedControllerType = controllerType ?? CurrentController;
         if (resolvedControllerType == MaaControllerTypes.Adb
             && !IsNetworkAdbSerial(Processor.Config.AdbDevice.AdbSerial))
@@ -1675,10 +1693,33 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 Processor.Config.AdbDevice.Config = device.Config;
                 Processor.Config.AdbDevice.Info = device;
             }
+            // 记录该实例占用的 serial，供其它 Tab 的自动分配避让
+            DeviceAssignmentRegistry.Assign(Processor.InstanceId, device.AdbSerial);
             // 正在连接或设备未变更时跳过 SetTasker，避免打断进行中的连接
             if (!Processor.IsConnecting && !isSameDevice)
                 ResetTaskerInBackground();
-            Processor.InstanceConfiguration.SetValue(ConfigurationKeys.AdbDevice, device);
+            // P0.2：自动检测选中了别的设备时，不把结果写回实例配置，
+            // 否则实例保存的模拟器会被静默改成另一台（多开串号的根因）。
+            if (_suppressDeviceConfigPersistence)
+            {
+                LoggerHelper.Info($"实例={Processor.InstanceId} 本次为自动降级选择 {device.AdbSerial}，保留实例原有设备配置不覆盖。");
+            }
+            else
+            {
+                // P1-3：AdbDeviceInfo 携带 MaaFramework 的原生句柄 Info，
+                // 整对象序列化会把 InfoHandle（进程内指针）一起写进实例配置，
+                // 重启后反序列化出来的是野指针。这里落盘时换成只含可序列化字段的副本。
+                var persistable = new AdbDeviceInfo(
+                    device.Name,
+                    device.AdbPath,
+                    device.AdbSerial,
+                    device.ScreencapMethods,
+                    device.InputMethods,
+                    device.Config,
+                    device.AgentPath);
+                Processor.InstanceConfiguration.SetValue(ConfigurationKeys.AdbDevice, persistable);
+                LoggerHelper.Info($"实例={Processor.InstanceId} 已持久化设备配置（剔除原生句柄）：{device.Name} / {device.AdbSerial}");
+            }
         }
         else if (value is WlRootsSocketInfo socket && CurrentController == MaaControllerTypes.WlRoots)
         {
@@ -2164,8 +2205,10 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                     ? DetectWlRootsSockets()
                 : DetectDesktopWindows(controllerType);
         token.ThrowIfCancellationRequested();
+        _suppressDeviceConfigPersistence = false;
         if (!UpdateDeviceList(devices, index, selectionVersion, strictLaunchTarget))
             return;
+        _suppressDeviceConfigPersistence = false;
         token.ThrowIfCancellationRequested();
         HandleControllerSettings(controllerType);
         token.ThrowIfCancellationRequested();
@@ -2188,6 +2231,13 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
         var devices = MaaProcessor.Toolkit.AdbDevice.Find();
         var index = CalculateAdbDeviceIndex(devices, strictLaunchTarget);
+        // P0.2：自动选出的设备与实例保存的不一致时，只用于本次连接，不写回实例配置
+        _suppressDeviceConfigPersistence = ShouldKeepSavedSerialOnAutoDetect(devices, index);
+        if (_suppressDeviceConfigPersistence)
+        {
+            LoggerHelper.Info($"实例={Processor.InstanceId} 保存的设备与自动检测结果不一致，本次不覆盖实例配置："
+                + $"保存={TryGetSavedInstanceAdbSerial() ?? "<none>"}，本次连接={devices[index].AdbSerial}");
+        }
         return (new(devices), index);
     }
 
@@ -2201,6 +2251,67 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             && separator < serial.Length - 1
             && int.TryParse(serial[(separator + 1)..], out var port)
             && port is > 0 and <= 65535;
+    }
+
+    /// <summary>
+    /// P0.2：读取本实例“保存的” ADB serial，供自动分配设备时优先匹配。
+    /// 读取顺序：当前活动配置 → 实例配置（强类型） → 实例配置文件原始 JSON（兼容反序列化失败的情况）。
+    /// </summary>
+    private string? TryGetSavedInstanceAdbSerial()
+    {
+        var activeSerial = Processor.Config.AdbDevice.AdbSerial;
+        if (!string.IsNullOrWhiteSpace(activeSerial))
+            return activeSerial;
+
+        try
+        {
+            if (Processor.InstanceConfiguration.TryGetValue(ConfigurationKeys.AdbDevice, out AdbDeviceInfo savedDevice,
+                    new UniversalEnumConverter<AdbInputMethods>(), new UniversalEnumConverter<AdbScreencapMethods>())
+                && !string.IsNullOrWhiteSpace(savedDevice.AdbSerial))
+            {
+                return savedDevice.AdbSerial;
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"[设备恢复] 读取实例保存的 AdbDevice 失败：{ex.Message}");
+        }
+
+        try
+        {
+            var configPath = Processor.InstanceConfiguration.GetConfigFilePath();
+            if (File.Exists(configPath))
+            {
+                var root = JObject.Parse(File.ReadAllText(configPath));
+                var serial = (root["AdbDevice"] as JObject)?["AdbSerial"]?.ToString();
+                if (!string.IsNullOrWhiteSpace(serial))
+                    return serial;
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"[设备恢复] 读取实例配置文件失败：{ex.Message}");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// P0.2：自动检测选出的设备与实例保存的 serial 不一致时，返回 true。
+    /// 为 true 时本次选中只用于连接，不写回实例配置（见 ChangedDevice 中的判断）。
+    /// 实例还没有保存设备（首次配置）时返回 false，保持原来的“自动写入”行为。
+    /// </summary>
+    private bool ShouldKeepSavedSerialOnAutoDetect(IList<AdbDeviceInfo> devices, int index)
+    {
+        if (index < 0 || index >= devices.Count)
+            return false;
+
+        var picked = devices[index];
+        var savedSerial = TryGetSavedInstanceAdbSerial();
+        if (string.IsNullOrWhiteSpace(savedSerial))
+            return false;
+
+        return !string.Equals(picked.AdbSerial, savedSerial, StringComparison.OrdinalIgnoreCase);
     }
 
     private int CalculateAdbDeviceIndex(IList<AdbDeviceInfo> devices, bool strictLaunchTarget = false)
@@ -2217,6 +2328,35 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             return -1;
         }
 
+        // P0.2：实例自己保存的 ADB serial 优先于「列表里第一台未被占用的设备」。
+        // 修复前：实例 B 保存的是 16448，但启动时 CurrentDevice 还是 null，
+        // 于是落到下面的独占分配，取到 A 的 16384，随后 ChangedDevice 又把配置写回实例，
+        // 结果 B 的配置被静默改成了 A。
+        var savedInstanceSerial = TryGetSavedInstanceAdbSerial();
+        if (!string.IsNullOrWhiteSpace(savedInstanceSerial))
+        {
+            var savedMatch = devices.FirstOrDefault(device =>
+                string.Equals(device.AdbSerial, savedInstanceSerial, StringComparison.OrdinalIgnoreCase));
+
+            if (savedMatch == null)
+            {
+                LoggerHelper.Info($"实例={Processor.InstanceId} 保存的设备 {savedInstanceSerial} 不在当前设备列表中，走独占分配。");
+            }
+            else if (DeviceAssignmentRegistry.IsAssignedToOther(savedMatch.AdbSerial, Processor.InstanceId))
+            {
+                LoggerHelper.Info($"实例={Processor.InstanceId} 保存的设备 {savedInstanceSerial} 已被其它实例占用，改走独占分配。");
+            }
+            else if (AdbDeviceAvailability.IsOnline(savedMatch.AdbPath, savedMatch.AdbSerial))
+            {
+                LoggerHelper.Info($"优先使用实例保存的 ADB 设备：实例={Processor.InstanceId}，设备={DescribeAdbDeviceInfo(savedMatch)}");
+                return devices.IndexOf(savedMatch);
+            }
+            else
+            {
+                LoggerHelper.Info($"实例={Processor.InstanceId} 保存的设备 {savedInstanceSerial} 当前离线，走独占分配。");
+            }
+        }
+
         if (CurrentDevice is AdbDeviceInfo info)
         {
             LogUiStateChange("MatchAdbDevice", $"当前设备指纹：{DescribeAdbDeviceInfo(info)}");
@@ -2227,7 +2367,19 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             }
         }
 
-        return devices.Count > 0 ? 0 : -1;
+        // 多实例：先过滤掉已安装但未启动的假设备，再优先选择未被其它实例占用的设备。
+        var onlineDevices = devices
+            .Where(device => AdbDeviceAvailability.IsOnline(device.AdbPath, device.AdbSerial))
+            .ToList();
+        var unassigned = onlineDevices.FirstOrDefault(device =>
+            !DeviceAssignmentRegistry.IsAssignedToOther(device.AdbSerial, Processor.InstanceId));
+        if (unassigned != null)
+        {
+            LoggerHelper.Info($"按实例独占规则选择 ADB 设备：实例={Processor.InstanceId}，设备={DescribeAdbDeviceInfo(unassigned)}");
+            return devices.IndexOf(unassigned);
+        }
+
+        return onlineDevices.Count > 0 ? devices.IndexOf(onlineDevices[0]) : -1;
     }
 
     private int FindPreferredAdbDeviceIndexByLaunchConfig(IList<AdbDeviceInfo> devices)
@@ -2254,7 +2406,8 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     private AdbDeviceInfo? FindBestFingerprintMatchedAdbDevice(IEnumerable<AdbDeviceInfo> devices, AdbDeviceInfo savedDevice)
     {
         var matchedDevices = devices
-            .Where(device => device.MatchesFingerprint(savedDevice))
+            .Where(device => AdbDeviceAvailability.IsOnline(device.AdbPath, device.AdbSerial)
+                && device.MatchesFingerprint(savedDevice))
             .ToList();
 
         LoggerHelper.Info($"按指纹匹配到的设备数量：{matchedDevices.Count}");
@@ -2879,11 +3032,46 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         var rememberAdb = Processor.InstanceConfiguration.GetValue(ConfigurationKeys.RememberAdb, true);
         var hasSavedDevice = Processor.InstanceConfiguration.TryGetValue(ConfigurationKeys.AdbDevice, out AdbDeviceInfo savedDevice1,
             new UniversalEnumConverter<AdbInputMethods>(), new UniversalEnumConverter<AdbScreencapMethods>());
+
+        // 兜底：某些手动写入/迁移的实例配置会让 AdbDeviceInfo 反序列化失败，
+        // 但文件里仍然保存了正确的 serial。这里直接读原始 JSON，避免被自动检测改成第一台。
+        if (!hasSavedDevice)
+        {
+            try
+            {
+                var configPath = Processor.InstanceConfiguration.GetConfigFilePath();
+                if (File.Exists(configPath))
+                {
+                    var root = JObject.Parse(File.ReadAllText(configPath));
+                    var adb = root["AdbDevice"] as JObject;
+                    var serial = adb?["AdbSerial"]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(serial))
+                    {
+                        savedDevice1 = new AdbDeviceInfo(
+                            adb?["Name"]?.ToString() ?? string.Empty,
+                            adb?["AdbPath"]?.ToString() ?? "adb",
+                            serial,
+                            AdbScreencapMethods.Default,
+                            AdbInputMethods.All,
+                            adb?["Config"]?.ToString() ?? "{}",
+                            adb?["AgentPath"]?.ToString() ?? "./MaaAgentBinary");
+                        hasSavedDevice = true;
+                        LoggerHelper.Info($"[设备恢复] 从原始配置补齐实例={Processor.InstanceId} serial={serial}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Warning($"[设备恢复] 读取实例原始配置失败：{ex.Message}");
+            }
+        }
         var shouldKeepMatchingSavedDeviceStrictly = strictLaunchTarget
             && CurrentController == MaaControllerTypes.Adb
             && rememberAdb
             && Processor.Config.AdbDevice.AdbPath == "adb"
             && hasSavedDevice;
+        LoggerHelper.Info($"[设备恢复] 实例={Processor.InstanceId} hasSaved={hasSavedDevice} savedSerial={savedDevice1?.AdbSerial ?? "<none>"} allowAuto={allowAutoDetect} current={CurrentDevice switch { AdbDeviceInfo a => a.AdbSerial, _ => "<none>" }}");
+
 
         if (!allowAutoDetect && !shouldKeepMatchingSavedDeviceStrictly)
         {
@@ -3591,6 +3779,11 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     private int _isDisposed;
     private bool _liveViewNoImageLogged;
 
+    // 实时视图连续取不到画面的计数。截图任务“成功”但控制器没有可用帧时不会走
+    // HandleScreencapStatus 的失败分支，若不单独计数，画面会永久停在旧帧上。
+    private int _liveViewEmptyStreak;
+    private DateTime _lastLiveViewEmptyRecovery = DateTime.MinValue;
+
     private void UpdateLiveViewTimerInterval()
     {
         var interval = GetLiveViewRefreshInterval();
@@ -3671,7 +3864,20 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 var buffer = Processor.GetLiveViewBuffer(false);
                 if (buffer == null)
                 {
-                    if (!_liveViewNoImageLogged)
+                    // 截图任务成功但没有可用帧（EncodeToFileAndPull 在部分模拟器上就是这样），
+                    // 不会走上面的失败分支；只打一次日志的话，实时视图会永久停在旧画面上。
+                    // 这里按"连续空帧"计数，超阈值后重建一次截图执行器（限流 30 秒一次，避免抖动）。
+                    _liveViewEmptyStreak++;
+                    if (_liveViewEmptyStreak >= 12
+                        && (DateTime.UtcNow - _lastLiveViewEmptyRecovery).TotalSeconds >= 30)
+                    {
+                        _lastLiveViewEmptyRecovery = DateTime.UtcNow;
+                        _liveViewEmptyStreak = 0;
+                        LoggerHelper.Warning("实时画面连续取不到图像，准备重建截图任务执行器。");
+                        Processor.ResetLiveViewTasker();
+                    }
+
+                    if (!_liveViewNoImageLogged && _liveViewEmptyStreak >= 3)
                     {
                         _liveViewNoImageLogged = true;
                         var screencapType = Processor.ScreenshotType();
@@ -3686,6 +3892,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 else
                 {
                     _liveViewNoImageLogged = false;
+                    _liveViewEmptyStreak = 0;
                     _ = UpdateLiveViewImageAsync(buffer);
                 }
             }

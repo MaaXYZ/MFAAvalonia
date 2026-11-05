@@ -444,6 +444,12 @@ public class FocusHandler
             || input.StartsWith("$", StringComparison.Ordinal))
             return false;
 
+        // focus 文案常见形如 <font color="DeepSkyBlue">进入秘境</font>，
+        // 其中的 </font> 含 '/'，会被下面的 Contains 误判成文件路径，
+        // 于是每个节点都刷一条"Focus 内容文件解析失败"的警告。含尖括号一律按内联文本处理。
+        if (input.Contains('<') || input.Contains('>'))
+            return false;
+
         return input.Contains(Path.DirectorySeparatorChar)
                || input.Contains(Path.AltDirectorySeparatorChar)
                || input.StartsWith("./", StringComparison.Ordinal)
