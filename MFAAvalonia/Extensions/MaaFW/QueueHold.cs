@@ -42,6 +42,8 @@ internal static class QueueHold
     /// 生成占位任务的 pipeline_override。占位沿用前一个真任务的覆盖（数组形式，后者覆盖前者），
     /// 让资源侧按节点读取的选项（如 attach）在占位期间与真任务一致；占位节点本身显式写满等待相关字段，
     /// 不继承资源 default_pipeline 里的延迟与 on_error。
+    /// 真任务的覆盖由 MaaToken 序列化，实际总是数组（[{...}, ...]）：按原顺序展开后再接占位节点；
+    /// 单个对象照旧放在占位节点之前。两种都只做字符串拼接，不解析真任务的 JSON。
     /// </summary>
     public static string BuildOverride(string? taskOverride, long seq)
     {
@@ -70,9 +72,16 @@ internal static class QueueHold
         }.ToJsonString(RelaxedJson);
 
         var inherited = taskOverride?.Trim();
-        if (string.IsNullOrEmpty(inherited) || inherited == "{}" || inherited[0] != '{')
+        if (string.IsNullOrEmpty(inherited) || inherited == "{}")
             return hold;
-        return $"[{inherited},{hold}]";
+        if (inherited[0] == '{')
+            return $"[{inherited},{hold}]";
+        if (inherited.Length >= 2 && inherited[0] == '[' && inherited[^1] == ']')
+        {
+            var items = inherited[1..^1].Trim();
+            return items.Length == 0 ? hold : $"[{items},{hold}]";
+        }
+        return hold;
     }
 
     public static bool TryParseSeq(string? actionParam, out long seq)

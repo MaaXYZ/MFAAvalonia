@@ -42,11 +42,37 @@ public class QueueHoldTests
         Assert.Equal(3, root[1]![QueueHold.NodeName]!["custom_action_param"]!["seq"]!.GetValue<long>());
     }
 
+    [Fact]
+    public void OverrideSplicesTheTaskOverrideArrayBeforeTheHoldNode()
+    {
+        // MaaProcessor 交给 AppendTask 的参数是 MaaToken.ToString()：带缩进的 List<Dictionary> 数组。
+        const string task = "[\r\n  {\r\n    \"StartGame_PCWindowOptions\": {\r\n      \"attach\": {\r\n        \"resolution\": \"1080p\"\r\n      }\r\n    }\r\n  },\r\n  {\r\n    \"B\": {}\r\n  }\r\n]";
+
+        var root = JsonNode.Parse(QueueHold.BuildOverride(task, 5))!.AsArray();
+
+        Assert.Equal(3, root.Count);
+        Assert.Equal("1080p", root[0]!["StartGame_PCWindowOptions"]!["attach"]!["resolution"]!.GetValue<string>());
+        Assert.True(root[1]!.AsObject().ContainsKey("B"));
+        Assert.Equal(5, root[2]![QueueHold.NodeName]!["custom_action_param"]!["seq"]!.GetValue<long>());
+    }
+
+    [Fact]
+    public void OverrideKeepsAnArrayWithOnlyAnEmptyObject()
+    {
+        var root = JsonNode.Parse(QueueHold.BuildOverride("[{}]", 2))!.AsArray();
+
+        Assert.Equal(2, root.Count);
+        Assert.Empty(root[0]!.AsObject());
+        Assert.True(root[1]!.AsObject().ContainsKey(QueueHold.NodeName));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("[{\"A\":{}}]")]
-    public void OverrideFallsBackToTheHoldNodeWhenTheTaskOverrideIsNotAnObject(string? task)
+    [InlineData("[]")]
+    [InlineData("[ ]")]
+    [InlineData("not json")]
+    public void OverrideFallsBackToTheHoldNodeWhenThereIsNothingToInherit(string? task)
     {
         var root = JsonNode.Parse(QueueHold.BuildOverride(task, 1))!.AsObject();
 
