@@ -15,5 +15,6 @@
   <ItemGroup>
     <Compile Include="../MFAAvalonia/Extensions/MaaFW/MaaProcessorConfig.cs" Link="MaaProcessorConfig.cs" />
     <Compile Include="../MFAAvalonia/Extensions/MaaFW/MaaControllerScreenshotOptions.cs" Link="MaaControllerScreenshotOptions.cs" />
+    <Compile Include="../MFAAvalonia/Extensions/MaaFW/QueueHold.cs" Link="QueueHold.cs" />
   </ItemGroup>
 </Project>
