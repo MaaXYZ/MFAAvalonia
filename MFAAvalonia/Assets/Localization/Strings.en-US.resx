@@ -439,10 +439,10 @@
         <value>Webhook Name</value>
     </data>
     <data name="ExternalNotificationEmailAccount" xml:space="preserve">
-        <value>Email Account</value>
+        <value>Email Address</value>
     </data>
     <data name="ExternalNotificationEmailSecret" xml:space="preserve">
-        <value>Email Secret</value>
+        <value>SMTP App Password / Authorization Code</value>
     </data>
     <data name="ExternalNotificationEnabled" xml:space="preserve">
         <value>Enabled configuration</value>

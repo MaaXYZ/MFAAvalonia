@@ -671,10 +671,10 @@
     <value>Webhook 名</value>
   </data>
   <data name="ExternalNotificationEmailAccount" xml:space="preserve">
-    <value>メールアカウント</value>
+    <value>メールアドレス</value>
   </data>
   <data name="ExternalNotificationEmailSecret" xml:space="preserve">
-    <value>メールシークレット</value>
+    <value>SMTP 認証コード / アプリパスワード</value>
   </data>
   <data name="ExternalNotificationEnabled" xml:space="preserve">
     <value>設定を有効化</value>

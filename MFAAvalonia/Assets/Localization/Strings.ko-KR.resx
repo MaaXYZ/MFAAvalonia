@@ -448,10 +448,10 @@
         <value>Webhook 이름</value>
     </data>
     <data name="ExternalNotificationEmailAccount" xml:space="preserve">
-        <value>이메일 계정</value>
+        <value>이메일 주소</value>
     </data>
     <data name="ExternalNotificationEmailSecret" xml:space="preserve">
-        <value>이메일 Secret</value>
+        <value>SMTP 인증 코드 / 앱 비밀번호</value>
     </data>
     <data name="ExternalNotificationEnabled" xml:space="preserve">
         <value>사용할 알림 방식</value>
