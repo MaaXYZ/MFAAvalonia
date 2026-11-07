@@ -20,6 +20,7 @@
     </Design.DataContext>
     <StackPanel Spacing="5">
         <suki:GlassCard IsVisible="{calcBinding:Binding 'EnabledExternalNotificationProviderCount > 0'}"
+                        Classes="ScenicPanel"
                         Padding="25,7,25,7">
             <StackPanel Spacing="8">
                 <DockPanel>
@@ -78,7 +79,7 @@
                 </DockPanel>
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,5,25,5">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,5,25,5">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ToggleSwitch
@@ -125,7 +126,7 @@
             </StackPanel>
 
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,5,25,5">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,5,25,5">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ToggleSwitch
@@ -172,7 +173,7 @@
             </StackPanel>
 
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,5,25,5">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,5,25,5">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ToggleSwitch
@@ -235,7 +236,7 @@
             </StackPanel>
 
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,5,25,5">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,5,25,5">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ToggleSwitch
@@ -282,7 +283,7 @@
             </StackPanel>
 
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,5,25,5">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,5,25,5">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ToggleSwitch
@@ -329,7 +330,7 @@
             </StackPanel>
 
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,5,25,5">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,5,25,5">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ToggleSwitch
@@ -376,7 +377,7 @@
             </StackPanel>
 
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,5,25,5">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,5,25,5">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ToggleSwitch
@@ -423,7 +424,7 @@
             </StackPanel>
 
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,5,25,5">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,5,25,5">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ToggleSwitch
@@ -483,7 +484,7 @@
             </StackPanel>
 
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,5,25,5">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,5,25,5">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ToggleSwitch
@@ -608,7 +609,7 @@
             </StackPanel>
 
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,5,25,5">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,5,25,5">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ToggleSwitch
@@ -681,7 +682,7 @@
             </StackPanel>
 
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,5,25,5">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,5,25,5">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ToggleSwitch
@@ -714,7 +715,7 @@
                 </StackPanel>
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,5,25,5">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,5,25,5">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ToggleSwitch

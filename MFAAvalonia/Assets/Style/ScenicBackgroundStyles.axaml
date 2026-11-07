@@ -1,0 +1,17 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:suki="https://github.com/kikipoulet/SukiUI">
+    <Style Selector="suki|SukiWindow.scenicTitleBar /template/ suki|GlassCard#PART_TitleBarBackground /template/ Border#PART_BorderCard">
+        <Setter Property="Background" Value="{DynamicResource ScenicChromeBackground}" />
+        <Setter Property="Opacity" Value="0.35" />
+    </Style>
+    <!-- Only application panels opt in. GlassCard also implements interactive controls. -->
+    <Style Selector="suki|SukiWindow.scenic suki|GlassCard.ScenicPanel /template/ Border#PART_BorderCard">
+        <Setter Property="Background" Value="{DynamicResource ScenicCardBackground}" />
+        <Setter Property="Opacity" Value="0.82" />
+    </Style>
+    <Style Selector="suki|SukiWindow.scenic suki|SukiSideMenu /template/ suki|GlassCard#Glass /template/ Border#PART_BorderCard">
+        <Setter Property="Background" Value="{DynamicResource ScenicChromeBackground}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+</Styles>

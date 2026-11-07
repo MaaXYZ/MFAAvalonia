@@ -87,6 +87,7 @@ public partial class DragItemViewModel : ObservableObject
     [ObservableProperty] [JsonIgnore] private string? _runErrorMessage;
 
     [JsonIgnore] public DateTimeOffset? RunStartedAt { get; set; }
+    [JsonIgnore] public DateTimeOffset? RunCompletedAt { get; set; }
     [JsonIgnore] public long RunId { get; set; }
 
     [JsonIgnore] public bool IsRunStatusVisible => RunState != TaskRunState.None;

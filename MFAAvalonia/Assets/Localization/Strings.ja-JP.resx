@@ -32,10 +32,10 @@
     <value>すべてのファイル</value>
   </data>
   <data name="AnimatedBackgroundDescription" xml:space="preserve">
-    <value>現在の背景効果に連動する背景アニメーションを有効または無効にします。</value>
+    <value>対応する内蔵模様を動かします。選択した画像の再生には適用されません。</value>
   </data>
   <data name="AnimatedBackgroundTitle" xml:space="preserve">
-    <value>背景アニメーション</value>
+    <value>内蔵背景のアニメーション</value>
   </data>
   <data name="Announcement" xml:space="preserve">
     <value>お知らせ</value>
@@ -68,10 +68,10 @@
     <value>起動後の操作</value>
   </data>
   <data name="BackgroundStyleDescription" xml:space="preserve">
-    <value>内蔵の背景スタイルから選択します。</value>
+    <value>グラデーションやバブル模様を選択します。画像の配置は変わりません。</value>
   </data>
   <data name="BackgroundStyleTitle" xml:space="preserve">
-    <value>背景スタイル</value>
+    <value>内蔵背景スタイル</value>
   </data>
   <data name="BackgroundTransitionsDescription" xml:space="preserve">
     <value>背景スタイル切り替え時の滑らかなフェード効果を有効または無効にします。</value>
@@ -350,17 +350,71 @@
     <value>背景画像</value>
   </data>
   <data name="BackgroundImageDescription" xml:space="preserve">
-    <value>背景として使用する画像を選択します。</value>
+    <value>背景画像を選択します。既定ではコンテンツ領域のみに表示されます。</value>
+  </data>
+  <data name="BackgroundImageExtendToTitleBarTitle" xml:space="preserve">
+    <value>背景をタイトルバーまで広げる</value>
+  </data>
+  <data name="BackgroundImageExtendToTitleBarDescription" xml:space="preserve">
+    <value>オンにすると画像をタイトルバーにも表示します。オフの場合はコンテンツ領域のみに表示します。既定はオフで、変更は保存されます。</value>
   </data>
   <data name="SelectBackgroundImage" xml:space="preserve">
     <value>背景画像を選択</value>
   </data>
   <data name="BackgroundImageOpacityTitle" xml:space="preserve">
-    <value>背景画像の透明度</value>
+    <value>背景画像の明るさ</value>
   </data>
   <data name="BackgroundImageOpacityDescription" xml:space="preserve">
-    <value>背景画像の表示透明度を調整します。</value>
+    <value>値を小さくすると暗くなります。アプリのテーマには影響されません。</value>
   </data>
+    <data name="BackgroundImagePlacementTitle" xml:space="preserve">
+        <value>画像の配置</value>
+    </data>
+    <data name="BackgroundImagePlacementDescription" xml:space="preserve">
+        <value>画像全体を端に配置し、余白を同じ画像のぼかしで埋めます。</value>
+    </data>
+    <data name="BackgroundImagePlacementDisabledDescription" xml:space="preserve">
+        <value>「片側に配置」でのみ使用できます。切り替えると方向を調整できます。</value>
+    </data>
+    <data name="BackgroundImageLeft" xml:space="preserve">
+        <value>左</value>
+    </data>
+    <data name="BackgroundImageRight" xml:space="preserve">
+        <value>右</value>
+    </data>
+    <data name="BackgroundImageTop" xml:space="preserve">
+        <value>上</value>
+    </data>
+    <data name="BackgroundImageBottom" xml:space="preserve">
+        <value>下</value>
+    </data>
+    <data name="BackgroundImageBlurTitle" xml:space="preserve">
+        <value>背景のぼかし</value>
+    </data>
+    <data name="BackgroundImageBlurDescription" xml:space="preserve">
+        <value>画像本体の鮮明さを変えずに、背景のぼかしを調整します。</value>
+    </data>
+    <data name="BackgroundImageModeTitle" xml:space="preserve">
+        <value>画像の表示方法</value>
+    </data>
+    <data name="BackgroundImageModeDescription" xml:space="preserve">
+        <value>明るいテーマと暗いテーマで表示方法と画像の強さを個別に保存します。</value>
+    </data>
+    <data name="BackgroundImageSideBlend" xml:space="preserve">
+        <value>片側に配置</value>
+    </data>
+    <data name="BackgroundImageCenteredBlend" xml:space="preserve">
+        <value>中央に全体表示</value>
+    </data>
+    <data name="BackgroundImageBlurred" xml:space="preserve">
+        <value>ぼかした背景</value>
+    </data>
+    <data name="BackgroundImageLightOpacityTitle" xml:space="preserve">
+        <value>背景画像の不透明度</value>
+    </data>
+    <data name="BackgroundImageLightOpacityDescription" xml:space="preserve">
+        <value>値を小さくすると、画像を暗くせずに淡い背景になじませます。</value>
+    </data>
   <data name="FontScaleTitle" xml:space="preserve">
     <value>フォント倍率</value>
   </data>
@@ -2238,4 +2292,9 @@
   <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>バックグラウンド · 仮想ディスプレイ</value></data>
   <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>フォアグラウンド · 現在の画面</value></data>
   <data name="CurrentScreen" xml:space="preserve"><value>現在の画面</value></data>
+  <data name="RestoreInputResourceDefault" xml:space="preserve"><value>この項目をリソースの既定値に戻す</value></data>
+  <data name="RestoreGroupResourceDefaults" xml:space="preserve"><value>このグループをリソースの既定値に戻す</value></data>
+  <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>「{0}」で変更された {1} 項目を、プリセットではなくリソースに定義された既定値に戻します。既定値のない項目とサブオプションの設定は保持されます。</value></data>
+  <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>グループを戻す</value></data>
+  <data name="ResumeInterruptedQueue" xml:space="preserve"><value>キューを再開するとき、前回未完了のタスクから再開（成功済みタスクはスキップ）</value></data>
 </root>

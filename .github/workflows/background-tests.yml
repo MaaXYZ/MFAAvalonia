@@ -1,0 +1,24 @@
+name: Background Layout Tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'MFAAvalonia/**'
+      - 'SukiUI/**'
+      - 'MFAAvalonia.Background.Tests/**'
+      - '.github/workflows/background-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test MFAAvalonia.Background.Tests/MFAAvalonia.Background.Tests.csproj -c Release

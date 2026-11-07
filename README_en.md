@@ -186,6 +186,34 @@ Repeat counts changed by the user are saved in the instance configuration.
 
 Place `.md` files in `resource/announcement/` to display them as resource announcements. Release notes for application or resource updates are downloaded separately and displayed in the update prompt.
 
+### Background images
+
+In the desktop client, choose an image under **Settings → UI settings → Background image**. The picture stays in the content area by default. Enable **Extend background into title bar** to cover the whole window while keeping navigation readable. This setting applies immediately and is saved.
+
+- **Edge blend** preserves the complete image at the selected edge and fills the remaining space with a blurred copy. Placement supports left, right, top, and bottom, with right as the default.
+- **Centered image** preserves the composition with feathered edges; **Soft backdrop** shows only the blurred scenery.
+- Presentation and image strength are saved separately for light and dark themes. Dark appearance adjusts brightness; light appearance fades the image into a pale surface.
+- Blur affects the extended background only. Clearing the image or loading an unreadable file restores the built-in background.
+
+The existing built-in background style, animation, and transition options control generated patterns, not playback or movement of the selected picture.
+
+A first-launch `config/config.template.json` can preset these client settings:
+
+```json
+{
+  "BackgroundImagePath": "resource/backgrounds/background.png",
+  "BackgroundImageExtendToTitleBar": false,
+  "BackgroundImagePlacement": "Right",
+  "BackgroundImageDarkMode": "SideBlend",
+  "BackgroundImageLightMode": "Blurred",
+  "BackgroundImageOpacity": 0.45,
+  "BackgroundImageLightOpacity": 0.16,
+  "BackgroundImageBlurRadius": 32.0
+}
+```
+
+Presentation values are `SideBlend`, `CenteredBlend`, and `Blurred`; placement values are `Left`, `Right`, `Top`, and `Bottom`. Strength ranges from 0 to 1 and blur from 0 to 60. These are client settings, not task options in `interface.json`.
+
 ### Custom icon
 
 Place `logo.ico` in the `Assets` folder under the application root to replace the MFAAvalonia window and tray icons.

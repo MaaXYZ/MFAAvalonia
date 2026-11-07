@@ -11,7 +11,8 @@ namespace MFAAvalonia.Helper;
 
 public static class LoggerHelper
 {
-    private static Serilog.Core.Logger? _logger;
+    private static volatile Serilog.Core.Logger? _logger;
+    private static readonly object LoggerLock = new();
     private static readonly List<(LogEventLevel level, string message, Exception? exception)> _logCache = [];
     private static readonly AsyncLocal<LogContextFrame?> CurrentContext = new();
 
@@ -41,30 +42,39 @@ public static class LoggerHelper
     {
         if (Design.IsDesignMode)
             return;
-        if (_logger != null) return;
 
-        AppPaths.Initialize();
-        Directory.CreateDirectory(AppPaths.LogsDirectory);
-        _logger = new LoggerConfiguration()
-            .MinimumLevel.Information()
-            .WriteTo.File(
-                Path.Combine(AppPaths.LogsDirectory, "log-.log"),
-                rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 14,
-                fileSizeLimitBytes: 10 * 1024 * 1024,
-                rollOnFileSizeLimit: true,
-                shared: true,
-                outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}][{Level:u3}] {Message:lj}{NewLine}{Exception}")
-            .WriteTo.Console(
-                outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}][{Level:u3}] {Message:lj}{NewLine}{Exception}")
-            .CreateLogger();
-        FlushCache();
+        lock (LoggerLock)
+        {
+            if (_logger != null)
+                return;
+
+            AppPaths.Initialize();
+            Directory.CreateDirectory(AppPaths.LogsDirectory);
+            var logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .WriteTo.File(
+                    Path.Combine(AppPaths.LogsDirectory, "log-.log"),
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 14,
+                    fileSizeLimitBytes: 10 * 1024 * 1024,
+                    rollOnFileSizeLimit: true,
+                    shared: true,
+                    outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}][{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                .WriteTo.Console(
+                    outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}][{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                .CreateLogger();
+            FlushCache(logger);
+            _logger = logger;
+        }
     }
 
     public static void DisposeLogger()
     {
-        _logger?.Dispose();
-        _logger = null;
+        lock (LoggerLock)
+        {
+            _logger?.Dispose();
+            _logger = null;
+        }
     }
 
     public static IDisposable PushContext(
@@ -139,13 +149,11 @@ public static class LoggerHelper
         Write(LogEventLevel.Warning, message);
     }
 
-    private static void FlushCache()
+    private static void FlushCache(Serilog.Core.Logger logger)
     {
-        if (_logger == null) return;
-
         foreach (var (level, message, exception) in _logCache)
         {
-            _logger.Write(level, exception, message);
+            logger.Write(level, exception, message);
         }
 
         _logCache.Clear();
@@ -156,13 +164,21 @@ public static class LoggerHelper
         var renderedMessage = NormalizeMessage(RenderMessage(message));
         var formattedMessage = AddContextPrefix(renderedMessage);
 
-        if (_logger == null)
+        var logger = _logger;
+        if (logger == null)
         {
-            _logCache.Add((level, formattedMessage, exception));
-            return;
+            lock (LoggerLock)
+            {
+                logger = _logger;
+                if (logger == null)
+                {
+                    _logCache.Add((level, formattedMessage, exception));
+                    return;
+                }
+            }
         }
 
-        _logger.Write(level, exception, formattedMessage);
+        logger.Write(level, exception, formattedMessage);
     }
 
     private static string RenderMessage(object? message)

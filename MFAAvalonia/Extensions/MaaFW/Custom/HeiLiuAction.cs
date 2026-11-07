@@ -528,6 +528,12 @@ public class HeiLiuAction : IMaaCustomAction
                         context.Click(detail.HitBox.X + 30, detail.HitBox.Y + 30);
                         return true;
                     }
+                    if (context.TemplateMatch("加工品前往.png", image, out detail, 0.8, 913, 460, 367, 180) && detail?.HitBox != null)
+                    {
+                        Thread.Sleep(100);
+                        context.Click(detail.HitBox.X + 30, detail.HitBox.Y + 30);
+                        return true;
+                    }
                     return false;
                 })).Until(context);
                 Thread.Sleep(1000);

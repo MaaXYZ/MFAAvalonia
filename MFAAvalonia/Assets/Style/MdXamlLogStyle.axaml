@@ -1,0 +1,83 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Styles.Resources>
+        <!-- Keep the summary as compact as a normal log line. Explicit inline
+             formatting in the summary (such as <b>) is still rendered normally. -->
+        <ControlTheme x:Key="LogDetailsHeaderTheme" TargetType="ToggleButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}">
+                        <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left">
+                            <ContentPresenter Name="PART_ContentPresenter"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              FontWeight="{TemplateBinding FontWeight}"
+                                              VerticalAlignment="Top" />
+                            <Path Name="PART_Arrow"
+                                  Grid.Column="1"
+                                  Width="8" Height="8"
+                                  Margin="6,0,0,0"
+                                  VerticalAlignment="Center"
+                                  Fill="{TemplateBinding Foreground}"
+                                  Opacity="0.6"
+                                  Stretch="Uniform"
+                                  Data="M 0,0 L 6,4 L 0,8 Z" />
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:checked /template/ Path#PART_Arrow">
+                <Setter Property="Data" Value="M 0,0 L 8,0 L 4,6 Z" />
+            </Style>
+            <Style Selector="^:focus-visible">
+                <Setter Property="Background" Value="{DynamicResource SukiBorderBrush}" />
+            </Style>
+        </ControlTheme>
+
+        <!-- A separate theme avoids the generic expander's bold header,
+             button padding, fixed content offset and always-visible border. -->
+        <ControlTheme x:Key="LogDetailsTheme" TargetType="Expander">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <StackPanel>
+                        <ToggleButton Name="PART_ToggleButton"
+                                      Theme="{StaticResource LogDetailsHeaderTheme}"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Foreground="{TemplateBinding Foreground}"
+                                      Content="{TemplateBinding Header}"
+                                      ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                      IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}" />
+                        <StackPanel IsVisible="{TemplateBinding IsExpanded}">
+                            <Border Height="1"
+                                    Margin="0,4"
+                                    Background="{DynamicResource SukiBorderBrush}"
+                                    Opacity="0.4" />
+                            <ContentPresenter Name="PART_ContentPresenter"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+    </Styles.Resources>
+
+    <!-- Included only by the runtime log viewer, so other Markdown views keep
+         their existing expander appearance. -->
+    <Style Selector=".Markdown_Avalonia_MarkdownViewer Expander">
+        <Setter Property="Theme" Value="{StaticResource LogDetailsTheme}" />
+    </Style>
+</Styles>

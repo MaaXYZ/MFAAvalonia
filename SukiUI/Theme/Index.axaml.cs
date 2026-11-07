@@ -328,6 +328,9 @@ public partial class SukiTheme : Styles
             "ja-JP", new ja_jp()
         },
         {
+            "ko-KR", new ko_kr()
+        },
+        {
             "zh-CN", new zh_hans()
         },
         {

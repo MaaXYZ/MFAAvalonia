@@ -461,6 +461,16 @@ public class SukiWindow : Window, IDisposable
             set => SetValue(BackgroundForceSoftwareRenderingProperty, value);
         }
     
+        public static readonly StyledProperty<Control?> BackgroundContentProperty =
+            SukiMainHost.BackgroundContentProperty.AddOwner<SukiWindow>();
+
+        /// <inheritdoc cref="SukiMainHost.BackgroundContent"/>
+        public Control? BackgroundContent
+        {
+            get => GetValue(BackgroundContentProperty);
+            set => SetValue(BackgroundContentProperty, value);
+        }
+
         public static readonly StyledProperty<Avalonia.Media.IImage?> BackgroundImageProperty =
             SukiMainHost.BackgroundImageProperty.AddOwner<SukiWindow>();
     

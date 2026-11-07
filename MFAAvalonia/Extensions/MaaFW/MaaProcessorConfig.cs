@@ -44,6 +44,24 @@ public class AdbDeviceCoreConfig
     public AdbDeviceInfo? Info { get; set; } = null;
 }
 
+// Keep controller creation parameters independent of subsequent device selection changes.
+internal sealed record AdbControllerSnapshot(
+    string AdbPath,
+    string AdbSerial,
+    AdbScreencapMethods ScreenCap,
+    AdbInputMethods Input,
+    string Config)
+{
+    public static AdbControllerSnapshot Capture(AdbDeviceCoreConfig device)
+    {
+        lock (device)
+        {
+            return new(device.AdbPath, device.AdbSerial, device.ScreenCap, device.Input,
+                string.IsNullOrWhiteSpace(device.Config) ? "{}" : device.Config);
+        }
+    }
+}
+
 /// <summary>
 /// PlayCover 设备核心配置
 /// </summary>

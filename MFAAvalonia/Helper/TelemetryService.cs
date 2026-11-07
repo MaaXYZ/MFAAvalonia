@@ -1322,6 +1322,7 @@ public static class TelemetryService
         {
             foreach (var input in definition.Inputs ?? [])
             {
+                if (input.IsPassword) continue;
                 var value = option.Data.GetValueOrDefault(input.Name ?? string.Empty);
                 var type = input.PipelineType?.ToLowerInvariant();
                 result[$"{option.Name}.{input.Name}"] = type is "int" or "float" or "bool" ? value ?? string.Empty : string.IsNullOrEmpty(value) ? "empty" : "filled";

@@ -79,6 +79,13 @@ public partial class InstanceTabViewModel : ViewModelBase
             DispatcherHelper.RunOnMainThread(RefreshBadges);
         }
 
+        if (e.PropertyName is nameof(TaskQueueViewModel.CurrentController)
+            or nameof(TaskQueueViewModel.CurrentResource))
+        {
+            DispatcherHelper.RunOnMainThread(() =>
+                Instances.InstanceTabBarViewModel.RefreshInstancePresets());
+        }
+
         if (e.PropertyName is nameof(TaskQueueViewModel.TaskItemViewModels) && TaskQueueViewModel != null)
         {
             SubscribeTaskItems(TaskQueueViewModel.TaskItemViewModels);

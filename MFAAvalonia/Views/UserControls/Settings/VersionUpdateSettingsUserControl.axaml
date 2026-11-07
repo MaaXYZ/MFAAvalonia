@@ -20,7 +20,7 @@
         <settings:VersionUpdateSettingsUserControlModel />
     </Design.DataContext>
     <StackPanel Spacing="15">
-        <suki:GlassCard x:Name="DebugLocalPackageCard" Padding="25,15,25,15" IsVisible="{Binding ShowLocalPackageUpdate}">
+        <suki:GlassCard x:Name="DebugLocalPackageCard" Classes="ScenicPanel" Padding="25,15,25,15" IsVisible="{Binding ShowLocalPackageUpdate}">
             <StackPanel Spacing="12">
                 <TextBlock
                     FontSize="15"
@@ -35,7 +35,7 @@
                     Padding="16,8" />
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,15,25,15">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,15,25,15">
             <StackPanel Spacing="20">
                 <DockPanel>
                     <TextBlock
@@ -81,7 +81,7 @@
                 </DockPanel>
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,15,25,15">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,15,25,15">
             <StackPanel Spacing="10">
                 <DockPanel IsVisible="False">
                     <ComboBox
@@ -244,7 +244,7 @@
                 </Grid>
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,15,25,15">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,15,25,15">
             <StackPanel Spacing="15">
                 <DockPanel>
                     <ToggleSwitch
@@ -293,7 +293,7 @@
                 </DockPanel>
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,15,25,15">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,15,25,15">
             <StackPanel Spacing="15">
                 <DockPanel IsVisible="False">
                     <Button

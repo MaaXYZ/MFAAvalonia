@@ -10,4 +10,6 @@
     <!--  标签栏背景（半透明，让主题渐变透出来）  -->
     <SolidColorBrush x:Key="TabBarBackground" Color="#22B0B2B8" />
     <SolidColorBrush x:Key="TabBarHoverBackground" Color="#18000000" />
+    <SolidColorBrush x:Key="ScenicCardBackground" Color="#F4F7FC" />
+    <SolidColorBrush x:Key="ScenicChromeBackground" Color="#EFF3F8" />
 </ResourceDictionary>

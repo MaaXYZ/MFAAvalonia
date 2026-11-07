@@ -19,7 +19,7 @@
        
     </Design.PreviewWith>
     <StackPanel>
-        <suki:GlassCard Margin="0,25,0,0" Padding="25">
+        <suki:GlassCard Classes="ScenicPanel" Margin="0,25,0,0" Padding="25">
             <StackPanel Spacing="25">
                 <DockPanel>
                     <ComboBox extensions:ComboBoxExtensions.DisableNavigationOnLostFocus="True" Classes="LimitWidth"

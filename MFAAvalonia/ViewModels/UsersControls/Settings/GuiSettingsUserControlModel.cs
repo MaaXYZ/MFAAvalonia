@@ -6,6 +6,7 @@ using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MFAAvalonia.Configuration;
+using MFAAvalonia.Controls;
 using MFAAvalonia.Extensions;
 using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.Converters;
@@ -39,7 +40,11 @@ public partial class GuiSettingsUserControlModel : ViewModelBase
     [ObservableProperty] private SukiBackgroundStyle _backgroundStyle =
         ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundStyle, SukiBackgroundStyle.GradientSoft, SukiBackgroundStyle.GradientSoft, new UniversalEnumConverter<SukiBackgroundStyle>());
 
-    [ObservableProperty] private ThemeVariant _baseTheme;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLightBackground), nameof(BackgroundImageStrength), nameof(BackgroundImageMode),
+        nameof(IsBackgroundPlacementEnabled), nameof(BackgroundImagePlacementHint),
+        nameof(BackgroundImageStrengthTitle), nameof(BackgroundImageStrengthDescription))]
+    private ThemeVariant _baseTheme;
 
     [ObservableProperty] private SukiColorTheme _currentColorTheme;
     [ObservableProperty] private AvaloniaList<ThemeItemViewModel> _themeItems;
@@ -61,10 +66,93 @@ public partial class GuiSettingsUserControlModel : ViewModelBase
 
     [ObservableProperty] private Bitmap? _backgroundImage;
 
-    [ObservableProperty] private double _backgroundImageOpacity =
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWindowBackgroundVisible), nameof(IsContentBackgroundVisible))]
+    private bool _backgroundImageExtendToTitleBar =
+        ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageExtendToTitleBar, false);
+
+    public bool IsWindowBackgroundVisible => HasBackgroundImage && BackgroundImageExtendToTitleBar;
+    public bool IsContentBackgroundVisible => HasBackgroundImage && !BackgroundImageExtendToTitleBar;
+    public bool CanExtendBackgroundToTitleBar => HasBackgroundImage && !OperatingSystem.IsAndroid() && !OperatingSystem.IsIOS();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BackgroundImageStrength))]
+    private double _backgroundImageOpacity =
         ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageOpacity, 0.2);
 
-    [ObservableProperty] private bool _hasBackgroundImage;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BackgroundImageStrength))]
+    private double _backgroundImageLightOpacity =
+        ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageLightOpacity, 0.16, double.NaN);
+
+    private ScenicImageMode _lightImageMode = ReadImageMode(ConfigurationKeys.BackgroundImageLightMode, ScenicImageMode.Blurred);
+    private ScenicImageMode _darkImageMode = ReadImageMode(ConfigurationKeys.BackgroundImageDarkMode, ScenicImageMode.SideBlend);
+
+    public bool IsLightBackground => BaseTheme == ThemeVariant.Light;
+    public bool IsBackgroundPlacementEnabled => BackgroundImageMode == ScenicImageMode.SideBlend;
+    public string BackgroundImagePlacementHint => (IsBackgroundPlacementEnabled
+        ? LangKeys.BackgroundImagePlacementDescription : LangKeys.BackgroundImagePlacementDisabledDescription).ToLocalization();
+    public string BackgroundImageStrengthTitle => (IsLightBackground
+        ? LangKeys.BackgroundImageLightOpacityTitle : LangKeys.BackgroundImageOpacityTitle).ToLocalization();
+    public string BackgroundImageStrengthDescription => (IsLightBackground
+        ? LangKeys.BackgroundImageLightOpacityDescription : LangKeys.BackgroundImageOpacityDescription).ToLocalization();
+
+    public double BackgroundImageStrength
+    {
+        get => IsLightBackground ? BackgroundImageLightOpacity : BackgroundImageOpacity;
+        set
+        {
+            if (IsLightBackground) BackgroundImageLightOpacity = value;
+            else BackgroundImageOpacity = value;
+        }
+    }
+
+    public ScenicImageMode BackgroundImageMode
+    {
+        get => IsLightBackground ? _lightImageMode : _darkImageMode;
+        set
+        {
+            if (value == BackgroundImageMode) return;
+            if (IsLightBackground) _lightImageMode = value;
+            else _darkImageMode = value;
+            HandlePropertyChanged(IsLightBackground ? ConfigurationKeys.BackgroundImageLightMode
+                : ConfigurationKeys.BackgroundImageDarkMode, value.ToString());
+            OnPropertyChanged(nameof(BackgroundImageMode));
+            OnPropertyChanged(nameof(IsBackgroundPlacementEnabled));
+            OnPropertyChanged(nameof(BackgroundImagePlacementHint));
+        }
+    }
+
+    private static ScenicImageMode ReadImageMode(string key, ScenicImageMode fallback)
+    {
+        var value = ConfigurationManager.Current.GetValue(key, fallback.ToString());
+        return Enum.TryParse<ScenicImageMode>(value, true, out var mode) && Enum.IsDefined(mode) ? mode : fallback;
+    }
+
+    internal void ReloadBackgroundImageModes()
+    {
+        _lightImageMode = ReadImageMode(ConfigurationKeys.BackgroundImageLightMode, ScenicImageMode.Blurred);
+        _darkImageMode = ReadImageMode(ConfigurationKeys.BackgroundImageDarkMode, ScenicImageMode.SideBlend);
+        OnPropertyChanged(nameof(BackgroundImageMode));
+        OnPropertyChanged(nameof(IsBackgroundPlacementEnabled));
+        OnPropertyChanged(nameof(BackgroundImagePlacementHint));
+    }
+
+    [ObservableProperty] private BackgroundPlacement _backgroundImagePlacement = ReadBackgroundImagePlacement();
+
+    [ObservableProperty] private double _backgroundImageBlurRadius =
+        ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageBlurRadius, 32.0, double.NaN);
+
+    internal static BackgroundPlacement ReadBackgroundImagePlacement()
+    {
+        var value = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImagePlacement, nameof(BackgroundPlacement.Right));
+        return Enum.TryParse<BackgroundPlacement>(value, true, out var placement) && Enum.IsDefined(placement)
+            ? placement : BackgroundPlacement.Right;
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWindowBackgroundVisible), nameof(IsContentBackgroundVisible), nameof(CanExtendBackgroundToTitleBar))]
+    private bool _hasBackgroundImage;
 // Font Scale properties
     [ObservableProperty] private double _fontScale =
         ConfigurationManager.Current.GetValue(ConfigurationKeys.FontScale, FontService.DefaultScale);
@@ -80,6 +168,17 @@ public partial class GuiSettingsUserControlModel : ViewModelBase
     partial void OnBackgroundImageOpacityChanged(double value) =>
         HandlePropertyChanged(ConfigurationKeys.BackgroundImageOpacity, value);
 
+    partial void OnBackgroundImageExtendToTitleBarChanged(bool value) =>
+        HandlePropertyChanged(ConfigurationKeys.BackgroundImageExtendToTitleBar, value);
+
+    partial void OnBackgroundImageLightOpacityChanged(double value) =>
+        HandlePropertyChanged(ConfigurationKeys.BackgroundImageLightOpacity, value);
+
+    partial void OnBackgroundImagePlacementChanged(BackgroundPlacement value) =>
+        HandlePropertyChanged(ConfigurationKeys.BackgroundImagePlacement, value.ToString());
+
+    partial void OnBackgroundImageBlurRadiusChanged(double value) =>
+        HandlePropertyChanged(ConfigurationKeys.BackgroundImageBlurRadius, value);
 
     partial void OnFontScaleChanged(double value)
     {
@@ -122,6 +221,9 @@ public partial class GuiSettingsUserControlModel : ViewModelBase
         LanguageHelper.LanguageChanged += (sender, args) =>
         {
             CurrentLanguage = args.Value.Key;
+            OnPropertyChanged(nameof(BackgroundImageStrengthTitle));
+            OnPropertyChanged(nameof(BackgroundImageStrengthDescription));
+            OnPropertyChanged(nameof(BackgroundImagePlacementHint));
         };
 
         // Load background image if path exists
@@ -130,26 +232,23 @@ public partial class GuiSettingsUserControlModel : ViewModelBase
 
     private void LoadBackgroundImage()
     {
+        Bitmap? image = null;
         try
         {
             if (!string.IsNullOrEmpty(BackgroundImagePath) && File.Exists(BackgroundImagePath))
             {
-                var oldImage = BackgroundImage;
-                BackgroundImage = new Bitmap(BackgroundImagePath);
-                oldImage?.Dispose();
-                HasBackgroundImage = true;
-            }
-            else
-            {
-                BackgroundImage = null;
-                HasBackgroundImage = false;
+                image = new Bitmap(BackgroundImagePath);
             }
         }
         catch
         {
-            BackgroundImage = null;
-            HasBackgroundImage = false;
+            // An unreadable image falls back to the normal window background.
         }
+
+        var oldImage = BackgroundImage;
+        BackgroundImage = image;
+        HasBackgroundImage = image != null;
+        oldImage?.Dispose();
     }
 
     [RelayCommand]

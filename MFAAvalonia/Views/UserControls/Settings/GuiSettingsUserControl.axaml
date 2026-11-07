@@ -173,7 +173,7 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <suki:GlassCard Margin="0,25,0,0" Padding="25">
+        <suki:GlassCard Classes="ScenicPanel" Margin="0,25,0,0" Padding="25">
             <StackPanel Spacing="20">
                 <DockPanel>
                     <Button
@@ -283,31 +283,101 @@
                     </StackPanel>
                 </DockPanel>
 
-                <!-- Background Image Opacity -->
+                <DockPanel IsVisible="{Binding CanExtendBackgroundToTitleBar}">
+                    <ToggleSwitch DockPanel.Dock="Right" VerticalAlignment="Top"
+                                  IsChecked="{Binding BackgroundImageExtendToTitleBar}" />
+                    <StackPanel HorizontalAlignment="Left">
+                        <TextBlock FontSize="16" FontWeight="DemiBold"
+                                   Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImageExtendToTitleBarTitle}}" />
+                        <TextBlock Foreground="{DynamicResource SukiLowText}" Margin="0,12,70,0"
+                                   Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImageExtendToTitleBarDescription}}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </DockPanel>
+
+                <DockPanel IsVisible="{Binding HasBackgroundImage}">
+                    <StackPanel DockPanel.Dock="Right" Width="215" Spacing="8">
+                        <RadioButton GroupName="BackgroundImageMode"
+                                     Content="{markup:I18n {x:Static helper:LangKeys.BackgroundImageSideBlend}}"
+                                     IsChecked="{Binding BackgroundImageMode, Converter={converters:UniversalEqualityConverter}, ConverterParameter=SideBlend, Mode=TwoWay}" />
+                        <RadioButton GroupName="BackgroundImageMode"
+                                     Content="{markup:I18n {x:Static helper:LangKeys.BackgroundImageCenteredBlend}}"
+                                     IsChecked="{Binding BackgroundImageMode, Converter={converters:UniversalEqualityConverter}, ConverterParameter=CenteredBlend, Mode=TwoWay}" />
+                        <RadioButton GroupName="BackgroundImageMode"
+                                     Content="{markup:I18n {x:Static helper:LangKeys.BackgroundImageBlurred}}"
+                                     IsChecked="{Binding BackgroundImageMode, Converter={converters:UniversalEqualityConverter}, ConverterParameter=Blurred, Mode=TwoWay}" />
+                    </StackPanel>
+                    <StackPanel HorizontalAlignment="Left">
+                        <TextBlock FontSize="16" FontWeight="DemiBold"
+                                   Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImageModeTitle}}" />
+                        <TextBlock Foreground="{DynamicResource SukiLowText}" Margin="0,12,70,0"
+                                   Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImageModeDescription}}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </DockPanel>
+
+                <DockPanel IsVisible="{Binding HasBackgroundImage}">
+                    <Grid DockPanel.Dock="Right" Width="215" RowDefinitions="Auto,Auto" ColumnDefinitions="*,*" RowSpacing="8"
+                          IsEnabled="{Binding IsBackgroundPlacementEnabled}">
+                        <RadioButton Grid.Row="0" Grid.Column="0" GroupName="BackgroundImagePlacement"
+                                     Content="{markup:I18n {x:Static helper:LangKeys.BackgroundImageLeft}}"
+                                     IsChecked="{Binding BackgroundImagePlacement, Converter={converters:UniversalEqualityConverter}, ConverterParameter=Left, Mode=TwoWay}" />
+                        <RadioButton Grid.Row="0" Grid.Column="1" GroupName="BackgroundImagePlacement"
+                                     Content="{markup:I18n {x:Static helper:LangKeys.BackgroundImageRight}}"
+                                     IsChecked="{Binding BackgroundImagePlacement, Converter={converters:UniversalEqualityConverter}, ConverterParameter=Right, Mode=TwoWay}" />
+                        <RadioButton Grid.Row="1" Grid.Column="0" GroupName="BackgroundImagePlacement"
+                                     Content="{markup:I18n {x:Static helper:LangKeys.BackgroundImageTop}}"
+                                     IsChecked="{Binding BackgroundImagePlacement, Converter={converters:UniversalEqualityConverter}, ConverterParameter=Top, Mode=TwoWay}" />
+                        <RadioButton Grid.Row="1" Grid.Column="1" GroupName="BackgroundImagePlacement"
+                                     Content="{markup:I18n {x:Static helper:LangKeys.BackgroundImageBottom}}"
+                                     IsChecked="{Binding BackgroundImagePlacement, Converter={converters:UniversalEqualityConverter}, ConverterParameter=Bottom, Mode=TwoWay}" />
+                    </Grid>
+                    <StackPanel HorizontalAlignment="Left">
+                        <TextBlock FontSize="16" FontWeight="DemiBold"
+                                   Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImagePlacementTitle}}" />
+                        <TextBlock Foreground="{DynamicResource SukiLowText}" Margin="0,12,70,0"
+                                   Text="{Binding BackgroundImagePlacementHint}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </DockPanel>
+
+                <DockPanel IsVisible="{Binding HasBackgroundImage}">
+                    <Slider DockPanel.Dock="Right" Width="215" Minimum="0" Maximum="60"
+                            Value="{Binding BackgroundImageBlurRadius}" />
+                    <StackPanel HorizontalAlignment="Left">
+                        <TextBlock FontSize="16" FontWeight="DemiBold"
+                                   Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImageBlurTitle}}" />
+                        <TextBlock Foreground="{DynamicResource SukiLowText}" Margin="0,12,70,0"
+                                   Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImageBlurDescription}}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </DockPanel>
+
+                <!-- The existing opacity setting now controls theme-independent brightness. -->
                 <DockPanel IsVisible="{Binding HasBackgroundImage}">
                     <Slider
                         DockPanel.Dock="Right"
                         Width="215"
                         Minimum="0"
                         Maximum="1"
-                        Value="{Binding BackgroundImageOpacity}"
+                        Value="{Binding BackgroundImageStrength}"
                         TickFrequency="0.1"
                         IsSnapToTickEnabled="False" />
                     <StackPanel HorizontalAlignment="Left">
                         <TextBlock
                             FontSize="16"
                             FontWeight="DemiBold"
-                            Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImageOpacityTitle}}" />
+                            Text="{Binding BackgroundImageStrengthTitle}" />
                         <TextBlock
                             Foreground="{DynamicResource SukiLowText}"
                             Margin="0,12,70,0"
-                            Text="{markup:I18n {x:Static helper:LangKeys.BackgroundImageOpacityDescription}}"
+                            Text="{Binding BackgroundImageStrengthDescription}"
                             TextWrapping="Wrap" />
                     </StackPanel>
                 </DockPanel>
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard Margin="0,25,0,0" Padding="25">
+        <suki:GlassCard Classes="ScenicPanel" Margin="0,25,0,0" Padding="25">
             <DockPanel>
                 <ComboBox extensions:ComboBoxExtensions.DisableNavigationOnLostFocus="True"
                           DisplayMemberBinding="{Binding Name}"
@@ -330,7 +400,7 @@
             </DockPanel>
         </suki:GlassCard>
         <!-- Font Scale Settings -->
-        <suki:GlassCard Margin="0,25,0,0" Padding="25">
+        <suki:GlassCard Classes="ScenicPanel" Margin="0,25,0,0" Padding="25">
             <StackPanel Spacing="10">
                 <DockPanel>
                     <TextBlock
@@ -361,7 +431,7 @@
                     TickPlacement="BottomRight" />
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard Margin="0,25,0,0" Padding="25">
+        <suki:GlassCard Classes="ScenicPanel" Margin="0,25,0,0" Padding="25">
             <DockPanel>
                 <ToggleSwitch
                     Classes="Switch"
@@ -381,7 +451,7 @@
                 </StackPanel>
             </DockPanel>
         </suki:GlassCard>
-        <suki:GlassCard Margin="0,25,0,0" Padding="25">
+        <suki:GlassCard Classes="ScenicPanel" Margin="0,25,0,0" Padding="25">
             <DockPanel>
                 <ToggleSwitch
                     Classes="Switch"

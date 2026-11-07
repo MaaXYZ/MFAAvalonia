@@ -18,7 +18,7 @@
              xmlns:fluent="clr-namespace:FluentIcons.Avalonia.Fluent.Markup;assembly=FluentIcons.Avalonia.Fluent">
     <StackPanel Spacing="10">
         <!-- 项目描述 -->
-        <suki:GlassCard Padding="20,13,30,-13"
+        <suki:GlassCard Classes="ScenicPanel" Padding="20,13,30,-13"
                         IsVisible="{Binding HasResourceDescription}">
             <suki:GroupBox>
                 <suki:GroupBox.Header>
@@ -71,7 +71,7 @@
             </suki:GroupBox>
         </suki:GlassCard>
         <!-- 联系方式 -->
-        <suki:GlassCard Padding="20,13,30,-13"
+        <suki:GlassCard Classes="ScenicPanel" Padding="20,13,30,-13"
                         IsVisible="{Binding HasResourceContact}">
             <suki:GroupBox>
                 <suki:GroupBox.Header>
@@ -124,7 +124,7 @@
         </suki:GlassCard>
         <!-- 许可�? -->
         
-        <suki:GlassCard Padding="22,8,25,8"
+        <suki:GlassCard Classes="ScenicPanel" Padding="22,8,25,8"
                         IsVisible="{Binding HasResourceLicense}">
             <DockPanel>
                 <Button Click="ShowLicense_Click" BorderBrush="Transparent"
@@ -146,7 +146,7 @@
                 </StackPanel>
             </DockPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,8,25,8">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,8,25,8">
             <DockPanel>
                 <Button BorderBrush="Transparent"
                         BorderThickness="0"
@@ -167,7 +167,7 @@
                 </StackPanel>
             </DockPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,8,25,8">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,8,25,8">
             <DockPanel>
                 <Button BorderBrush="Transparent"
                         BorderThickness="0"
@@ -188,7 +188,7 @@
                 </StackPanel>
             </DockPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,8,25,8">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,8,25,8">
             <DockPanel>
                 <Button BorderBrush="Transparent"
                         BorderThickness="0"
@@ -209,7 +209,7 @@
                 </StackPanel>
             </DockPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,8,25,8" IsVisible="False">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,8,25,8" IsVisible="False">
             <DockPanel>
                 <Button BorderBrush="Transparent"
                         BorderThickness="0"
@@ -236,7 +236,7 @@
                 </StackPanel>
             </DockPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,8,25,8"  IsVisible="False">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,8,25,8"  IsVisible="False">
             <DockPanel>
                 <Button BorderBrush="Transparent"
                         BorderThickness="0"
@@ -263,7 +263,7 @@
                 </StackPanel>
             </DockPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,8,25,8"
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,8,25,8"
                         IsVisible="{Binding ShowResourceIssues}">
             <DockPanel>
                 <Button BorderBrush="Transparent"
@@ -291,7 +291,7 @@
                 </StackPanel>
             </DockPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,8,25,8"
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,8,25,8"
                         IsVisible="{Binding ShowResourceIssues}">
             <DockPanel>
                 <Button BorderBrush="Transparent"
@@ -319,7 +319,7 @@
                 </StackPanel>
             </DockPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25,8,25,8" Name="TutorialCard">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,8,25,8" Name="TutorialCard">
             <DockPanel>
                 <Button BorderBrush="Transparent"
                         BorderThickness="0"
@@ -341,7 +341,7 @@
                 </StackPanel>
             </DockPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25">
             <DockPanel>
                 <ToggleSwitch Classes="Switch"
                               DockPanel.Dock="Right"

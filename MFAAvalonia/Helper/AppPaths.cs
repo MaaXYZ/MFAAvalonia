@@ -26,6 +26,7 @@ public static class AppPaths
         ? Path.Combine(InstallRoot, "temp")
         : _tempDirectory;
     public static string TempResourceDirectory => Path.Combine(TempDirectory, "temp_res");
+    public static string TempResourceUpdateDirectory => Path.Combine(TempDirectory, "temp_resource_update");
     public static string TempMfaDirectory => Path.Combine(TempDirectory, "temp_mfa");
     public static string TempMaaFwDirectory => Path.Combine(TempDirectory, "temp_maafw");
     public static string InterfaceJsonPath => Path.Combine(DataRoot, "interface.json");

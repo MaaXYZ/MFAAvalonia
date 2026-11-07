@@ -70,6 +70,12 @@
                                                             IsVisible="{DynamicResource IsLight}"
                                                             Opacity="0.1" />
 
+                            <ContentPresenter Name="PART_BackgroundContent"
+                                              Content="{TemplateBinding BackgroundContent}"
+                                              HorizontalContentAlignment="Stretch"
+                                              VerticalContentAlignment="Stretch"
+                                              IsHitTestVisible="False" />
+
                             <ContentPresenter x:Name="PART_ContentPresenter"
                                               Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"

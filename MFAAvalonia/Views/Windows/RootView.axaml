@@ -2,9 +2,9 @@
     BackgroundAnimationEnabled="{Binding BackgroundAnimations, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
     BackgroundStyle="{Binding BackgroundStyle, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
     BackgroundTransitionsEnabled="{Binding BackgroundTransitions, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
-    BackgroundImage="{Binding BackgroundImage, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
-    BackgroundImageOpacity="{Binding BackgroundImageOpacity, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
     IsVisible="{Binding IsWindowVisible}"
+    Classes.scenic="{Binding HasBackgroundImage, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+    Classes.scenicTitleBar="{Binding IsWindowBackgroundVisible, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
     MinHeight="360"
     MinWidth="700"
     d:DesignHeight="450"
@@ -25,10 +25,12 @@
     xmlns:suki="https://github.com/kikipoulet/SukiUI"
     xmlns:windows="clr-namespace:MFAAvalonia.ViewModels.Windows"
     xmlns:mobile="clr-namespace:MFAAvalonia.Views.Mobile"
+    xmlns:controls="clr-namespace:MFAAvalonia.Controls"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     NonClientAreaContentIsHitTestVisible="True" Icon="{Binding Source={x:Static helper:IconHelper.WindowIcon}}"
     xmlns:fluent="clr-namespace:FluentIcons.Avalonia.Fluent.Markup;assembly=FluentIcons.Avalonia.Fluent">
     <suki:SukiWindow.Styles>
+        <StyleInclude Source="avares://MFAAvalonia.Core/Assets/Style/ScenicBackgroundStyles.axaml" />
         <Style Selector="ToggleButton.SP:checked > PathIcon">
             <Setter Property="Foreground" Value="{DynamicResource SukiPrimaryColor}" />
         </Style>
@@ -230,6 +232,26 @@
             Manager="{x:Static helper:Instances.DialogManager}"
             Name="DialogHost" />
     </suki:SukiWindow.Hosts>
-    <mobile:RootViewContent />
+    <suki:SukiWindow.BackgroundContent>
+        <controls:ScenicBackground
+            IsVisible="{Binding IsWindowBackgroundVisible, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+            Source="{Binding BackgroundImage, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+            Placement="{Binding BackgroundImagePlacement, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+            Brightness="{Binding BackgroundImageStrength, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+            LightMode="{Binding IsLightBackground, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+            ImageMode="{Binding BackgroundImageMode, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+            BlurRadius="{Binding BackgroundImageBlurRadius, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}" />
+    </suki:SukiWindow.BackgroundContent>
+    <Grid ClipToBounds="True">
+        <controls:ScenicBackground
+            IsVisible="{Binding IsContentBackgroundVisible, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+            Source="{Binding BackgroundImage, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+            Placement="{Binding BackgroundImagePlacement, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+            Brightness="{Binding BackgroundImageStrength, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+            LightMode="{Binding IsLightBackground, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+            ImageMode="{Binding BackgroundImageMode, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+            BlurRadius="{Binding BackgroundImageBlurRadius, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}" />
+        <mobile:RootViewContent />
+    </Grid>
 
 </suki:SukiWindow>

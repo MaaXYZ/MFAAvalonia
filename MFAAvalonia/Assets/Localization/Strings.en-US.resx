@@ -73,10 +73,10 @@
         <value>Attempt to restart ADB Server after connection failure</value>
     </data>
     <data name="AnimatedBackgroundDescription" xml:space="preserve">
-        <value>Enable/disable background animations, which are driven by the currently active effect.</value>
+        <value>Animate supported built-in patterns over time; this does not play the selected image.</value>
     </data>
     <data name="AnimatedBackgroundTitle" xml:space="preserve">
-        <value>Animated Background</value>
+        <value>Built-in background animation</value>
     </data>
     <data name="Announcement" xml:space="preserve">
         <value>Announcement</value>
@@ -112,10 +112,10 @@
         <value>Post-start operation</value>
     </data>
     <data name="BackgroundStyleDescription" xml:space="preserve">
-        <value>Select from the built-in background styles.</value>
+        <value>Choose a generated gradient or bubble pattern; this does not change the image layout.</value>
     </data>
     <data name="BackgroundStyleTitle" xml:space="preserve">
-        <value>Background Style</value>
+        <value>Built-in background style</value>
     </data>
     <data name="BackgroundTransitionsDescription" xml:space="preserve">
         <value>Enable/disable background transitions with smooth fading effects when changing styles.</value>
@@ -1513,16 +1513,70 @@
         <value>Background Image</value>
     </data>
     <data name="BackgroundImageDescription" xml:space="preserve">
-        <value>Select an image as the window background, which will be overlaid on top of the default background effect.</value>
+        <value>Choose a background image. By default, it appears only in the content area.</value>
+    </data>
+    <data name="BackgroundImageExtendToTitleBarTitle" xml:space="preserve">
+        <value>Extend background into title bar</value>
+    </data>
+    <data name="BackgroundImageExtendToTitleBarDescription" xml:space="preserve">
+        <value>Show the image behind the title bar as well as the content. Off by default; changes are saved.</value>
     </data>
     <data name="SelectBackgroundImage" xml:space="preserve">
         <value>Select Background Image</value>
     </data>
     <data name="BackgroundImageOpacityTitle" xml:space="preserve">
-        <value>Background Image Opacity</value>
+        <value>Background image brightness</value>
     </data>
     <data name="BackgroundImageOpacityDescription" xml:space="preserve">
-        <value>Adjust the opacity of the background image. Lower values make the image more transparent.</value>
+        <value>Lower values darken the image independently of the application theme.</value>
+    </data>
+    <data name="BackgroundImagePlacementTitle" xml:space="preserve">
+        <value>Image placement</value>
+    </data>
+    <data name="BackgroundImagePlacementDescription" xml:space="preserve">
+        <value>Keep the complete image at one edge and fill the rest with a blurred copy.</value>
+    </data>
+    <data name="BackgroundImagePlacementDisabledDescription" xml:space="preserve">
+        <value>Only available for “Edge blend”. Select it to adjust placement.</value>
+    </data>
+    <data name="BackgroundImageLeft" xml:space="preserve">
+        <value>Left</value>
+    </data>
+    <data name="BackgroundImageRight" xml:space="preserve">
+        <value>Right</value>
+    </data>
+    <data name="BackgroundImageTop" xml:space="preserve">
+        <value>Top</value>
+    </data>
+    <data name="BackgroundImageBottom" xml:space="preserve">
+        <value>Bottom</value>
+    </data>
+    <data name="BackgroundImageBlurTitle" xml:space="preserve">
+        <value>Background blur</value>
+    </data>
+    <data name="BackgroundImageBlurDescription" xml:space="preserve">
+        <value>Blur the extended background without changing the original image sharpness.</value>
+    </data>
+    <data name="BackgroundImageModeTitle" xml:space="preserve">
+        <value>Image presentation</value>
+    </data>
+    <data name="BackgroundImageModeDescription" xml:space="preserve">
+        <value>Presentation and image strength are saved separately for light and dark themes.</value>
+    </data>
+    <data name="BackgroundImageSideBlend" xml:space="preserve">
+        <value>Edge blend</value>
+    </data>
+    <data name="BackgroundImageCenteredBlend" xml:space="preserve">
+        <value>Centered image</value>
+    </data>
+    <data name="BackgroundImageBlurred" xml:space="preserve">
+        <value>Soft backdrop</value>
+    </data>
+    <data name="BackgroundImageLightOpacityTitle" xml:space="preserve">
+        <value>Background image opacity</value>
+    </data>
+    <data name="BackgroundImageLightOpacityDescription" xml:space="preserve">
+        <value>Lower values fade the image into a pale surface without darkening it.</value>
     </data>
     <data name="AgentConnectionRetry" xml:space="preserve">
         <value>Agent connection retry ({0})...</value>
@@ -2243,6 +2297,11 @@ Update using this archive?</value>
   <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>Background · Virtual display</value></data>
   <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>Foreground · Current screen</value></data>
   <data name="CurrentScreen" xml:space="preserve"><value>Current screen</value></data>
+  <data name="RestoreInputResourceDefault" xml:space="preserve"><value>Restore this field to the resource default</value></data>
+  <data name="RestoreGroupResourceDefaults" xml:space="preserve"><value>Restore this group to resource defaults</value></data>
+  <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>Restore {1} changed item(s) in “{0}” to the defaults declared by the resource, rather than preset values. Fields without declared defaults and sub-option settings will be kept.</value></data>
+  <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>Restore group</value></data>
+  <data name="ResumeInterruptedQueue" xml:space="preserve"><value>When restarting the queue, resume from the first unfinished task (succeeded tasks are skipped)</value></data>
 </root>
 
 

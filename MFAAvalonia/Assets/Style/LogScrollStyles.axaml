@@ -1,0 +1,7 @@
+<Styles xmlns="https://github.com/avaloniaui">
+    <!-- Markdown 日志内部还有 ScrollViewer。它们的焦点定位请求会冒泡到外层，
+         即使外层已关闭 BringIntoViewOnFocusChange，也仍会导致日志跳回旧位置。 -->
+    <Style Selector="ScrollViewer">
+        <Setter Property="BringIntoViewOnFocusChange" Value="False" />
+    </Style>
+</Styles>

@@ -27,6 +27,7 @@
                 Text="{Binding ActiveTab.Name, Source={x:Static helper:Instances.InstanceTabBarViewModel}}" />
         </StackPanel>
         <suki:GlassCard
+            Classes="ScenicPanel"
             IsVisible="{calcBinding:Binding 'CurrentControllerType == maa:MaaControllerTypes.Adb'}"
             Margin="0,25,0,0" Padding="25,10,25,10">
             <StackPanel>
@@ -176,7 +177,7 @@
                 </StackPanel>
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard
+        <suki:GlassCard Classes="ScenicPanel"
             IsVisible="{calcBinding:Binding 'CurrentControllerType == maa:MaaControllerTypes.MacOS'}"
             Margin="0,25,0,0"
             Padding="25,10,25,10">
@@ -211,7 +212,7 @@
                 </DockPanel>
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard
+        <suki:GlassCard Classes="ScenicPanel"
             IsVisible="{calcBinding:Binding 'CurrentControllerType == maa:MaaControllerTypes.Win32'}"
             Margin="0,25,0,0"
             Padding="25,10,25,10">
@@ -299,7 +300,7 @@
                 </DockPanel>
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard
+        <suki:GlassCard Classes="ScenicPanel"
             IsVisible="{calcBinding:Binding 'CurrentControllerType == maa:MaaControllerTypes.Gamepad'}"
             Margin="0,25,0,0"
             Padding="25,10,25,10">
@@ -328,7 +329,7 @@
                 </DockPanel>
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard Margin="0,25,0,0" Padding="25,10,25,10">
+        <suki:GlassCard Classes="ScenicPanel" Margin="0,25,0,0" Padding="25,10,25,10">
             <DockPanel>
                 <ToggleSwitch
                     Classes="Switch"

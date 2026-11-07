@@ -89,6 +89,19 @@ public class SukiMainHost : ContentControl
         set => SetValue(BackgroundForceSoftwareRenderingProperty, value);
     }
 
+    public static readonly StyledProperty<Control?> BackgroundContentProperty =
+        AvaloniaProperty.Register<SukiMainHost, Control?>(nameof(BackgroundContent));
+
+    /// <summary>
+    /// Gets or sets a decorative layer above the built-in background and below the content.
+    /// This layer does not receive input.
+    /// </summary>
+    public Control? BackgroundContent
+    {
+        get => GetValue(BackgroundContentProperty);
+        set => SetValue(BackgroundContentProperty, value);
+    }
+
     public static readonly StyledProperty<IImage?> BackgroundImageProperty =
         AvaloniaProperty.Register<SukiMainHost, IImage?>(nameof(BackgroundImage));
 

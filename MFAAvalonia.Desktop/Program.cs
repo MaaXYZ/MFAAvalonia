@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -31,6 +32,25 @@ sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        var waitArgumentIndex = Array.FindIndex(args, argument => argument.StartsWith("--wait-for-process-exit=", StringComparison.Ordinal));
+        if (waitArgumentIndex >= 0)
+        {
+            var pidText = args[waitArgumentIndex]["--wait-for-process-exit=".Length..];
+            args = args.Where((_, index) => index != waitArgumentIndex).ToArray();
+            if (int.TryParse(pidText, out var processId))
+            {
+                try
+                {
+                    using var previousProcess = Process.GetProcessById(processId);
+                    previousProcess.WaitForExit();
+                }
+                catch (ArgumentException)
+                {
+                    // The previous process already exited.
+                }
+            }
+        }
+
         // 快速识别参数：用于更新时判断该可执行文件是否为 MFAAvalonia
         if (args.Length > 0 && args[0] == "--identify")
         {

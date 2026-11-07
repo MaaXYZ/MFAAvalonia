@@ -73,10 +73,10 @@
         <value>連接失敗後嘗試重開 ADB 伺服器</value>
     </data>
     <data name="AnimatedBackgroundDescription" xml:space="preserve">
-        <value>啟用/停用背景動畫，動畫由當前活動效果驅動。</value>
+        <value>讓支援動畫的內建底紋隨時間變化；不會播放所選圖片。</value>
     </data>
     <data name="AnimatedBackgroundTitle" xml:space="preserve">
-        <value>動態背景動畫</value>
+        <value>內建背景動畫</value>
     </data>
     <data name="Announcement" xml:space="preserve">
         <value>公告</value>
@@ -112,10 +112,10 @@
         <value>啟動後操作</value>
     </data>
     <data name="BackgroundStyleDescription" xml:space="preserve">
-        <value>從內建背景樣式中選擇。</value>
+        <value>選擇用戶端繪製的漸層或氣泡底紋，不改變所選圖片的構圖。</value>
     </data>
     <data name="BackgroundStyleTitle" xml:space="preserve">
-        <value>背景樣式</value>
+        <value>內建背景樣式</value>
     </data>
     <data name="BackgroundTransitionsDescription" xml:space="preserve">
         <value>啟用/停用背景過渡效果，切換效果時會有漸變過渡。</value>
@@ -1516,16 +1516,70 @@
         <value>背景圖片</value>
     </data>
     <data name="BackgroundImageDescription" xml:space="preserve">
-        <value>選擇一張圖片作為視窗背景，將覆蓋在預設背景效果之上。</value>
+        <value>選擇背景圖片。預設僅顯示於內容區域。</value>
+    </data>
+    <data name="BackgroundImageExtendToTitleBarTitle" xml:space="preserve">
+        <value>背景延伸至標題列</value>
+    </data>
+    <data name="BackgroundImageExtendToTitleBarDescription" xml:space="preserve">
+        <value>開啟後圖片覆蓋整個視窗；關閉時僅顯示於內容區。預設關閉，變更會自動儲存。</value>
     </data>
     <data name="SelectBackgroundImage" xml:space="preserve">
         <value>選擇背景圖片</value>
     </data>
     <data name="BackgroundImageOpacityTitle" xml:space="preserve">
-        <value>背景圖片不透明度</value>
+        <value>背景圖片亮度</value>
     </data>
     <data name="BackgroundImageOpacityDescription" xml:space="preserve">
-        <value>調整背景圖片的不透明度，值越小圖片越透明。</value>
+        <value>調整圖片亮度，數值越小越暗；不隨介面主題改變。</value>
+    </data>
+    <data name="BackgroundImagePlacementTitle" xml:space="preserve">
+        <value>原畫靠邊方向</value>
+    </data>
+    <data name="BackgroundImagePlacementDescription" xml:space="preserve">
+        <value>完整原畫靠邊顯示，其他區域以同圖虛化補滿。</value>
+    </data>
+    <data name="BackgroundImagePlacementDisabledDescription" xml:space="preserve">
+        <value>僅適用於「單邊融景」，切換後可調整方向。</value>
+    </data>
+    <data name="BackgroundImageLeft" xml:space="preserve">
+        <value>左側</value>
+    </data>
+    <data name="BackgroundImageRight" xml:space="preserve">
+        <value>右側</value>
+    </data>
+    <data name="BackgroundImageTop" xml:space="preserve">
+        <value>上方</value>
+    </data>
+    <data name="BackgroundImageBottom" xml:space="preserve">
+        <value>下方</value>
+    </data>
+    <data name="BackgroundImageBlurTitle" xml:space="preserve">
+        <value>背景虛化程度</value>
+    </data>
+    <data name="BackgroundImageBlurDescription" xml:space="preserve">
+        <value>調整延展背景的虛化程度，不影響原畫清晰度。</value>
+    </data>
+    <data name="BackgroundImageModeTitle" xml:space="preserve">
+        <value>原畫呈現方式</value>
+    </data>
+    <data name="BackgroundImageModeDescription" xml:space="preserve">
+        <value>為目前明暗主題分別儲存呈現方式與圖片強度。</value>
+    </data>
+    <data name="BackgroundImageSideBlend" xml:space="preserve">
+        <value>單邊融景</value>
+    </data>
+    <data name="BackgroundImageCenteredBlend" xml:space="preserve">
+        <value>完整置中</value>
+    </data>
+    <data name="BackgroundImageBlurred" xml:space="preserve">
+        <value>柔焦滿屏</value>
+    </data>
+    <data name="BackgroundImageLightOpacityTitle" xml:space="preserve">
+        <value>背景圖片不透明度</value>
+    </data>
+    <data name="BackgroundImageLightOpacityDescription" xml:space="preserve">
+        <value>降低數值，讓圖片融入淺色底面，不壓暗圖片。</value>
     </data>
     <data name="AgentConnectionRetry" xml:space="preserve">
         <value>Agent 連線重試 ({0})...</value>    
@@ -2231,6 +2285,11 @@
   <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>背景模式 · 虛擬螢幕</value></data>
   <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>前景模式 · 目前螢幕</value></data>
   <data name="CurrentScreen" xml:space="preserve"><value>目前螢幕</value></data>
+  <data name="RestoreInputResourceDefault" xml:space="preserve"><value>還原此項資源預設值</value></data>
+  <data name="RestoreGroupResourceDefaults" xml:space="preserve"><value>還原本組資源預設值</value></data>
+  <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>將「{0}」中 {1} 項已修改的內容還原為資源預設值。此操作使用資源宣告的預設值，不是預設方案中的值；未宣告預設值的欄位和子選項設定會保留。</value></data>
+  <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>還原本組</value></data>
+  <data name="ResumeInterruptedQueue" xml:space="preserve"><value>重新啟動任務清單時，從上次未完成的任務繼續（自動跳過已成功的任務）</value></data>
 </root>
 
 

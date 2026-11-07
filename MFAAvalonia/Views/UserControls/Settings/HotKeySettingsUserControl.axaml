@@ -18,7 +18,7 @@
             FontWeight="SemiBold"
             HorizontalAlignment="Center"
             Text="{markup:I18n {x:Static helper:LangKeys.GlobalConfigTip}}" />
-        <suki:GlassCard Padding="25,8,25,8">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25,8,25,8">
             <StackPanel Spacing="20">
                 <DockPanel>
                     <userControls:HotKeyEditor

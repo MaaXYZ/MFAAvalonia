@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Remove="Packaging.Targets" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.1" />
+    <PackageReference Include="Avalonia.Headless.XUnit" Version="11.3.12" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Exercise the production control without initializing the automation host. -->
+    <Compile Include="..\MFAAvalonia\Controls\ScenicBackground.cs" Link="ScenicBackground.cs" />
+    <Compile Include="..\MFAAvalonia\Extensions\ScrollViewerExtensions.cs" Link="ScrollViewerExtensions.cs" />
+    <AvaloniaResource Include="..\MFAAvalonia\Assets\Style\LogScrollStyles.axaml" Link="LogScrollStyles.axaml" />
+    <AvaloniaResource Include="..\MFAAvalonia\Assets\Style\ScenicBackgroundStyles.axaml" Link="ScenicBackgroundStyles.axaml" />
+    <ProjectReference Include="..\SukiUI\SukiUI.csproj" />
+    <ProjectReference Include="..\Markdown.Avalonia\Markdown.Avalonia.csproj" />
+  </ItemGroup>
+</Project>

@@ -66,13 +66,14 @@ public partial class AdbEditorDialogViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public void Save()
+    public async Task Save()
     {
         var vm = Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel;
         if (vm != null)
         {
-            vm.Devices = [Output];
-            vm.CurrentDevice = Output;
+            // 保存即应用自定义连接目标，允许模拟器尚未启动、设备尚未被发现的情况。
+            // 是否立即尝试连接由设备选择流程中的连接设置决定。
+            await vm.ApplyCustomAdbDevice(Output);
         }
 
         Dialog.Dismiss();

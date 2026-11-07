@@ -2,6 +2,7 @@ using MFAAvalonia.Extensions.MaaFW;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Principal;
@@ -161,6 +162,10 @@ public static class AdminHelper
                 Verb = "runas", // 请求管理员权限
                 WorkingDirectory = AppContext.BaseDirectory
             };
+
+            startInfo.ArgumentList.Add($"--wait-for-process-exit={Environment.ProcessId}");
+            foreach (var argument in Environment.GetCommandLineArgs().Skip(1))
+                startInfo.ArgumentList.Add(argument);
 
             var process = Process.Start(startInfo);
             return process != null;

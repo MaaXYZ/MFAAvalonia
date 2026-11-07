@@ -16,21 +16,24 @@ namespace MFAAvalonia.Helper;
 public static class LanguageHelper
 {
     public static event EventHandler<LanguageEventArgs>? LanguageChanged;
-    private static readonly string[] SupportedLanguageKeys = ["zh-CN", "zh-Hant", "en-US", "ja-JP"];
+    private static readonly string[] SupportedLanguageKeys = ["zh-CN", "zh-Hant", "en-US", "ja-JP", "ko-KR"];
     private static readonly Dictionary<object, string> LegacyLanguageMappings = new()
     {
         ["zh-CN"] = "zh-CN",
         ["zh-Hant"] = "zh-Hant",
         ["en-US"] = "en-US",
         ["ja-JP"] = "ja-JP",
+        ["ko-KR"] = "ko-KR",
         [0] = "zh-CN",
         [1] = "zh-Hant",
         [2] = "en-US",
         [3] = "ja-JP",
+        [4] = "ko-KR",
         [0L] = "zh-CN",
         [1L] = "zh-Hant",
         [2L] = "en-US",
         [3L] = "ja-JP",
+        [4L] = "ko-KR",
     };
 
     public static readonly List<SupportedLanguage> SupportedLanguages =
@@ -39,6 +42,7 @@ public static class LanguageHelper
         new("zh-Hant", "繁體中文"),
         new("en-US", "English"),
         new("ja-JP", "日本語"),
+        new("ko-KR", "한국어"),
     ];
 
     public static Dictionary<string, CultureInfo> Cultures { get; } = new();
@@ -223,6 +227,9 @@ public static class LanguageHelper
         if (IsJapanese(normalized))
             return "ja-JP";
 
+        if (IsKorean(normalized))
+            return "ko-KR";
+
         return null;
     }
 
@@ -348,6 +355,23 @@ public static class LanguageHelper
             "ja-jp"
         ];
         foreach (string prefix in japanesePrefixes)
+        {
+            if (langCode.Replace("_", "-").StartsWith(prefix))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool IsKorean(string langCode)
+    {
+        string[] koreanPrefixes =
+        [
+            "ko",
+            "ko-kr"
+        ];
+        foreach (string prefix in koreanPrefixes)
         {
             if (langCode.Replace("_", "-").StartsWith(prefix))
             {

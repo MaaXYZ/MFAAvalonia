@@ -10,6 +10,10 @@ namespace MFAAvalonia.Helper;
 
 public static class LangKeys
 {
+	public static readonly string RestoreInputResourceDefault = "RestoreInputResourceDefault";
+	public static readonly string RestoreGroupResourceDefaults = "RestoreGroupResourceDefaults";
+	public static readonly string RestoreResourceDefaultsConfirmation = "RestoreResourceDefaultsConfirmation";
+	public static readonly string RestoreResourceDefaultsConfirm = "RestoreResourceDefaultsConfirm";
 	public static readonly string About = "About";
 	public static readonly string AdbCaptureMode = "AdbCaptureMode";
 	public static readonly string AdbConfig = "AdbConfig";
@@ -470,6 +474,7 @@ public static class LangKeys
 	public static readonly string StopTaskBeforeUpdateResource = "StopTaskBeforeUpdateResource";
 	public static readonly string MirrorCdkEmpty = "MirrorCdkEmpty";
 	public static readonly string ContinueRunningWhenError = "ContinueRunningWhenError";
+	public static readonly string ResumeInterruptedQueue = "ResumeInterruptedQueue";
 	public static readonly string CurrentOtherUpdatingTask = "CurrentOtherUpdatingTask";
 	public static readonly string RedownloadResourceFullPackage = "RedownloadResourceFullPackage";
 	public static readonly string RedownloadUiFullPackage = "RedownloadUiFullPackage";
@@ -531,9 +536,27 @@ public static class LangKeys
 	public static readonly string Reset = "Reset";
 	public static readonly string BackgroundImageTitle = "BackgroundImageTitle";
 	public static readonly string BackgroundImageDescription = "BackgroundImageDescription";
+	public static readonly string BackgroundImageExtendToTitleBarTitle = "BackgroundImageExtendToTitleBarTitle";
+	public static readonly string BackgroundImageExtendToTitleBarDescription = "BackgroundImageExtendToTitleBarDescription";
 	public static readonly string SelectBackgroundImage = "SelectBackgroundImage";
 	public static readonly string BackgroundImageOpacityTitle = "BackgroundImageOpacityTitle";
 	public static readonly string BackgroundImageOpacityDescription = "BackgroundImageOpacityDescription";
+	public static readonly string BackgroundImagePlacementTitle = "BackgroundImagePlacementTitle";
+	public static readonly string BackgroundImagePlacementDescription = "BackgroundImagePlacementDescription";
+	public static readonly string BackgroundImagePlacementDisabledDescription = "BackgroundImagePlacementDisabledDescription";
+	public static readonly string BackgroundImageLeft = "BackgroundImageLeft";
+	public static readonly string BackgroundImageRight = "BackgroundImageRight";
+	public static readonly string BackgroundImageTop = "BackgroundImageTop";
+	public static readonly string BackgroundImageBottom = "BackgroundImageBottom";
+	public static readonly string BackgroundImageBlurTitle = "BackgroundImageBlurTitle";
+	public static readonly string BackgroundImageBlurDescription = "BackgroundImageBlurDescription";
+	public static readonly string BackgroundImageModeTitle = "BackgroundImageModeTitle";
+	public static readonly string BackgroundImageModeDescription = "BackgroundImageModeDescription";
+	public static readonly string BackgroundImageSideBlend = "BackgroundImageSideBlend";
+	public static readonly string BackgroundImageCenteredBlend = "BackgroundImageCenteredBlend";
+	public static readonly string BackgroundImageBlurred = "BackgroundImageBlurred";
+	public static readonly string BackgroundImageLightOpacityTitle = "BackgroundImageLightOpacityTitle";
+	public static readonly string BackgroundImageLightOpacityDescription = "BackgroundImageLightOpacityDescription";
 	public static readonly string TriggerDate = "TriggerDate";
 	public static readonly string ConnectingInProgress = "ConnectingInProgress";
 	public static readonly string SchedulePickerTip = "SchedulePickerTip";

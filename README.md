@@ -186,6 +186,34 @@ MFAAvalonia 在 Project Interface V2 的 `task` 项中额外支持以下字段�
 
 将 `.md` 文件放入 `resource/announcement/` 目录即可作为资源公告显示。程序或资源更新的 Release Notes 会单独下载，并显示在更新提示中。
 
+### 图片背景
+
+桌面版可在「设置 → 界面设置 → 背景图片」选图。图片默认只显示在内容区域；开启「背景延伸到标题栏」可覆盖整窗，导航仍保持清晰。此选项即时生效并保存。
+
+- 「单边融景」将完整原画放在指定边缘，其余区域用同图虚化补满；方向可选左、右、上、下，默认靠右。
+- 「完整居中」保留完整构图并柔化边缘；「柔焦满屏」只保留虚化景色。
+- 明暗主题分别保存呈现方式和图片强度。暗色调节亮度，浅色调节不透明度，将图片淡化到浅色底面。
+- 虚化程度只影响延展背景。清除图片或文件不可读时恢复内置背景。
+
+原有「内置背景样式」「内置背景动画」「背景过渡效果」控制客户端绘制的底纹，不会播放或移动选中的图片。
+
+首次安装的 `config/config.template.json` 也可预设这些客户端选项，例如：
+
+```json
+{
+  "BackgroundImagePath": "resource/backgrounds/background.png",
+  "BackgroundImageExtendToTitleBar": false,
+  "BackgroundImagePlacement": "Right",
+  "BackgroundImageDarkMode": "SideBlend",
+  "BackgroundImageLightMode": "Blurred",
+  "BackgroundImageOpacity": 0.45,
+  "BackgroundImageLightOpacity": 0.16,
+  "BackgroundImageBlurRadius": 32.0
+}
+```
+
+呈现方式取值为 `SideBlend`、`CenteredBlend`、`Blurred`，方向为 `Left`、`Right`、`Top`、`Bottom`，图片强度为0至1，虚化程度为0至60。这些是客户端配置，不是 `interface.json` 的任务选项。
+
 ### 自定义图标
 
 将 `logo.ico` 放置在程序根目录的 `Assets` 文件夹中，即可替换 MFAAvalonia 的窗口和托盘图标。

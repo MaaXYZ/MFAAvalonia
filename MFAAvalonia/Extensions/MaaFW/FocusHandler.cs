@@ -43,11 +43,19 @@ public class FocusHandler
 
     private AutoInitDictionary autoInitDictionary;
     private readonly TaskQueueViewModel _viewModel;
+    private readonly Action<object?, object?> _showNotification;
 
     public FocusHandler(AutoInitDictionary autoInitDictionary, TaskQueueViewModel viewModel)
+        : this(autoInitDictionary, viewModel, (title, content) => ToastNotification.Show(title, content))
+    {
+    }
+
+    internal FocusHandler(AutoInitDictionary autoInitDictionary, TaskQueueViewModel viewModel,
+        Action<object?, object?> showNotification)
     {
         this.autoInitDictionary = autoInitDictionary;
         _viewModel = viewModel;
+        _showNotification = showNotification;
     }
 
     public void UpdateDictionary(AutoInitDictionary dictionary)
@@ -234,9 +242,9 @@ public class FocusHandler
                             .Queue());
                     break;
                 case "notification":
-                    ToastNotification.Show(
+                    DispatcherHelper.RunOnMainThread(() => _showNotification(
                         LangKeys.Tip.ToLocalization(),
-                        CreateFocusMarkdownContent(displayText, NotificationMarkdownMaxHeight));
+                        CreateFocusMarkdownContent(displayText, NotificationMarkdownMaxHeight)));
                     break;
                 case "dialog":
                     // 非阻塞式弹窗：fire-and-forget，任务继续执行
@@ -323,9 +331,9 @@ public class FocusHandler
                 {
                     var title = ResolveLegacyFocusText(focus.Toast[0]);
                     var content = focus.Toast.Count >= 2 ? ResolveLegacyFocusText(focus.Toast[1]) : "";
-                    ToastNotification.Show(
+                    DispatcherHelper.RunOnMainThread(() => _showNotification(
                         CreateFocusMarkdownContent(title, NotificationTitleMarkdownMaxHeight),
-                        CreateFocusMarkdownContent(content, NotificationMarkdownMaxHeight));
+                        CreateFocusMarkdownContent(content, NotificationMarkdownMaxHeight)));
                 }
                 if (focus.Start != null)
                 {

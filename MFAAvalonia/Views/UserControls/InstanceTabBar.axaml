@@ -256,6 +256,9 @@
     <Grid RowDefinitions="Auto,*">
         <!-- Row 0: 标签栏 = [展开按钮(固定左)] [标签页+添加按钮] -->
         <Grid Grid.Row="0" ColumnDefinitions="Auto,*">
+            <Border Grid.ColumnSpan="2"
+                    IsVisible="{Binding HasBackgroundImage, Source={x:Static helper:Instances.GuiSettingsUserControlModel}}"
+                    Background="{DynamicResource ScenicChromeBackground}" />
             <!-- TabBarBackground 铺满整个标签栏（包括下拉按钮区域），选中标签区域会被 Clip 挖掉 -->
             <Border x:Name="TabBarBackgroundBorder"
                     Grid.ColumnSpan="2"

@@ -36,6 +36,7 @@
                                        BackgroundStyle="{TemplateBinding BackgroundStyle}"
                                        BackgroundTransitionTime="{TemplateBinding BackgroundTransitionTime}"
                                        BackgroundTransitionsEnabled="{TemplateBinding BackgroundTransitionsEnabled}"
+                                       BackgroundContent="{TemplateBinding BackgroundContent}"
                                        BackgroundImage="{TemplateBinding BackgroundImage}"
                                        BackgroundImageStretch="{TemplateBinding BackgroundImageStretch}"
                                        BackgroundImageOpacity="{TemplateBinding BackgroundImageOpacity}"

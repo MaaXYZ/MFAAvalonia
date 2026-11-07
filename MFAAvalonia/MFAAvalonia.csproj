@@ -61,7 +61,7 @@
         <PackageReference Include="Lang.Avalonia" Version="11.3.12.1" />
         <PackageReference Include="Maa.AgentBinary" Version="1.2.0" />
         <PackageReference Include="Maa.Framework" Version="5.10.0" />
-        <PackageReference Include="Maa.Framework.Runtimes" Version="5.12.3" />
+        <PackageReference Include="Maa.Framework.Runtimes" Version="5.14.3" />
         <PackageReference Include="MailKit" Version="4.14.1" />
         <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="5.0.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />

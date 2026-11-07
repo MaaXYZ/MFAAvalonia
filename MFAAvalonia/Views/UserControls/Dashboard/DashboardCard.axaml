@@ -170,7 +170,7 @@
             </Setter>
             <Setter Property="Template">
                 <ControlTemplate>
-                    <suki:GlassCard x:Name="RootCard"
+                    <suki:GlassCard x:Name="RootCard" Classes="ScenicPanel"
                                     IsAnimated="False"
                                     Padding="0"
                                     Margin="5"

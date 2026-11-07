@@ -897,6 +897,16 @@ public sealed class MaaProcessorManager
             // 检查是否存在 preset 定义
             if (MaaProcessor.Interface?.Preset is { Count: > 0 } presets)
             {
+                if (LazyInstance.IsValueCreated && Current?.ViewModel != null)
+                {
+                    var currentViewModel = Current.ViewModel;
+                    presets = presets
+                        .Where(preset => preset.IsApplicableTo(
+                            currentViewModel.GetCurrentControllerName(),
+                            currentViewModel.CurrentResource))
+                        .ToList();
+                }
+
                 LoggerHelper.Info($"[初始化] 未找到实例配置，将基于 {presets.Count} 个 preset 创建初始实例");
 
                 lock (_lock)

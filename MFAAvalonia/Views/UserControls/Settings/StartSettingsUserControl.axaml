@@ -31,7 +31,7 @@
                 FontWeight="SemiBold"
                 Text="{Binding ActiveTab.Name, Source={x:Static helper:Instances.InstanceTabBarViewModel}}" />
         </StackPanel>
-        <suki:GlassCard Padding="25">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <ComboBox extensions:ComboBoxExtensions.DisableNavigationOnLostFocus="True"
@@ -67,7 +67,7 @@
                 </DockPanel>
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25">
             <StackPanel Spacing="8">
                 <DockPanel>
                     <TextBox
@@ -383,7 +383,7 @@
                 </Border>
             </StackPanel>
         </suki:GlassCard>
-        <suki:GlassCard Padding="25">
+        <suki:GlassCard Classes="ScenicPanel" Padding="25">
             <StackPanel Spacing="8">
 
                 <DockPanel>

@@ -16,7 +16,7 @@
     <Design.DataContext>
         <settings:PerformanceUserControlModel />
     </Design.DataContext>
-    <suki:GlassCard Margin="0,15,0,0" Padding="25,10,25,10">
+    <suki:GlassCard Classes="ScenicPanel" Margin="0,15,0,0" Padding="25,10,25,10">
         <StackPanel Orientation="Vertical" Spacing="10">
             <DockPanel>
 

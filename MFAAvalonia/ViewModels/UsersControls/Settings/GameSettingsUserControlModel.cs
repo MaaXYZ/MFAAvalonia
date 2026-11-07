@@ -24,6 +24,8 @@ public partial class GameSettingsUserControlModel : ViewModelBase
 
     [ObservableProperty] private bool _continueRunningWhenError = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.ContinueRunningWhenError, true);
 
+    [ObservableProperty] private bool _resumeInterruptedQueue = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.ResumeInterruptedQueue, true);
+
     partial void OnEnableRecordingChanged(bool value)
     {
         ConfigurationManager.Maa.SetValue(ConfigurationKeys.Recording, value);
@@ -67,6 +69,8 @@ public partial class GameSettingsUserControlModel : ViewModelBase
     }
 
     partial void OnContinueRunningWhenErrorChanged(bool value) => HandlePropertyChanged(ConfigurationKeys.ContinueRunningWhenError, value);
+
+    partial void OnResumeInterruptedQueueChanged(bool value) => HandlePropertyChanged(ConfigurationKeys.ResumeInterruptedQueue, value);
 
     // [ObservableProperty] private ObservableCollection<MaaInterface.MaaCustomResource> _currentResources = [];
     //

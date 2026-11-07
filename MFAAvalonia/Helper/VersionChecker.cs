@@ -67,6 +67,7 @@ public static class VersionChecker
     private static readonly object StartupCheckLock = new();
     private static Task? _startupCheckTask;
     private static int _restartPending;
+    private static ISukiToast? _activeResourceUpdateToast;
 
     public static bool IsRestartPending => Volatile.Read(ref _restartPending) != 0;
 
@@ -303,7 +304,7 @@ public static class VersionChecker
         var normalizedPackagePath = Path.GetFullPath(localPackagePath);
         var pathHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedPackagePath)))[..12]
             .ToLowerInvariant();
-        return Path.Combine(AppPaths.TempResourceDirectory, $"local_package_{pathHash}_extracted");
+        return Path.Combine(AppPaths.TempResourceUpdateDirectory, $"local_package_{pathHash}_extracted");
     }
 
     private static async Task UpdateResourceFromLocalPackageCoreAsync(string packagePath, string currentVersion)
@@ -675,6 +676,28 @@ public static class VersionChecker
 
     public async static Task UpdateResource(bool isGithub = true, bool closeDialog = false, bool noDialog = false, Action action = null, string currentVersion = "", string? localPackagePath = null)
     {
+        try
+        {
+            await UpdateResourceCore(isGithub, closeDialog, noDialog, action, currentVersion, localPackagePath);
+        }
+        catch (Exception ex)
+        {
+            Dismiss(_activeResourceUpdateToast);
+            _activeResourceUpdateToast = null;
+            Instances.RootViewModel.SetUpdating(false);
+            Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel.ClearDownloadProgress();
+            ToastHelper.Error(LangKeys.Warning.ToLocalization(), $"资源更新失败：{ex.Message}", -1);
+            LoggerHelper.Error($"资源更新失败：{ex.Message}", ex);
+            throw;
+        }
+        finally
+        {
+            _activeResourceUpdateToast = null;
+        }
+    }
+
+    private async static Task UpdateResourceCore(bool isGithub, bool closeDialog, bool noDialog, Action? action, string currentVersion, string? localPackagePath)
+    {
         shouldShowToast = false;
         Instances.RootViewModel.SetUpdating(true);
         var debugEnabled = IsEnvEnabled(ResourceUpdateDebugEnv);
@@ -722,6 +745,7 @@ public static class VersionChecker
                 .WithTitle(LangKeys.UpdateResource.ToLocalization())
                 .WithContent(stackPanel).Queue()
         );
+        _activeResourceUpdateToast = sukiToast;
         var localVersion = string.IsNullOrWhiteSpace(currentVersion) ? MaaProcessor.Interface?.Version ?? string.Empty : currentVersion;
 
         if (string.IsNullOrWhiteSpace(localVersion))
@@ -839,7 +863,7 @@ public static class VersionChecker
                 }
             }
         });
-        var tempPath = AppPaths.TempResourceDirectory;
+        var tempPath = AppPaths.TempResourceUpdateDirectory;
         Directory.CreateDirectory(tempPath);
         var debugSessionId = DateTime.Now.ToString("yyyyMMddHHmmss");
         string fileExtension = OperatingSystem.IsAndroid() ? ".apk" : GetFileExtensionFromUrl(downloadUrl);
@@ -858,14 +882,15 @@ public static class VersionChecker
             SetStatusText(textBlock, downloadSpeedTextBlock, LangKeys.Downloading.ToLocalization());
             SetProgress(progress, 0);
             (var downloadStatus, tempZipFilePath) = await DownloadWithRetry(downloadUrl, tempZipFilePath, progress, 3, textBlock, downloadSpeedTextBlock);
-            LoggerHelper.Info($"已下载更新包到临时文件：文件={tempZipFilePath}");
             if (!downloadStatus)
             {
+                LoggerHelper.Warning($"资源包下载失败：文件={tempZipFilePath}");
                 Dismiss(sukiToast);
                 ToastHelper.Warn(LangKeys.Warning.ToLocalization(), LangKeys.DownloadFailed.ToLocalization());
                 Instances.RootViewModel.SetUpdating(false);
-                return;
+                throw new IOException($"资源包下载失败：{tempZipFilePath}");
             }
+            LoggerHelper.Info($"已下载更新包到临时文件：文件={tempZipFilePath}");
         }
         else
         {
@@ -1190,6 +1215,20 @@ public static class VersionChecker
 
         if (isLocalPackage)
             CleanupLocalPackageExtractDirectory(tempExtractDir);
+        else if (!keepArtifacts)
+        {
+            try
+            {
+                if (File.Exists(tempZipFilePath))
+                    File.Delete(tempZipFilePath);
+                if (Directory.Exists(tempExtractDir))
+                    Directory.Delete(tempExtractDir, true);
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Warning($"清理资源更新暂存文件失败：{ex.Message}");
+            }
+        }
 
         // 重启前执行清理（保存配置、释放资源等）
         Interlocked.Exchange(ref _restartPending, 1);
@@ -2266,11 +2305,21 @@ public static class VersionChecker
         {
             try
             {
-                return await DownloadFileAsync(url, savePath, progress, downloadSizeTextBlock, downloadSpeedTextBlock);
+                var result = await DownloadFileAsync(url, savePath, progress, downloadSizeTextBlock, downloadSpeedTextBlock);
+                if (result.Item1)
+                    return result;
+
+                if (File.Exists(result.Item2))
+                    File.Delete(result.Item2);
+                if (i < retries - 1)
+                {
+                    LoggerHelper.Warning($"下载失败，准备重试：第 {i + 1}/{retries} 次");
+                    await Task.Delay(2000 * (i + 1));
+                }
             }
-            catch (WebException ex) when (i < retries - 1)
+            catch (Exception ex) when (i < retries - 1)
             {
-                LoggerHelper.Warning($"下载失败，准备重试：第 {i + 1}/{retries} 次，状态={ex.Status}");
+                LoggerHelper.Warning($"下载失败，准备重试：第 {i + 1}/{retries} 次，原因={ex.Message}");
                 await Task.Delay(2000 * (i + 1));
             }
         }
@@ -3231,7 +3280,7 @@ public static class VersionChecker
         var targetFilePath = filePath;
         try
         {
-            using var httpClient = CreateHttpClientWithProxy();
+            using var httpClient = CreateHttpClientWithProxy(TimeSpan.FromMinutes(20));
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("request");
             httpClient.DefaultRequestHeaders.Accept.Clear();
             httpClient.DefaultRequestHeaders.Accept.ParseAdd("*/*");
@@ -4083,7 +4132,7 @@ public static class VersionChecker
     }
 
 
-    public static HttpClient CreateHttpClientWithProxy()
+    public static HttpClient CreateHttpClientWithProxy(TimeSpan? timeout = null)
     {
         bool disableSSL = File.Exists(Path.Combine(AppContext.BaseDirectory, "NO_SSL"));
 
@@ -4139,7 +4188,7 @@ public static class VersionChecker
         {
             return new HttpClient(handler)
             {
-                Timeout = TimeSpan.FromSeconds(60),
+                Timeout = timeout ?? TimeSpan.FromSeconds(60),
                 DefaultRequestVersion = HttpVersion.Version11
             };
         }
@@ -4176,7 +4225,7 @@ public static class VersionChecker
                     handler.UseProxy = true;
                     return new HttpClient(handler)
                     {
-                        Timeout = TimeSpan.FromSeconds(60),
+                        Timeout = timeout ?? TimeSpan.FromSeconds(60),
                         DefaultRequestVersion = HttpVersion.Version11
                     };
                 default:
@@ -4184,7 +4233,7 @@ public static class VersionChecker
                     handler.UseProxy = true;
                     return new HttpClient(handler)
                     {
-                        Timeout = TimeSpan.FromSeconds(60),
+                        Timeout = timeout ?? TimeSpan.FromSeconds(60),
                         DefaultRequestVersion = HttpVersion.Version11
                     };
             }
@@ -4194,7 +4243,7 @@ public static class VersionChecker
             LoggerHelper.Error($"初始化网络代理失败：原因={ex.Message}", ex);
             return new HttpClient(handler)
             {
-                Timeout = TimeSpan.FromSeconds(60),
+                Timeout = timeout ?? TimeSpan.FromSeconds(60),
                 DefaultRequestVersion = HttpVersion.Version11
             };
         }

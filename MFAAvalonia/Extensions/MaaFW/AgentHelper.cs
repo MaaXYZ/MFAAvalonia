@@ -210,6 +210,7 @@ public static class AgentHelper
         {
             LoggerHelper.Info("Agent 进程已退出。");
             ctx.Client = null;
+            processor.OnAgentUnavailable(ctx);
         };
 
         LoggerHelper.Info($"Agent 客户端哈希：{ctx.Client?.GetHashCode()}");
@@ -314,6 +315,7 @@ public static class AgentHelper
                     LoggerHelper.Info("Agent 进程已退出。");
                     StopReadStreams(ctx);
                     ctx.Process = null;
+                    processor.OnAgentUnavailable(ctx);
                 };
 
                 BindProcessLifetime(ctx);
@@ -391,7 +393,11 @@ public static class AgentHelper
                         timeOut = agentConfig.Timeout ?? -1;
                         if (timeOut > 0)
                             ctx.Client.SetTimeout(TimeSpan.FromSeconds(timeOut));
-                        ctx.Client.Releasing += (_, _) => LoggerHelper.Info("Agent 进程已退出。");
+                        ctx.Client.Releasing += (_, _) =>
+                        {
+                            LoggerHelper.Info("Agent 进程已退出。");
+                            processor.OnAgentUnavailable(ctx);
+                        };
                     }
                     catch (Exception recreateEx)
                     {

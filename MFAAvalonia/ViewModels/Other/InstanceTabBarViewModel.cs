@@ -68,6 +68,7 @@ public partial class InstanceTabBarViewModel : ViewModelBase
             SearchText = string.Empty;
             RefreshFilteredTabs();
             RefreshFilteredRecentClosedTabs();
+            RefreshInstancePresets();
         }
     }
 
@@ -138,6 +139,7 @@ public partial class InstanceTabBarViewModel : ViewModelBase
 
     private void RefreshFilteredInstancePresets()
     {
+        var sourceViewModel = GetNewInstanceSourceViewModel();
         FilteredInstancePresets.Clear();
         var presets = InstancePresets;
         if (presets == null || presets.Count == 0)
@@ -148,6 +150,11 @@ public partial class InstanceTabBarViewModel : ViewModelBase
         var query = PresetSearchText?.Trim() ?? string.Empty;
         foreach (var preset in presets)
         {
+            if (!IsPresetApplicableToSource(preset, sourceViewModel))
+            {
+                continue;
+            }
+
             if (string.IsNullOrEmpty(query)
                 || (!string.IsNullOrWhiteSpace(preset.DisplayName)
                     && preset.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase))
@@ -157,6 +164,19 @@ public partial class InstanceTabBarViewModel : ViewModelBase
                 FilteredInstancePresets.Add(preset);
             }
         }
+    }
+
+    private static bool IsPresetApplicableToSource(
+        MaaInterface.MaaInterfacePreset preset,
+        TaskQueueViewModel? sourceViewModel)
+    {
+        return sourceViewModel == null
+            || preset.IsApplicableTo(sourceViewModel.GetCurrentControllerName(), sourceViewModel.CurrentResource);
+    }
+
+    private TaskQueueViewModel? GetNewInstanceSourceViewModel()
+    {
+        return Tabs.LastOrDefault()?.TaskQueueViewModel;
     }
 
     [RelayCommand]
@@ -365,6 +385,7 @@ public partial class InstanceTabBarViewModel : ViewModelBase
             newValue.TaskQueueViewModel?.ResumeLiveView();
             // 排序期间 Tabs.Move 可能导致 SelectedItem 变化触发此回调，跳过副作用
             if (_isReloading) return;
+            RefreshInstancePresets();
             if (MaaProcessorManager.Instance.Current != newValue.Processor)
             {
                 SwitchToInstance(newValue.Processor);
@@ -496,7 +517,9 @@ public partial class InstanceTabBarViewModel : ViewModelBase
     public void RefreshInstancePresets()
     {
         var presets = MaaProcessor.Interface?.Preset;
-        HasInstancePresets = presets is { Count: > 0 };
+        var sourceViewModel = GetNewInstanceSourceViewModel();
+        HasInstancePresets = presets?.Any(preset =>
+            IsPresetApplicableToSource(preset, sourceViewModel)) == true;
         InstancePresets = presets;
         RefreshFilteredInstancePresets();
     }

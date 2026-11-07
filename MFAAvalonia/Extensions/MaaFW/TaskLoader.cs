@@ -156,10 +156,10 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
                 {
                     Name = saved.Name,
                     Index = saved.Index,
-                    Data = saved.Data != null ? new Dictionary<string, string?>(saved.Data) : null,
                     SelectedCases = saved.SelectedCases != null ? new List<string>(saved.SelectedCases) : null,
                     SubOptions = saved.SubOptions != null ? CloneSubOptions(saved.SubOptions) : null,
                 };
+                savedOption.CopyInputDataFrom(saved);
                 SetDefaultOptionValue(maaInterface, savedOption);
                 return savedOption;
             }
@@ -237,10 +237,10 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
                     {
                         Name = savedOpt.Name,
                         Index = savedOpt.Index,
-                        Data = savedOpt.Data != null ? new Dictionary<string, string?>(savedOpt.Data) : null,
                         SubOptions = savedOpt.SubOptions != null ? CloneSubOptions(savedOpt.SubOptions) : null,
                         SelectedCases = savedOpt.SelectedCases != null ? new List<string>(savedOpt.SelectedCases) : null,
                     };
+                    clonedOpt.CopyInputDataFrom(savedOpt);
                     SetDefaultOptionValue(maaInterface, clonedOpt);
                     return clonedOpt;
                 }
@@ -264,13 +264,17 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
     /// </summary>
     private static List<MaaInterface.MaaInterfaceSelectOption> CloneSubOptions(List<MaaInterface.MaaInterfaceSelectOption> subOptions)
     {
-        return subOptions.Select(opt => new MaaInterface.MaaInterfaceSelectOption
+        return subOptions.Select(opt =>
         {
-            Name = opt.Name,
-            Index = opt.Index,
-            Data = opt.Data != null ? new Dictionary<string, string?>(opt.Data) : null,
-            SubOptions = opt.SubOptions != null ? CloneSubOptions(opt.SubOptions) : null,
-            SelectedCases = opt.SelectedCases != null ? new List<string>(opt.SelectedCases) : null,
+            var clone = new MaaInterface.MaaInterfaceSelectOption
+            {
+                Name = opt.Name,
+                Index = opt.Index,
+                SubOptions = opt.SubOptions != null ? CloneSubOptions(opt.SubOptions) : null,
+                SelectedCases = opt.SelectedCases != null ? new List<string>(opt.SelectedCases) : null,
+            };
+            clone.CopyInputDataFrom(opt);
+            return clone;
         }).ToList();
     }
     /// <summary>
@@ -528,9 +532,9 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
                     var opt = new MaaInterface.MaaInterfaceSelectOption
                     {
                         Name = newOpt.Name,
-                        Index = newOpt.Index,
-                        Data = newOpt.Data != null ? new Dictionary<string, string?>(newOpt.Data) : null
+                        Index = newOpt.Index
                     };
+                    opt.CopyInputDataFrom(newOpt);
                     SetDefaultOptionValue(maaInterface, opt);
                     newOptions.Add(opt);
                 }
@@ -548,9 +552,10 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
             var newSubOpt = new MaaInterface.MaaInterfaceSelectOption
             {
                 Name = subOpt.Name,
-                Index = subOpt.Index,
-                Data = subOpt.Data?.Count > 0 ? new Dictionary<string, string?>(subOpt.Data) : null
+                Index = subOpt.Index
             };
+            newSubOpt.CopyInputDataFrom(subOpt);
+            if (subOpt.Data?.Count == 0) newSubOpt.Data = null;
             if ((maaInterface?.Option?.TryGetValue(subOpt.Name ?? string.Empty, out var sio) ?? false) && sio.Cases is { Count: > 0 })
                 newSubOpt.Index = Math.Min(subOpt.Index ?? 0, sio.Cases.Count - 1);
             if (subOpt.SubOptions?.Count > 0) newSubOpt.SubOptions = MergeSubOptions(subOpt.SubOptions);
@@ -560,6 +565,8 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
 
     public static void SetDefaultOptionValue(MaaInterface? @interface, MaaInterface.MaaInterfaceSelectOption option)
     {
+        // Migrate saved passwords in inactive branches without activating those branches.
+        if (@interface?.Option != null) option.ProtectInputData(@interface.Option);
         SetDefaultOptionValue(@interface, option, new HashSet<string>(StringComparer.Ordinal));
     }
 
@@ -591,10 +598,7 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
             }
             if (io.IsInput && io.Inputs != null)
             {
-                option.Data ??= new Dictionary<string, string?>();
-                foreach (var input in io.Inputs)
-                    if (!string.IsNullOrEmpty(input.Name) && !option.Data.ContainsKey(input.Name))
-                        option.Data[input.Name] = input.Default ?? string.Empty;
+                option.InitializeInputData(io);
             }
             if (io.IsHotkey && io.Hotkeys != null)
             {
@@ -856,10 +860,10 @@ public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueue
                 {
                     Name = saved.Name,
                     Index = saved.Index,
-                    Data = saved.Data != null ? new Dictionary<string, string?>(saved.Data) : null,
                     SelectedCases = saved.SelectedCases != null ? new List<string>(saved.SelectedCases) : null,
                     SubOptions = saved.SubOptions != null ? CloneSubOptions(saved.SubOptions) : null,
                 };
+                savedOption.CopyInputDataFrom(saved);
                 SetDefaultOptionValue(maaInterface, savedOption);
                 return savedOption;
             }

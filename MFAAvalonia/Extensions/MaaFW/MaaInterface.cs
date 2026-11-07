@@ -61,7 +61,13 @@ public partial class MaaInterface
         public void InitializeDisplayName()
         {
             UpdateDisplayName();
+            LanguageHelper.LanguageChanged -= OnLanguageChanged;
             LanguageHelper.LanguageChanged += OnLanguageChanged;
+        }
+
+        public void UnsubscribeLanguage()
+        {
+            LanguageHelper.LanguageChanged -= OnLanguageChanged;
         }
 
         private void OnLanguageChanged(object? sender, LanguageHelper.LanguageEventArgs e)
@@ -132,7 +138,28 @@ public partial class MaaInterface
 
         /// <summary>输入字段的默认值</summary>
         [JsonProperty("default")]
-        public string? Default { get; set; }
+        public string? Default { get => IsPassword ? null : field; set; }
+
+        /// <summary>编辑控件类型：text、file、directory，与 pipeline_type 独立。</summary>
+        [JsonProperty("input_type")]
+        public string? InputType { get; set; }
+
+        /// <summary>兼容 inputs[].type 写法；input_type 优先。</summary>
+        [JsonProperty("type")]
+        public string? Type { get; set; }
+
+        [JsonProperty("password")]
+        public bool Password { get; set; }
+
+        [JsonIgnore]
+        public bool IsPassword => Password || string.Equals(Type, "password", StringComparison.OrdinalIgnoreCase);
+
+        [JsonIgnore]
+        public string EditorType => (InputType ?? Type ?? "text").ToLowerInvariant();
+
+        [JsonIgnore]
+        public bool UseBooleanSwitch => !IsPassword && InputType == null && Type == null
+            && string.Equals(PipelineType, "bool", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>pipeline_override 中的数据类型: "string", "int", "bool"</summary>
         [JsonProperty("pipeline_type")]
@@ -506,7 +533,8 @@ public partial class MaaInterface
                 }
                 catch (Exception ex)
                 {
-                    LoggerHelper.Error($"Option 类型转换失败: {ex.Message}");
+                    // Conversion exceptions can contain the user's password.
+                    LoggerHelper.Error($"Option 类型转换失败: {ex.GetType().Name}");
                 }
             }
 
@@ -637,8 +665,64 @@ public partial class MaaInterface
         public List<string>? SelectedCases { get; set; }
 
         /// <summary>用于 input 类型的字段数据（key: 字段名, value: 用户输入值）</summary>
-        [JsonProperty("data")]
+        [JsonIgnore]
         public Dictionary<string, string?>? Data { get; set; }
+
+        private readonly HashSet<string> _passwordFields = new(StringComparer.Ordinal);
+
+        internal void ProtectInputData(IReadOnlyDictionary<string, MaaInterfaceOption> definitions)
+        {
+            if (Name != null && definitions.TryGetValue(Name, out var definition))
+                foreach (var input in definition.Inputs ?? [])
+                    if (input.IsPassword && input.Name != null) _passwordFields.Add(input.Name);
+            foreach (var child in SubOptions ?? []) child.ProtectInputData(definitions);
+        }
+
+        internal void CopyInputDataFrom(MaaInterfaceSelectOption source)
+        {
+            Data = source.Data == null ? null : new Dictionary<string, string?>(source.Data);
+            _passwordFields.UnionWith(source._passwordFields);
+        }
+
+        public void InitializeInputData(MaaInterfaceOption definition)
+        {
+            Data ??= new Dictionary<string, string?>();
+            foreach (var input in definition.Inputs ?? [])
+            {
+                if (string.IsNullOrEmpty(input.Name)) continue;
+                if (input.IsPassword) _passwordFields.Add(input.Name);
+                if (!Data.TryGetValue(input.Name, out var value) || value == null)
+                    Data[input.Name] = input.Default ?? string.Empty;
+            }
+        }
+
+        // Keep runtime values in memory. Only the persistence representation is encrypted.
+        // The envelope is self-describing, so loading does not depend on interface load order.
+        [JsonProperty("data")]
+        private Dictionary<string, JToken>? PersistedData
+        {
+            get
+            {
+                if (Data == null) return null;
+                return Data.ToDictionary(pair => pair.Key, pair =>
+                    _passwordFields.Contains(pair.Key) && pair.Value != null
+                        ? (JToken)new JObject { ["encrypted"] = SimpleEncryptionHelper.Encrypt("pi-password:" + pair.Value) }
+                        : pair.Value == null ? JValue.CreateNull() : new JValue(pair.Value));
+            }
+            set
+            {
+                Data = value?.ToDictionary(pair => pair.Key, pair =>
+                {
+                    if (pair.Value is JObject envelope && envelope["encrypted"]?.Type == JTokenType.String)
+                    {
+                        _passwordFields.Add(pair.Key);
+                        var plaintext = SimpleEncryptionHelper.Decrypt(envelope["encrypted"]!.Value<string>()!);
+                        return plaintext.StartsWith("pi-password:", StringComparison.Ordinal) ? plaintext[12..] : string.Empty;
+                    }
+                    return pair.Value.Type == JTokenType.Null ? null : pair.Value.Value<string>();
+                });
+            }
+        }
 
         /// <summary>子配置项列表（当选中某个 case 时会展开的选项）</summary>
         [JsonProperty("sub_options")]
@@ -1111,6 +1195,9 @@ public partial class MaaInterface
         [JsonProperty("display_raw")]
         public bool? DisplayRaw { get; set; }
 
+        [JsonProperty("display_expand")]
+        public List<int>? DisplayExpand { get; set; }
+
         [JsonProperty("permission_required")]
         public bool? PermissionRequired { get; set; }
         
@@ -1281,9 +1368,28 @@ public partial class MaaInterface
         [JsonProperty("icon")]
         public string? Icon { get; set; }
 
+        /// <summary>支持的控制器名称列表；为空表示支持所有控制器</summary>
+        [JsonProperty("controller")]
+        [JsonConverter(typeof(GenericSingleOrListConverter<string>))]
+        public List<string>? Controller { get; set; }
+
+        /// <summary>支持的资源包名称列表；为空表示支持所有资源包</summary>
+        [JsonProperty("resource")]
+        [JsonConverter(typeof(GenericSingleOrListConverter<string>))]
+        public List<string>? Resource { get; set; }
+
         /// <summary>预设包含的任务配置列表</summary>
         [JsonProperty("task")]
         public List<MaaInterfacePresetTask>? Task { get; set; }
+
+        public bool IsApplicableTo(string? controllerName, string? resourceName)
+        {
+            var supportsController = Controller is not { Count: > 0 }
+                || Controller.Any(name => string.Equals(name?.Trim(), controllerName?.Trim(), StringComparison.OrdinalIgnoreCase));
+            var supportsResource = Resource is not { Count: > 0 }
+                || Resource.Any(name => string.Equals(name?.Trim(), resourceName?.Trim(), StringComparison.OrdinalIgnoreCase));
+            return supportsController && supportsResource;
+        }
 
         [ObservableProperty] [JsonIgnore] private string _displayName = string.Empty;
 
@@ -1302,7 +1408,13 @@ public partial class MaaInterface
         public void InitializeDisplayName()
         {
             UpdateDisplayName();
+            LanguageHelper.LanguageChanged -= OnLanguageChanged;
             LanguageHelper.LanguageChanged += OnLanguageChanged;
+        }
+
+        public void UnsubscribeLanguage()
+        {
+            LanguageHelper.LanguageChanged -= OnLanguageChanged;
         }
 
         private void OnLanguageChanged(object? sender, LanguageHelper.LanguageEventArgs e) => UpdateDisplayName();
@@ -1497,7 +1609,6 @@ public partial class MaaInterface
     [JsonProperty("welcome")]
     [JsonConverter(typeof(MaaWelcomeConverter))]
     public List<MaaInterfaceWelcome>? Welcome { get; set; }
-
     public class MaaInterfaceWelcome
     {
         [JsonProperty("label")]
