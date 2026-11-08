@@ -523,6 +523,8 @@ public class MaaProcessor
     public void Dispose()
     {
         _isClosed = true;
+        // 关闭后正在阻塞的占位立即退出，之后也不会再投递。
+        _queueHold.Close();
         DetachScreenshotTasker(requireStopped: true);
         _detachedScreenshotCleanupCancellationTokenSource?.Cancel();
         _detachedScreenshotCleanupCancellationTokenSource?.Dispose();
@@ -709,6 +711,9 @@ public class MaaProcessor
                 }
             }
 
+            // 旧 Tasker 上的占位已随停止退出（或在释放时自行退出），登记一并作废。
+            _queueHold.ReleaseAll();
+            _queueHoldTasker = null;
             _agentStarted = false;
             // Agent contexts can outlive MaaTasker after an earlier partial cleanup. Always
             // terminate them, even when MaaTasker is already null.
@@ -721,6 +726,8 @@ public class MaaProcessor
         }
         else if (maaTasker != null)
         {
+            if (!ReferenceEquals(MaaTasker, maaTasker))
+                _queueHold.ReleaseAll();
             MaaTasker = maaTasker;
             DetachScreenshotTasker();
             ResetScreencapFailureLogFlags();
@@ -2050,6 +2057,10 @@ public class MaaProcessor
         {
             jObject = new JObject();
         }
+
+        // 占位任务是 MFAA 自己的调度手段，不进遥测、识别回显与 focus 处理。
+        if (IsQueueHoldCallback(jObject))
+            return;
 
         var callbackName = jObject["name"]?.ToString() ?? string.Empty;
         var shouldTraceNodeEvent = ShouldTraceNodeEvent(jObject, args.Message);
@@ -3658,6 +3669,7 @@ public class MaaProcessor
     {
         using var logScope = BeginInstanceLogScope("ExecuteTaskQueue", "Worker");
         ResetActionFailedCount();
+        ResetQueueHoldRunState();
         Interlocked.Exchange(ref _stopCompletionMessageHandled, 0);
         Status = MFATask.MFATaskStatus.NOT_STARTED;
         CancellationTokenSource = new CancellationTokenSource();
@@ -3721,11 +3733,15 @@ public class MaaProcessor
             await TaskManager.RunTaskAsync(async () =>
             {
                 var queueResult = await ExecuteTasks(token);
+                // 完成提示、完成后操作与 --quit-after-run 都排在 Stop 之后，先让窗口收尾完成。
+                await ReleaseQueueHoldAndWaitAsync("queue_end", token);
                 Stop(Status, true, onlyStart, queueCompleted: queueResult.QueueCompleted);
             }, token: token, name: "启动任务");
         }
         finally
         {
+            // 取消、异常等提前退出的路径同样不能留下占位。
+            await ReleaseQueueHoldAndWaitAsync("queue_exit", token);
             if (!onlyStart)
             {
                 TelemetryService.FinishRun(InstanceId, Status);
@@ -3742,6 +3758,11 @@ public class MaaProcessor
         var completedWithFailures = false;
         while (!token.IsCancellationRequested && TaskQueue.TryDequeue(out var task))
         {
+            // 占位只跨「MaaFW 任务 → MaaFW 任务」的边界。进入 modal 等待或非 MaaFW 任务（前后置脚本、检查更新）前先放行，
+            // 让内核按队列结束收尾，弹窗与脚本面对的是已恢复的窗口。
+            if (_isWaitingForModal || task.Type != MFATask.MFATaskType.MAAFW)
+                await ReleaseQueueHoldAndWaitAsync(_isWaitingForModal ? "modal" : "non_maafw_task", token);
+
             // 等待 modal 弹窗确认（display=modal 时任务队列暂停推进）
             while (_isWaitingForModal && !token.IsCancellationRequested)
             {
@@ -4464,10 +4485,88 @@ public class MaaProcessor
         if (maa == null || task == null) return MaaJobStatus.Invalid;
 
         var job = maa.AppendTask(task, param ?? "{}");
+        // 先投真任务、再投它的占位、最后放行上一个占位：内核在任务之间看到的队列始终不空。
+        // 真任务没投进去时保留上一个占位，由下一个真任务或队列收尾放行。
+        if (job.Id != 0)
+            _queueHold.Replace(ShouldUseQueueHold(maa) ? PostQueueHold(maa, param) : null);
         TelemetryService.SetActiveTaskId(InstanceId, job.Id);
         return await TaskManager.RunTaskAsync(() => job.Wait(), token, (ex) => throw ex,
             name: "队列任务", catchException: true, shouldLog: false);
     }
+
+    #region 队列占位任务
+
+    // 设为 0/false/off 可在不换构建的前提下关闭占位，供现场对照。
+    private static readonly bool QueueHoldDisabledByEnvironment =
+        Environment.GetEnvironmentVariable("MFAA_QUEUE_HOLD") is { } queueHoldSwitch
+        && (queueHoldSwitch == "0"
+            || queueHoldSwitch.Equals("false", StringComparison.OrdinalIgnoreCase)
+            || queueHoldSwitch.Equals("off", StringComparison.OrdinalIgnoreCase));
+
+    private readonly QueueHoldCoordinator _queueHold = new();
+    private MaaTasker? _queueHoldTasker;
+    private int _queueHoldAnnounced;
+    private int _queueHoldPostFailureLogged;
+
+    /// <summary>
+    /// 只在 Win32 控制器启用：伪最小化随 inactive 撤销的问题只存在于 Win32；
+    /// 占位动作也只在成功注册过它的 Tasker 上投递。
+    /// </summary>
+    private bool ShouldUseQueueHold(MaaTasker maa)
+    {
+        return !QueueHoldDisabledByEnvironment
+            && OperatingSystem.IsWindows()
+            && ViewModel?.CurrentController == MaaControllerTypes.Win32
+            && ReferenceEquals(maa, _queueHoldTasker);
+    }
+
+    private QueueHoldTicket? PostQueueHold(MaaTasker maa, string? param)
+    {
+        var ticket = _queueHold.TryPost(
+            (entry, pipelineOverride) => maa.AppendTask(entry, pipelineOverride).Id,
+            () => maa.IsRunning,
+            param,
+            out var failure);
+        if (ticket == null)
+        {
+            if (Interlocked.Exchange(ref _queueHoldPostFailureLogged, 1) == 0)
+                LoggerHelper.Warning($"队列占位任务投递失败，本次任务边界按原行为收尾：{failure}");
+            return null;
+        }
+
+        if (Interlocked.Exchange(ref _queueHoldAnnounced, 1) == 0)
+            LoggerHelper.Info("队列占位已启用：任务之间保持 Tasker 运行，队列结束时统一收尾。");
+        return ticket;
+    }
+
+    private void ResetQueueHoldRunState()
+    {
+        Interlocked.Exchange(ref _queueHoldAnnounced, 0);
+        Interlocked.Exchange(ref _queueHoldPostFailureLogged, 0);
+    }
+
+    /// <summary>
+    /// 放行当前占位并等内核收尾（队列为空时含一次 inactive）。
+    /// 已取消时只放行不等待：停止流程会等内核停稳，这里再等只会推迟 IsTaskRunActive 清零、挡住紧接着的重新启动。
+    /// </summary>
+    private async Task ReleaseQueueHoldAndWaitAsync(string reason, CancellationToken token)
+    {
+        var ticket = _queueHold.ReleaseOutstanding();
+        if (ticket == null || token.IsCancellationRequested)
+            return;
+
+        if (!await QueueHoldCoordinator.WaitForExitAsync(ticket, QueueHold.ExitWaitTimeout, TimeSpan.FromMilliseconds(20), token)
+            && !token.IsCancellationRequested)
+            LoggerHelper.Warning($"放行队列占位后等待 Tasker 空闲超时（{reason}）：seq={ticket.Seq}, task_id={ticket.JobId}");
+    }
+
+    private static bool IsQueueHoldCallback(JObject details)
+    {
+        return QueueHold.IsHoldNode(details["name"]?.ToString())
+            || QueueHold.IsHoldNode(details["entry"]?.ToString());
+    }
+
+    #endregion
 
     async private Task RunScript(string str = "Prescript")
     {
@@ -4618,6 +4717,8 @@ public class MaaProcessor
                         }
 
                     }
+                    // 停止已清掉排队的占位、正在跑的占位也已自行退出；这里只清理登记。
+                    _queueHold.ReleaseOutstanding();
                     HandleStopResult(status, stopResult, onlyStart, queueCompleted, action, isUpdateRelated);
                     DispatcherHelper.PostOnMainThread(() =>
                     {
@@ -5171,6 +5272,21 @@ public class MaaProcessor
     /// <param name="tasker">MaaTasker 实例</param>
     private void RegisterCustomRecognitionsAndActions(MaaTasker tasker)
     {
+        // 队列占位不依赖 interface，注册失败时不投占位、保持原行为。
+        try
+        {
+            var registered = tasker.Resource.Register(new QueueHoldAction(_queueHold.Registry,
+                message => LoggerHelper.Warning(message)));
+            _queueHoldTasker = registered ? tasker : null;
+            if (!registered)
+                LoggerHelper.Warning("注册队列占位动作失败，本 Tasker 不使用占位任务。");
+        }
+        catch (Exception ex)
+        {
+            _queueHoldTasker = null;
+            LoggerHelper.Warning($"注册队列占位动作失败，本 Tasker 不使用占位任务：{ex.Message}");
+        }
+
         if (Interface == null) return;
 
         try
