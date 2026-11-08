@@ -20,6 +20,25 @@ public static class ConfigurationManager
     private const string DefaultConfigTemplateFileName = "config.template.json";
     private static Dictionary<string, Dictionary<string, object>> _presetSettings = new(StringComparer.OrdinalIgnoreCase);
     private static Dictionary<string, object> _templateSettings = new(StringComparer.OrdinalIgnoreCase);
+    public static BackgroundDefaults Background { get; private set; } = BackgroundDefaults.Empty;
+
+    public static bool MigrateBackgroundDefaults()
+    {
+        if (!Current.IsLoadedSuccessfully) return false;
+        var change = Background.CreateMigration(Current.Config);
+        if (change == null) return false;
+        return Current.TryCommitBackground(change);
+    }
+
+    private static (Dictionary<string, object> Values, bool Success) ReadUserConfig(string fileName)
+    {
+        var path = Path.Combine(ConfigDir, fileName + ".json");
+        if (!File.Exists(path))
+            return (new Dictionary<string, object> { [BackgroundDefaults.MigrationKey] = BackgroundDefaults.MigrationVersion }, true);
+        var values = JsonHelper.LoadJson<Dictionary<string, object>?>(path, null);
+        if (values == null) LoggerHelper.Warning($"用户配置未成功解析，禁用背景迁移和写入：{fileName}");
+        return (values ?? new Dictionary<string, object>(), values != null);
+    }
 
     private static string ConfigDir
     {
@@ -116,14 +135,15 @@ public static class ConfigurationManager
             DispatcherHelper.PostOnMainThread(() => Instances.RootViewModel.SetConfigSwitchProgress(25));
 
             var config = Configs.First(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-            var configData = await Task.Run(() => JsonHelper.LoadConfig(config.FileName, new Dictionary<string, object>()));
+            var configData = await Task.Run(() => ReadUserConfig(config.FileName));
 
             await DispatcherHelper.RunOnMainThreadAsync(() =>
             {
                 SetDefaultConfig(name);
                 ConfigName = name;
-                config.SetConfig(configData);
+                config.SetConfig(configData.Values, configData.Success);
                 Current = config;
+                MigrateBackgroundDefaults();
                 Instances.RootViewModel.SetConfigSwitchProgress(55);
             });
 
@@ -231,10 +251,17 @@ public static class ConfigurationManager
             Directory.CreateDirectory(configDir);
         TryPromoteDefaultConfigTemplate(configDir, defaultConfigPath);
         if (!File.Exists(defaultConfigPath))
-            File.WriteAllText(defaultConfigPath, "{}");
+        {
+            var initial = new Dictionary<string, object>();
+            if (!Directory.EnumerateFiles(configDir, "mfa_*.json", SearchOption.TopDirectoryOnly).Any())
+                initial[BackgroundDefaults.MigrationKey] = BackgroundDefaults.MigrationVersion;
+            if (!BackgroundConfigurationWriter.TryWrite(defaultConfigPath, initial, false, out var error))
+                throw new IOException($"无法创建初始配置：{error}");
+        }
         if (ConfigName != "Default" && !File.Exists(Path.Combine(configDir, $"mfa_{ConfigName}.json")))
             ConfigName = "Default";
-        collection.Add(Current.SetConfig(JsonHelper.LoadConfig("config", new Dictionary<string, object>())));
+        var defaultData = ReadUserConfig("config");
+        collection.Add(Current.SetConfig(defaultData.Values, defaultData.Success));
         foreach (var file in Directory.EnumerateFiles(configDir, "mfa_*.json"))
         {
             var fileName = Path.GetFileNameWithoutExtension(file);
@@ -242,9 +269,12 @@ public static class ConfigurationManager
             string nameWithoutPrefix = fileName.StartsWith("mfa_")
                 ? fileName.Substring("mfa_".Length)
                 : fileName;
-            var configs = JsonHelper.LoadConfig(fileName, new Dictionary<string, object>());
+            var configs = ReadUserConfig(fileName);
 
-            var config = new MFAConfiguration(nameWithoutPrefix, fileName, configs);
+            var config = new MFAConfiguration(nameWithoutPrefix, fileName, configs.Values)
+            {
+                IsLoadedSuccessfully = configs.Success,
+            };
 
             collection.Add(config);
         }
@@ -261,9 +291,20 @@ public static class ConfigurationManager
 
     private static void TryPromoteDefaultConfigTemplate(string configDir, string defaultConfigPath)
     {
+        Background = BackgroundDefaults.FromTemplate(new Newtonsoft.Json.Linq.JObject(), AppPaths.DataRoot,
+            message => LoggerHelper.Warning(message));
         var templatePath = Path.Combine(configDir, DefaultConfigTemplateFileName);
         if (!File.Exists(templatePath))
             return;
+
+        var template = JsonHelper.LoadJson<Newtonsoft.Json.Linq.JObject?>(templatePath, null);
+        if (template == null)
+        {
+            LoggerHelper.Warning($"背景模板无效，保留文件并使用内置默认：{DefaultConfigTemplateFileName}");
+            return;
+        }
+        Background = BackgroundDefaults.FromTemplate(template, AppPaths.DataRoot, message => LoggerHelper.Warning(message));
+        LoggerHelper.Info($"已读取持续背景默认：[{string.Join(", ", Background.TemplateKeys)}]");
 
         // 只有应用实际使用的正式配置文件才会阻止预设接管；同目录下其它
         // 非 mfa 配置（例如 maa_option.json 或资源附带的 JSON）不应影响首次初始化。
@@ -278,23 +319,26 @@ public static class ConfigurationManager
 
         if (hasExistingConfig)
         {
-            LoggerHelper.Info($"检测到已有用户配置，忽略临时预设配置：{DefaultConfigTemplateFileName}");
-            return;
-        }
-
-        var templateConfig = JsonHelper.LoadJson<Dictionary<string, object>?>(templatePath, null);
-        if (templateConfig == null)
-        {
-            LoggerHelper.Warning($"临时预设配置无效，已忽略：{DefaultConfigTemplateFileName}");
+            LoggerHelper.Info("检测到已有用户配置，只读取持续背景默认，不重新应用首装种子。");
             return;
         }
 
         try
         {
+            var templateConfig = template.ToObject<Dictionary<string, object>>() ?? new();
             templateConfig.TryGetValue("PresetSettings", out var presetSettings);
             templateConfig.Remove("PresetSettings");
+            foreach (var key in templateConfig.Keys.Where(key => BackgroundDefaults.IsBackgroundKey(key)
+                         || BackgroundDefaults.IsMetadataKey(key)).ToArray())
+                templateConfig.Remove(key);
             _templateSettings = new Dictionary<string, object>(templateConfig, StringComparer.OrdinalIgnoreCase);
-            JsonHelper.SaveJson(defaultConfigPath, templateConfig);
+            templateConfig[BackgroundDefaults.MigrationKey] = BackgroundDefaults.MigrationVersion;
+            if (!BackgroundConfigurationWriter.TryWrite(defaultConfigPath, templateConfig, false, out var error))
+            {
+                _templateSettings.Clear();
+                LoggerHelper.Error($"首装配置保存失败，保留模板：{error}");
+                return;
+            }
 
             if (presetSettings is not null)
             {
@@ -306,8 +350,7 @@ public static class ConfigurationManager
                         ?? new(StringComparer.OrdinalIgnoreCase);
             }
 
-            File.Delete(templatePath);
-            LoggerHelper.Info($"已将临时预设配置转换为默认配置：{DefaultConfigTemplateFileName} -> config.json");
+            LoggerHelper.Info($"已写入首装种子并保留背景模板：[{string.Join(", ", _templateSettings.Keys)}]");
         }
         catch (Exception ex)
         {
@@ -328,7 +371,8 @@ public static class ConfigurationManager
     {
         var configPath = ConfigDir;
         var newConfigPath = Path.Combine(configPath, $"{name}.json");
-        var newConfig = new MFAConfiguration(name.Equals("config", StringComparison.OrdinalIgnoreCase) ? "Default" : name, name.Equals("config", StringComparison.OrdinalIgnoreCase) ? name : $"mfa_{name}", new Dictionary<string, object>());
+        var newConfig = new MFAConfiguration(name.Equals("config", StringComparison.OrdinalIgnoreCase) ? "Default" : name, name.Equals("config", StringComparison.OrdinalIgnoreCase) ? name : $"mfa_{name}",
+            new Dictionary<string, object> { [BackgroundDefaults.MigrationKey] = BackgroundDefaults.MigrationVersion });
         Configs.Add(newConfig);
         return newConfig;
     }

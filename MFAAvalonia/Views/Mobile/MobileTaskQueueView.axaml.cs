@@ -311,35 +311,22 @@ public partial class MobileTaskQueueView : UserControl
 
     private void SaveConfiguration()
     {
-        if (ViewModel == null)
-            return;
-
-        var config = ViewModel.Processor.InstanceConfiguration;
-        config.SetValue(ConfigurationKeys.TaskItems,
-            ViewModel.TaskItemViewModels
-                .Where(item => !item.IsResourceOptionItem)
-                .Select(item => item.InterfaceItem)
-                .ToList());
-
-        var resourceItems = ViewModel.TaskItemViewModels
-            .Where(item => item.IsResourceOptionItem && item.ResourceItem?.SelectOptions != null)
-            .ToList();
-        var global = resourceItems.FirstOrDefault(item => item.ResourceItem?.Name == "__GlobalOption__");
-        if (global?.ResourceItem?.SelectOptions != null)
-            config.SetValue(ConfigurationKeys.GlobalOptionItems, global.ResourceItem.SelectOptions);
-
-        const string controllerPrefix = "__ControllerOption__";
-        var controllerOptions = resourceItems
-            .Where(item => item.ResourceItem?.Name?.StartsWith(controllerPrefix) == true)
-            .ToDictionary(item => item.ResourceItem!.Name![controllerPrefix.Length..], item => item.ResourceItem!.SelectOptions!);
-        if (controllerOptions.Count > 0)
-            config.SetValue(ConfigurationKeys.ControllerOptionItems, controllerOptions);
-
-        var resourceOptions = resourceItems
-            .Where(item => item.ResourceItem?.Name != "__GlobalOption__"
-                           && item.ResourceItem?.Name?.StartsWith(controllerPrefix) != true)
-            .ToDictionary(item => item.ResourceItem!.Name ?? string.Empty, item => item.ResourceItem!.SelectOptions!);
-        config.SetValue(ConfigurationKeys.ResourceOptionItems, resourceOptions);
+        if (ViewModel?.TrySaveTaskItems() != false || _activeOptionItem == null) return;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_activeOptionItem == null || ViewModel == null) return;
+            if (!ViewModel.TaskItemViewModels.Contains(_activeOptionItem))
+            {
+                ShowTaskList();
+                return;
+            }
+            MobileOptionPanel.Children.Clear();
+            var generator = new TaskOptionGenerator(ViewModel, SaveConfiguration);
+            if (_activeOptionItem.IsResourceOptionItem)
+                generator.GenerateResourceOptionPanelContent(MobileOptionPanel, _activeOptionItem);
+            else
+                generator.GeneratePanelContent(MobileOptionPanel, _activeOptionItem);
+        }, DispatcherPriority.Background);
     }
 
     private void MoveTaskUp(object? sender, RoutedEventArgs e) => MoveTask(sender, -1);
@@ -367,8 +354,10 @@ public partial class MobileTaskQueueView : UserControl
         if (targetIndex < 0 || targetIndex >= items.Count)
             return;
 
-        items.Move(currentIndex, targetIndex);
-        SaveConfiguration();
+        var candidate = items.ToList();
+        candidate.RemoveAt(currentIndex);
+        candidate.Insert(targetIndex, item);
+        viewModel.TryApplyTaskEdit(candidate);
     }
 
     private void TaskItem_OnContextRequested(object? sender, ContextRequestedEventArgs e)
@@ -459,12 +448,13 @@ public partial class MobileTaskQueueView : UserControl
             return;
 
         var output = source.Clone();
-        output.InterfaceItem.Option?.ForEach(option => TaskLoader.SetDefaultOptionValue(MaaProcessor.Interface, option));
+        output.InterfaceItem.Option?.ForEach(option => TaskLoader.PrepareOption(MaaProcessor.Interface, option));
         output.OwnerViewModel = viewModel;
         viewModel.RefreshTaskSupportForCurrentContext(output);
         var index = viewModel.TaskItemViewModels.IndexOf(selected);
-        viewModel.TaskItemViewModels.Insert(index >= 0 ? index + 1 : viewModel.TaskItemViewModels.Count, output);
-        SaveConfiguration();
+        var candidate = viewModel.TaskItemViewModels.ToList();
+        candidate.Insert(index >= 0 ? index + 1 : candidate.Count, output);
+        viewModel.TryApplyTaskEdit(candidate);
     }
 
     private void EditTaskRemark(object? sender, RoutedEventArgs e)
@@ -478,10 +468,12 @@ public partial class MobileTaskQueueView : UserControl
             .WithViewModel(dialog => new TaskRemarkDialogViewModel(dialog,
                 interfaceItem.DisplayNameOverride, interfaceItem.Remark, (displayName, remark) =>
                 {
-                    interfaceItem.DisplayNameOverride = string.IsNullOrWhiteSpace(displayName) ? null : displayName;
-                    interfaceItem.Remark = string.IsNullOrWhiteSpace(remark) ? null : remark;
-                    item.RefreshDisplayName();
-                    SaveConfiguration();
+                    var edited = item.Clone();
+                    edited.CopyRuntimeStateFrom(item);
+                    edited.InterfaceItem!.DisplayNameOverride = string.IsNullOrWhiteSpace(displayName) ? null : displayName;
+                    edited.InterfaceItem.Remark = string.IsNullOrWhiteSpace(remark) ? null : remark;
+                    edited.RefreshDisplayName();
+                    viewModel.TryApplyTaskEdit(viewModel.TaskItemViewModels.Select(task => ReferenceEquals(task, item) ? edited : task));
                 }))
             .TryShow();
     }
@@ -491,8 +483,8 @@ public partial class MobileTaskQueueView : UserControl
         if (GetMenuItem(sender) is not { IsResourceOptionItem: false } item || ViewModel is not { } viewModel)
             return;
 
-        viewModel.TaskItemViewModels.Remove(item);
-        SaveConfiguration();
+        viewModel.TryApplyTaskEdit(viewModel.TaskItemViewModels.Where(task => !ReferenceEquals(task, item)),
+            deletedName: item.InterfaceItem?.Name);
     }
 
     private async Task RefreshControllerPreviewAsync(MaaProcessor processor, CancellationToken token)

@@ -1522,6 +1522,9 @@
     <data name="Reset" xml:space="preserve">
         <value>重置</value>
     </data>
+    <data name="RestoreDefaultBackground" xml:space="preserve">
+        <value>恢复默认背景</value>
+    </data>
     <data name="BackgroundImageTitle" xml:space="preserve">
             <value>背景图片</value>
     </data>
@@ -2307,9 +2310,24 @@
   <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>后台模式 · 虚拟屏</value></data>
   <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>前台模式 · 当前屏</value></data>
   <data name="CurrentScreen" xml:space="preserve"><value>当前屏幕</value></data>
-  <data name="RestoreInputResourceDefault" xml:space="preserve"><value>恢复此项资源默认值</value></data>
-  <data name="RestoreGroupResourceDefaults" xml:space="preserve"><value>恢复本组资源默认值</value></data>
-  <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>将“{0}”中 {1} 项已修改的内容恢复为资源默认值。此操作使用资源声明的默认值，不是预设值；未声明默认值的字段和子选项设置会保留。</value></data>
+  <data name="RestoreInputResourceDefault" xml:space="preserve"><value>恢复此项默认值</value></data>
+  <data name="RestoreGroupResourceDefaults" xml:space="preserve"><value>恢复本组默认值</value></data>
+  <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>将“{0}”中 {1} 项恢复为默认值，之后随资源的默认设置变化。默认值不是预设方案中的值；子选项的设置会保留。</value></data>
   <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>恢复本组</value></data>
+  <data name="ResetTasksToPreset" xml:space="preserve"><value>重置为预设“{0}”</value></data>
   <data name="ResumeInterruptedQueue" xml:space="preserve"><value>重新启动队列时，从上次未完成的任务继续（自动跳过已成功的任务）</value></data>
+  <data name="TaskConfigurationTitle" xml:space="preserve"><value>任务配置</value></data>
+  <data name="TaskCleanupPaused" xml:space="preserve"><value>较多任务未在资源中找到，已暂停自动清理，请检查资源包。</value></data>
+  <data name="TaskMissingFromResource" xml:space="preserve"><value>资源中已没有这个任务；下次启动软件时若仍缺失，将自动移除。</value></data>
+  <data name="TaskConfigurationReadFailed" xml:space="preserve"><value>任务配置读取失败，已保留原配置。详情请查看日志。</value></data>
+  <data name="TaskConfigurationDefinitionsNotLoaded" xml:space="preserve"><value>资源任务定义尚未完整加载，已保留原任务配置。详情请查看日志。</value></data>
+  <data name="TaskConfigurationDefinitionsInvalid" xml:space="preserve"><value>资源任务定义无效，已保留原任务配置。请检查资源包，详情请查看日志。</value></data>
+  <data name="TaskConfigurationSaveFailed" xml:space="preserve"><value>任务配置保存失败，已保留原配置。详情请查看日志。</value></data>
+  <data name="TaskConfigurationInstanceDeleted" xml:space="preserve"><value>实例已删除，无法保存任务配置。详情请查看日志。</value></data>
+  <data name="TaskConfigurationSyncFailed" xml:space="preserve"><value>任务配置同步失败，已阻止任务执行。详情请查看日志。</value></data>
+  <data name="OptionCaseDefinitionInvalid" xml:space="preserve"><value>此选项的可选项定义缺失或名称重复，请检查资源包。</value></data>
+  <data name="OptionSavedSelectionInvalid" xml:space="preserve"><value>之前保存的选择已失效，请重新选择。</value></data>
+  <data name="OptionDefaultCaseUnavailable" xml:space="preserve"><value>资源指定的默认选项不存在，请检查资源包或重新选择。</value></data>
+  <data name="TaskExecutionBlockedByOptions" xml:space="preserve"><value>全局、资源或控制器选项无效，已阻止执行任务：{0}。请在选项面板重新选择或修正输入。</value></data>
+  <data name="TaskSkippedInvalidOptions" xml:space="preserve"><value>任务选项无效，已跳过：{0}。请在选项面板重新选择或修正输入。</value></data>
 </root>

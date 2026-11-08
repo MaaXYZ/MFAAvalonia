@@ -1,4 +1,4 @@
-﻿using Avalonia.Controls;
+using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
 using Avalonia.Media;
 using MaaFramework.Binding;
@@ -448,12 +448,6 @@ public class MaaProcessor
     {
         CommentHandling = CommentHandling.Ignore
     };
-
-    private static Dictionary<string, JToken> DeserializePipelineOverrideJsonc(string json)
-    {
-        var token = JToken.Parse(json, JsoncLoadSettings);
-        return token.ToObject<Dictionary<string, JToken>>() ?? new Dictionary<string, JToken>();
-    }
 
     /// <summary>
     /// 获取 interface 文件路径，优先返回 .jsonc，其次 .json
@@ -1088,13 +1082,11 @@ public class MaaProcessor
 
     private MaaInterface.MaaResourceController? GetCurrentInterfaceController()
     {
-        var controllerType = ViewModel?.CurrentController ?? MaaControllerTypes.Adb;
-        var controllerName = ViewModel?.GetCurrentControllerName();
-        return Interface?.Controller?.FirstOrDefault(controller =>
-                   !string.IsNullOrWhiteSpace(controllerName)
-                   && string.Equals(controller.Name, controllerName, StringComparison.OrdinalIgnoreCase))
-               ?? Interface?.Controller?.FirstOrDefault(controller =>
-                   string.Equals(controller.Type, controllerType.ToJsonKey(), StringComparison.OrdinalIgnoreCase));
+        var controllerType = ViewModel?.CurrentController
+            ?? InstanceConfiguration.GetValue(ConfigurationKeys.CurrentController, MaaControllerTypes.Adb);
+        return ViewModel?.GetSelectedControllerDefinition(controllerType)
+            ?? MaaInterfaceActivationHelper.ResolveControllerDefinition(Interface?.Controller, controllerType,
+                InstanceConfiguration.GetValue(ConfigurationKeys.CurrentControllerName, string.Empty));
     }
 
     private bool UseSeparateScreenshotTasker =>
@@ -2720,10 +2712,7 @@ public class MaaProcessor
     private async Task<bool> RunPreTasksAsync(CancellationToken token)
     {
         if (Interface?.PreTask is not { Count: > 0 }) return false;
-        var controllerName = ViewModel?.GetCurrentControllerName()
-            ?? MaaInterfaceActivationHelper.ResolveControllerName(
-                Interface, ViewModel?.CurrentController ?? MaaControllerTypes.None)
-            ?? ViewModel?.CurrentController.ToJsonKey();
+        var controllerName = GetCurrentControllerNameForOptionMerge();
         var resourceName = ViewModel?.CurrentResource;
         var executed = false;
 
@@ -2772,7 +2761,6 @@ public class MaaProcessor
 
     private string BuildPreTaskOptionJson(IEnumerable<string> optionNames, string? controllerName, string? resourceName)
     {
-        var result = new JObject();
         var selected = ViewModel?.TaskItemViewModels
             .SelectMany(item => item.IsResourceOptionItem
                 ? item.ResourceItem?.SelectOptions ?? []
@@ -2782,30 +2770,7 @@ public class MaaProcessor
             .ToDictionary(group => group.Key, group => group.First())
             ?? new Dictionary<string, MaaInterface.MaaInterfaceSelectOption>();
 
-        foreach (var name in optionNames)
-        {
-            if (Interface?.Option?.TryGetValue(name, out var definition) != true) continue;
-            if (!MaaInterfaceActivationHelper.IsOptionApplicable(Interface, definition, controllerName, resourceName)) continue;
-            selected.TryGetValue(name, out var value);
-            if (definition.IsCheckbox)
-                result[name] = JToken.FromObject(value?.SelectedCases ?? definition.DefaultCases ?? []);
-            else if (definition.IsInput || definition.IsHotkey)
-            {
-                var data = value?.Data ?? new Dictionary<string, string?>();
-                var defaults = definition.IsHotkey
-                    ? definition.Hotkeys?.ToDictionary(x => x.Name ?? string.Empty, x => x.Default ?? string.Empty)
-                    : definition.Inputs?.ToDictionary(x => x.Name ?? string.Empty, x => x.Default ?? string.Empty);
-                result[name] = JObject.FromObject(defaults == null
-                    ? data
-                    : defaults.Concat(data).GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.Last().Value));
-            }
-            else
-            {
-                var index = value?.Index ?? Math.Max(0, definition.Cases?.FindIndex(x => x.Name == definition.DefaultCase) ?? 0);
-                result[name] = definition.Cases?.ElementAtOrDefault(index)?.Name ?? definition.DefaultCase ?? string.Empty;
-            }
-        }
-        return result.ToString(Formatting.None);
+        return OptionParameterMerger.BuildPreTaskOptionJson(Interface, selected, optionNames, controllerName, resourceName);
     }
 
     public bool InitializeData(Collection<DragItemViewModel>? dragItem = null)
@@ -2855,12 +2820,8 @@ public class MaaProcessor
         if (!string.IsNullOrWhiteSpace(customTitle) || !string.IsNullOrWhiteSpace(fallback))
             Instances.RootViewModel.ShowCustomTitleAndFallBack(customTitle, fallback);
 
-        if (Interface != null)
-        {
-            AppendVersionLog(Interface.Version);
-            TasksSource.Clear();
-            LoadTasks(Interface.Task ?? new List<MaaInterface.MaaInterfaceTask>(), dragItem);
-        }
+        if (Interface != null) AppendVersionLog(Interface.Version);
+        if (!LoadTasks(Interface?.Task ?? new List<MaaInterface.MaaInterfaceTask>(), dragItem)) return false;
         return LoadTask();
     }
 
@@ -3128,8 +3089,7 @@ public class MaaProcessor
         if (ViewModel?.CurrentController != MaaControllerTypes.PlayCover)
             return;
 
-        var controller = Interface?.Controller?.FirstOrDefault(c =>
-            c.Type?.Equals("playcover", StringComparison.OrdinalIgnoreCase) == true);
+        var controller = GetCurrentInterfaceController();
 
         if (!string.IsNullOrWhiteSpace(controller?.PlayCover?.Uuid))
         {
@@ -3189,10 +3149,11 @@ public class MaaProcessor
     public const string NEW_SEPARATOR = "<|||>";
     public const string OLD_SEPARATOR = ":";
 
-    private void LoadTasks(List<MaaInterface.MaaInterfaceTask> tasks, IList<DragItemViewModel>? oldDrags = null)
+    private bool LoadTasks(List<MaaInterface.MaaInterfaceTask> tasks, IList<DragItemViewModel>? oldDrags = null)
     {
         _taskLoader ??= new TaskLoader(Interface, ViewModel!);
-        _taskLoader.LoadTasks(tasks, TasksSource, ref FirstTask, oldDrags);
+        _taskLoader.UpdateInterface(Interface);
+        return _taskLoader.LoadTasks(tasks, TasksSource, ref FirstTask, oldDrags);
     }
 
     private void ResetActionFailedCount()
@@ -3520,7 +3481,21 @@ public class MaaProcessor
             }
             else
             {
-                tasks = FilterExecutableTasks(dragItemViewModels, ignoreCheckedState);
+                // Reloading may replace row objects and resource entries. Rebind each requested
+                // occurrence, keeping intentionally duplicated tasks distinct without new IDs.
+                var fresh = ViewModel?.TaskItemViewModels.Where(item => !item.IsResourceOptionItem).ToList() ?? [];
+                var rebound = new List<DragItemViewModel>();
+                foreach (var requested in dragItemViewModels)
+                {
+                    var name = requested.InterfaceItem?.Name;
+                    var oldMatches = currentTasks.Where(item => !item.IsResourceOptionItem
+                        && item.InterfaceItem?.Name == name).ToList();
+                    var occurrence = oldMatches.IndexOf(requested);
+                    var replacement = occurrence >= 0
+                        ? fresh.Where(item => item.InterfaceItem?.Name == name).ElementAtOrDefault(occurrence) : null;
+                    if (replacement != null) rebound.Add(replacement);
+                }
+                tasks = FilterExecutableTasks(rebound, ignoreCheckedState);
             }
 
             _ = RunTaskChainAsync(tasks, onlyStart, checkUpdate, retainCompletedStates, retainedCompletedTasks);
@@ -3579,28 +3554,62 @@ public class MaaProcessor
 
     private List<DragItemViewModel> FilterExecutableTasks(IEnumerable<DragItemViewModel>? source, bool ignoreCheckedState = false)
     {
+        var candidates = source?.ToList() ?? [];
         var currentResourceName = ViewModel?.CurrentResource;
         var currentControllerName = ViewModel?.GetCurrentControllerName();
 
-        return source?
-                .Where(task =>
-                {
-                    if (task.IsResourceOptionItem)
-                    {
-                        return false;
-                    }
-
-                    var isSupported = task.SupportsResource(currentResourceName)
-                        && task.SupportsController(currentControllerName);
-
-                    task.IsResourceSupported = task.SupportsResource(currentResourceName);
-                    task.IsControllerSupported = task.SupportsController(currentControllerName);
-                    task.IsTaskSupported = isSupported;
-
-                    return (ignoreCheckedState || task.IsChecked || task.IsCheckedWithNull == null) && isSupported;
-                })
-                .ToList()
-            ?? new List<DragItemViewModel>();
+        if (ViewModel?.IsTaskConfigurationValid != true || !InstanceConfiguration.IsTaskStateValid)
+            return [];
+        bool Applicable(MaaInterface.MaaInterfaceOption definition) =>
+            MaaInterfaceActivationHelper.IsOptionApplicable(Interface, definition, currentControllerName, currentResourceName);
+        bool Available(DragItemViewModel task)
+        {
+            var model = task.InterfaceItem;
+            var exists = model?.Entry != null && MFAAvalonia.ViewModels.UsersControls.Settings.AddTaskDialogViewModel.SpecialActionNames.Contains(model.Entry)
+                || Interface?.Task?.Any(definition => definition.Name == model?.Name) == true;
+            return exists && task.IsDefinitionAvailable
+                && task.SupportsResource(currentResourceName) && task.SupportsController(currentControllerName);
+        }
+        static string? InputError(MaaInterface.MaaInterfaceOption definition, MaaInterface.MaaInterfaceSelectOption value)
+        {
+            if (!definition.IsInput) return null;
+            var result = definition.ValidateAllInputs(value.Data);
+            return result.IsValid ? null : result.ErrorMessage;
+        }
+        if (Interface?.Option != null && (ViewModel?.TaskItemViewModels ?? [])
+            .Where(item => item.IsResourceOptionItem)
+            .Any(item => !OptionSelection.ValidateActive(Interface.Option, item.ResourceItem?.SelectOptions, out _, Applicable, InputError)))
+        {
+            LoggerHelper.Warning("全局或资源选项无效，已阻止任务执行，请在选项面板重新选择。");
+            var blockedNames = candidates.Where(task => !task.IsResourceOptionItem
+                    && Available(task)
+                    && (ignoreCheckedState || task.IsChecked || task.IsCheckedWithNull == null))
+                .Select(task => task.Name).ToList();
+            if (blockedNames.Count > 0)
+                AddLogByKey(LangKeys.TaskExecutionBlockedByOptions, BrushHelper.ConvertToBrush("DarkGoldenrod"),
+                    false, false, string.Join(", ", blockedNames));
+            return [];
+        }
+        return candidates.Where(task =>
+        {
+            if (task.IsResourceOptionItem) return false;
+            var model = task.InterfaceItem;
+            var isSupported = Available(task);
+            task.IsResourceSupported = task.SupportsResource(currentResourceName);
+            task.IsControllerSupported = task.SupportsController(currentControllerName);
+            task.IsTaskSupported = isSupported;
+            task.HasValidationError = false;
+            if (Interface?.Option != null && !OptionSelection.ValidateActive(Interface.Option, model?.Option, out _, Applicable, InputError))
+            {
+                task.HasValidationError = true;
+                LoggerHelper.Warning($"任务选项无效，已跳过：{model?.Name}");
+                if (isSupported && (ignoreCheckedState || task.IsChecked || task.IsCheckedWithNull == null))
+                    AddLogByKey(LangKeys.TaskSkippedInvalidOptions, BrushHelper.ConvertToBrush("DarkGoldenrod"),
+                        false, false, task.Name);
+                return false;
+            }
+            return (ignoreCheckedState || task.IsChecked || task.IsCheckedWithNull == null) && isSupported;
+        }).ToList();
     }
 
     /// <summary>
@@ -3790,237 +3799,28 @@ public class MaaProcessor
         public long RunId { get; set; }
     }
 
-    private void UpdateTaskDictionary(ref MaaToken taskModels,
-        List<MaaInterface.MaaInterfaceSelectOption>? options,
+    private static void MergeAdvancedParams(MaaToken taskModels,
         List<MaaInterface.MaaInterfaceSelectAdvanced>? advanceds)
     {
-        // Instance.NodeDictionary = Instance.NodeDictionary.MergeMaaNodes(taskModels);
-        if (options != null)
-        {
-            ProcessOptions(ref taskModels, options);
-        }
+        if (advanceds == null)
+            return;
 
-        if (advanceds != null)
+        foreach (var selectAdvanced in advanceds)
         {
-            foreach (var selectAdvanced in advanceds)
+            if (Interface?.Advanced?.TryGetValue(selectAdvanced.Name ?? string.Empty, out var interfaceAdvanced) == true)
             {
-                if (Interface?.Advanced?.TryGetValue(selectAdvanced.Name ?? string.Empty, out var interfaceAdvanced) == true)
-                {
-                    var inputValues = selectAdvanced.Data
-                        .Where(kv => kv.Value != null)
-                        .ToDictionary(kv => kv.Key, kv => kv.Value!);
-                    selectAdvanced.PipelineOverride = interfaceAdvanced.GenerateProcessedPipeline(inputValues);
-                }
-
-                if (!string.IsNullOrWhiteSpace(selectAdvanced.PipelineOverride) && selectAdvanced.PipelineOverride != "{}")
-                {
-                    var param = DeserializePipelineOverrideJsonc(selectAdvanced.PipelineOverride);
-                    //       Instance.NodeDictionary = Instance.NodeDictionary.MergeMaaNodes(param);
-                    taskModels.Merge(param);
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// 处理 option 列表（支持 select/switch/input 类型及子配置项）
-    /// </summary>
-    /// <param name="taskModels">任务参数</param>
-    /// <param name="allOptions">任务的所有 option 列表</param>
-    /// <param name="optionNamesToProcess">要处理的 option 名称列表（null 表示处理所有直接引用的 options）</param>
-    /// <param name="processedOptions">已处理的 option 名称（避免重复处理）</param>
-    private void ProcessOptions(
-        ref MaaToken taskModels,
-        List<MaaInterface.MaaInterfaceSelectOption> allOptions,
-        List<string>? optionNamesToProcess = null,
-        HashSet<string>? processedOptions = null)
-    {
-        processedOptions ??= new HashSet<string>();
-        var currentControllerName = GetCurrentControllerNameForOptionMerge();
-        var currentResourceName = ViewModel?.CurrentResource;
-
-        // 确定要处理的 options
-        IEnumerable<MaaInterface.MaaInterfaceSelectOption> optionsToProcess;
-
-        if (optionNamesToProcess == null)
-        {
-            // 根级调用：处理所有 options（按顺序）
-            optionsToProcess = allOptions;
-        }
-        else
-        {
-            // 递归调用：只处理指定名称的 options
-            optionsToProcess = allOptions.Where(o => optionNamesToProcess.Contains(o.Name ?? string.Empty));
-        }
-
-        foreach (var selectOption in optionsToProcess)
-        {
-            var optionName = selectOption.Name ?? string.Empty;
-
-            // 避免重复处理同一个 option
-            if (processedOptions.Contains(optionName))
-                continue;
-
-            processedOptions.Add(optionName);
-
-            if (Interface?.Option?.TryGetValue(optionName, out var interfaceOption) != true)
-                continue;
-
-            // v2.3.1: 不适用于当前 controller/resource 的 option 视为未激活，
-            // 它自身及其子 option 都不参与 pipeline_override 合并。
-            if (!MaaInterfaceActivationHelper.IsOptionApplicable(
-                    Interface,
-                    interfaceOption,
-                    currentControllerName,
-                    currentResourceName))
-            {
-                continue;
+                var inputValues = selectAdvanced.Data
+                    .Where(kv => kv.Value != null)
+                    .ToDictionary(kv => kv.Key, kv => kv.Value!);
+                selectAdvanced.PipelineOverride = interfaceAdvanced.GenerateProcessedPipeline(inputValues);
             }
 
-            // 处理 checkbox 类型（多选，任务 10）
-            if (interfaceOption.IsCheckbox && interfaceOption.Cases != null)
+            if (!string.IsNullOrWhiteSpace(selectAdvanced.PipelineOverride) && selectAdvanced.PipelineOverride != "{}")
             {
-                var selectedCases = selectOption.SelectedCases ?? new List<string>();
-                // 按 cases 定义顺序合并所有选中 case 的 pipeline_override
-                foreach (var caseItem in interfaceOption.Cases)
-                {
-                    if (caseItem.Name != null && selectedCases.Contains(caseItem.Name))
-                    {
-                        if (caseItem.PipelineOverride != null)
-                        {
-                            taskModels.Merge(caseItem.PipelineOverride);
-                        }
-
-                        // 递归处理被选中 case 的子配置项
-                        if (caseItem.Option != null && caseItem.Option.Count > 0)
-                        {
-                            var unprocessedSubOptionNames = caseItem.Option
-                                .Where(name => !processedOptions.Contains(name))
-                                .ToList();
-
-                            if (unprocessedSubOptionNames.Count > 0 && selectOption.SubOptions != null)
-                            {
-                                var subOptionsToProcess = selectOption.SubOptions
-                                    .Where(s => unprocessedSubOptionNames.Contains(s.Name ?? string.Empty))
-                                    .ToList();
-
-                                if (subOptionsToProcess.Count > 0)
-                                {
-                                    ProcessOptions(ref taskModels, subOptionsToProcess, unprocessedSubOptionNames, processedOptions);
-                                }
-                            }
-
-                            var missingSubOptionNames = unprocessedSubOptionNames
-                                .Where(name => !processedOptions.Contains(name))
-                                .ToList();
-
-                            if (missingSubOptionNames.Count > 0)
-                            {
-                                var defaultSubOptions = CreateDefaultSelectOptions(missingSubOptionNames);
-                                if (defaultSubOptions.Count > 0)
-                                {
-                                    ProcessOptions(ref taskModels, defaultSubOptions, missingSubOptionNames, processedOptions);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // 处理 input 类型
-            else if (interfaceOption.IsInput)
-            {
-                if ((selectOption.Data == null || selectOption.Data.Count == 0) && interfaceOption.Inputs is { Count: > 0 })
-                {
-                    selectOption.Data = interfaceOption.Inputs
-                        .Where(input => !string.IsNullOrEmpty(input.Name))
-                        .ToDictionary(input => input.Name!, input => input.Default ?? string.Empty);
-                }
-
-                // 运行前始终按最新 Data 重建，避免 UI 某些路径未刷新缓存时继续使用旧值。
-                string? pipelineOverride = selectOption.PipelineOverride;
-                if (selectOption.Data != null && interfaceOption.PipelineOverride != null)
-                {
-                    pipelineOverride = interfaceOption.GenerateProcessedPipeline(
-                        selectOption.Data.Where(kv => kv.Value != null)
-                            .ToDictionary(kv => kv.Key, kv => kv.Value!));
-                    selectOption.PipelineOverride = pipelineOverride;
-                }
-
-                if (!string.IsNullOrWhiteSpace(pipelineOverride) && pipelineOverride != "{}")
-                {
-                    var param = DeserializePipelineOverrideJsonc(pipelineOverride);
-                    taskModels.Merge(param);
-                }
-            }
-            // 处理 select/switch 类型
-            else if (selectOption.Index is int index
-                     && interfaceOption.Cases is { } cases
-                     && index >= 0
-                     && index < cases.Count)
-            {
-                var selectedCase = cases[index];
-
-                // 合并当前 case 的 pipeline_override
-                if (selectedCase.PipelineOverride != null)
-                {
-                    taskModels.Merge(selectedCase.PipelineOverride);
-                }
-
-                // 只递归处理被选中 case 的子配置项（且未被处理过的）
-                if (selectedCase.Option != null && selectedCase.Option.Count > 0)
-                {
-                    // 过滤掉已处理的
-                    var unprocessedSubOptionNames = selectedCase.Option
-                        .Where(name => !processedOptions.Contains(name))
-                        .ToList();
-
-                    if (unprocessedSubOptionNames.Count > 0 && selectOption.SubOptions != null)
-                    {
-                        // 从 selectOption.SubOptions 中获取子选项（已保存的用户选择值）
-                        var subOptionsToProcess = selectOption.SubOptions
-                            .Where(s => unprocessedSubOptionNames.Contains(s.Name ?? string.Empty))
-                            .ToList();
-
-                        if (subOptionsToProcess.Count > 0)
-                        {
-                            ProcessOptions(ref taskModels, subOptionsToProcess, unprocessedSubOptionNames, processedOptions);
-                        }
-                    }
-
-                    var missingSubOptionNames = unprocessedSubOptionNames
-                        .Where(name => !processedOptions.Contains(name))
-                        .ToList();
-
-                    if (missingSubOptionNames.Count > 0)
-                    {
-                        var defaultSubOptions = CreateDefaultSelectOptions(missingSubOptionNames);
-                        if (defaultSubOptions.Count > 0)
-                        {
-                            ProcessOptions(ref taskModels, defaultSubOptions, missingSubOptionNames, processedOptions);
-                        }
-                    }
-                }
+                var param = OptionParameterMerger.DeserializePipelineOverrideJsonc(selectAdvanced.PipelineOverride);
+                taskModels.Merge(param);
             }
         }
-    }
-
-    private List<MaaInterface.MaaInterfaceSelectOption> CreateDefaultSelectOptions(IEnumerable<string> optionNames)
-    {
-        var result = new List<MaaInterface.MaaInterfaceSelectOption>();
-        foreach (var optionName in optionNames.Distinct())
-        {
-            if (string.IsNullOrWhiteSpace(optionName) || Interface?.Option?.ContainsKey(optionName) != true)
-                continue;
-
-            var option = new MaaInterface.MaaInterfaceSelectOption
-            {
-                Name = optionName
-            };
-            TaskLoader.SetDefaultOptionValue(Interface, option);
-            result.Add(option);
-        }
-
-        return result;
     }
 
     private string SerializeTaskParams(MaaToken taskModels)
@@ -4053,17 +3853,13 @@ public class MaaProcessor
         })).ToMaaToken();
 
         // PI v2.3.0 合并顺序：global_option < resource.option < controller.option < task.option
-        // 1. 合并全局选项（global_option，最低优先级）
-        MergeGlobalOptionParams(ref taskModels);
-
-        // 2. 合并当前资源的全局选项参数（resource.option）
-        MergeResourceOptionParams(ref taskModels);
-
-        // 3. 合并当前控制器的选项参数（controller.option）
-        MergeControllerOptionParams(ref taskModels);
-
-        // 4. 合并任务自身的 option（task.option，最高优先级）
-        UpdateTaskDictionary(ref taskModels, task.InterfaceItem?.Option, task.InterfaceItem?.Advanced);
+        OptionParameterMerger.MergeScopes(taskModels, Interface,
+            GetCurrentControllerNameForOptionMerge(), ViewModel?.CurrentResource,
+            Interface?.GlobalSelectOptions,
+            GetCurrentResourceSelectOptions(),
+            GetCurrentInterfaceController()?.SelectOptions,
+            task.InterfaceItem?.Option);
+        MergeAdvancedParams(taskModels, task.InterfaceItem?.Advanced);
 
         var taskParams = SerializeTaskParams(taskModels);
         // var settings = new JsonSerializerSettings
@@ -4093,21 +3889,9 @@ public class MaaProcessor
     }
 
     /// <summary>
-    /// 合并全局选项参数（global_option，最低优先级）
+    /// 当前资源的 resource.option 取值：优先任务列表中资源设置项的用户选择
     /// </summary>
-    private void MergeGlobalOptionParams(ref MaaToken taskModels)
-    {
-        var globalSelectOptions = Interface?.GlobalSelectOptions;
-        if (globalSelectOptions == null || globalSelectOptions.Count == 0)
-            return;
-
-        ProcessOptions(ref taskModels, globalSelectOptions);
-    }
-
-    /// <summary>
-    /// 合并当前资源的全局选项参数到任务参数中（resource.option）
-    /// </summary>
-    private void MergeResourceOptionParams(ref MaaToken taskModels)
+    private List<MaaInterface.MaaInterfaceSelectOption>? GetCurrentResourceSelectOptions()
     {
         // 获取当前资源
         var currentResourceName = ViewModel?.CurrentResource;
@@ -4115,37 +3899,18 @@ public class MaaProcessor
             .FirstOrDefault(r => r.Name == currentResourceName);
 
         if (currentResource?.SelectOptions == null || currentResource.SelectOptions.Count == 0)
-            return;
+            return null;
 
         // 查找任务列表中的资源设置项，获取用户选择的值
         var resourceOptionItem = ViewModel?.TaskItemViewModels
             .FirstOrDefault(t => t.IsResourceOptionItem && t.ResourceItem?.Name == currentResourceName);
 
-        var selectOptions = resourceOptionItem?.ResourceItem?.SelectOptions ?? currentResource.SelectOptions;
-
-        // 处理资源的全局选项
-        ProcessOptions(ref taskModels, selectOptions);
-    }
-
-    /// <summary>
-    /// 合并当前控制器的选项参数（controller.option）
-    /// </summary>
-    private void MergeControllerOptionParams(ref MaaToken taskModels)
-    {
-        var controllerConfig = GetCurrentInterfaceController();
-
-        var selectOptions = controllerConfig?.SelectOptions;
-        if (selectOptions == null || selectOptions.Count == 0)
-            return;
-
-        ProcessOptions(ref taskModels, selectOptions);
+        return resourceOptionItem?.ResourceItem?.SelectOptions ?? currentResource.SelectOptions;
     }
 
     private string? GetCurrentControllerNameForOptionMerge()
     {
-        var controllerType = ViewModel?.CurrentController ?? MaaControllerTypes.None;
-        return MaaInterfaceActivationHelper.ResolveControllerName(Interface, controllerType)
-            ?? controllerType.ToJsonKey();
+        return ViewModel?.GetCurrentControllerName() ?? GetCurrentInterfaceController()?.Name;
     }
 
     private void InitializeConnectionTasksAsync(CancellationToken token)

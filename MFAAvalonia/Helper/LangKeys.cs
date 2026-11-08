@@ -534,6 +534,8 @@ public static class LangKeys
 	public static readonly string LoadResourcesFailedDetail = "LoadResourcesFailedDetail";
 	public static readonly string NoEmulatorFoundDetail = "NoEmulatorFoundDetail";
 	public static readonly string Reset = "Reset";
+	public static readonly string ResetTasksToPreset = "ResetTasksToPreset";
+	public static readonly string RestoreDefaultBackground = "RestoreDefaultBackground";
 	public static readonly string BackgroundImageTitle = "BackgroundImageTitle";
 	public static readonly string BackgroundImageDescription = "BackgroundImageDescription";
 	public static readonly string BackgroundImageExtendToTitleBarTitle = "BackgroundImageExtendToTitleBarTitle";
@@ -747,6 +749,20 @@ public static class LangKeys
 	public static readonly string ImportInstanceConfigInvalid = "ImportInstanceConfigInvalid";
 	public static readonly string ImportInstanceConfigProjectMismatch = "ImportInstanceConfigProjectMismatch";
 	public static readonly string ImportInstanceConfigUnsupportedVersion = "ImportInstanceConfigUnsupportedVersion";
+	public static readonly string TaskConfigurationTitle = "TaskConfigurationTitle";
+	public static readonly string TaskCleanupPaused = "TaskCleanupPaused";
+	public static readonly string TaskMissingFromResource = "TaskMissingFromResource";
+	public static readonly string TaskConfigurationReadFailed = "TaskConfigurationReadFailed";
+	public static readonly string TaskConfigurationDefinitionsNotLoaded = "TaskConfigurationDefinitionsNotLoaded";
+	public static readonly string TaskConfigurationDefinitionsInvalid = "TaskConfigurationDefinitionsInvalid";
+	public static readonly string TaskConfigurationSaveFailed = "TaskConfigurationSaveFailed";
+	public static readonly string TaskConfigurationInstanceDeleted = "TaskConfigurationInstanceDeleted";
+	public static readonly string TaskConfigurationSyncFailed = "TaskConfigurationSyncFailed";
+	public static readonly string OptionCaseDefinitionInvalid = "OptionCaseDefinitionInvalid";
+	public static readonly string OptionSavedSelectionInvalid = "OptionSavedSelectionInvalid";
+	public static readonly string OptionDefaultCaseUnavailable = "OptionDefaultCaseUnavailable";
+	public static readonly string TaskExecutionBlockedByOptions = "TaskExecutionBlockedByOptions";
+	public static readonly string TaskSkippedInvalidOptions = "TaskSkippedInvalidOptions";
 	
 }
 
