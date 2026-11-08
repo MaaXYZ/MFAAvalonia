@@ -129,7 +129,8 @@ internal static class GlobalStartManager
             }
 
             var beforeTask = vm.Processor.InstanceConfiguration.GetValue(ConfigurationKeys.BeforeTask, "None");
-            if (beforeTask.Contains("StartupSoftware", StringComparison.OrdinalIgnoreCase))
+            var startSoftware = beforeTask.Contains("StartupSoftware", StringComparison.OrdinalIgnoreCase);
+            if (startSoftware)
             {
                 LoggerHelper.Info($"全局启动：按实例配置启动 {instanceName} 的目标程序");
                 await vm.Processor.StartSoftware();
@@ -138,7 +139,9 @@ internal static class GlobalStartManager
             await DispatcherHelper.RunOnMainThreadAsync(() =>
             {
                 Instances.InstanceTabBarViewModel.SwitchToInstanceById(instanceId);
-                vm.TryReadAdbDeviceFromConfig(false, false, true, false);
+                // The connection step skips target re-reading after a software launch, so the instance just
+                // launched must win here, as in the single-instance startup path (WaitSoftware).
+                vm.TryReadAdbDeviceFromConfig(false, false, true, false, strictLaunchTarget: startSoftware);
                 vm.StartTask();
             });
 

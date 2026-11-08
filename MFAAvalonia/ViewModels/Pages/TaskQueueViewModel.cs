@@ -2181,7 +2181,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                     ? DetectWlRootsSockets()
                 : DetectDesktopWindows(controllerType);
         token.ThrowIfCancellationRequested();
-        if (!UpdateDeviceList(devices, index, selectionVersion, strictLaunchTarget))
+        if (!UpdateDeviceList(devices, index, selectionVersion, strictLaunchTarget, token))
             return;
         token.ThrowIfCancellationRequested();
         HandleControllerSettings(controllerType);
@@ -2224,6 +2224,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     {
         var target = GetPreferredAdbTarget();
         var launchIndex = GetPreferredEmulatorIndexFromLaunchConfig();
+        IList<AdbDeviceInfo> candidates = devices;
         if (strictLaunchTarget && launchIndex >= 0)
         {
             var launchedDeviceIndex = FindPreferredAdbDeviceIndexByLaunchConfig(devices);
@@ -2237,18 +2238,26 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 LoggerHelper.Info($"启动目标尚未出现：多开号={launchIndex}，不选择其他设备。");
                 return -1;
             }
+
+            // Every device still reporting an instance index is another instance. Keep them out of the
+            // recovery below, and do not retain the target when one of them now answers on its address
+            // (e.g. a reused emulator port): connecting that address would reach the other instance.
+            candidates = devices.Where(device => !TryGetIndexFromConfig(device.Config, out _)).ToList();
+            if (devices.Any(device => TryGetIndexFromConfig(device.Config, out _) && IsSameAdbAddress(device, target)))
+            {
+                LoggerHelper.Info($"启动目标尚未出现：多开号={launchIndex}，已保存地址正被其他实例占用，不选择其他设备。");
+                return -1;
+            }
         }
 
         if (target != null)
         {
-            var exact = devices.FirstOrDefault(device =>
-                string.Equals(device.AdbPath, target.AdbPath, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(device.AdbSerial, target.AdbSerial, StringComparison.OrdinalIgnoreCase));
+            var exact = candidates.FirstOrDefault(device => IsSameAdbAddress(device, target));
             if (exact != null)
                 return devices.IndexOf(exact);
 
             var matched = Processor.InstanceConfiguration.GetValue(ConfigurationKeys.UseFingerprintMatching, true)
-                ? FindBestFingerprintMatchedAdbDevice(devices, target)
+                ? FindBestFingerprintMatchedAdbDevice(candidates, target)
                 : null;
             if (matched != null)
                 return devices.IndexOf(matched);
@@ -2262,6 +2271,10 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
         var preferredDeviceIndex = FindPreferredAdbDeviceIndexByLaunchConfig(devices);
         return preferredDeviceIndex >= 0 ? preferredDeviceIndex : devices.Count > 0 ? 0 : -1;
     }
+
+    private static bool IsSameAdbAddress(AdbDeviceInfo device, AdbDeviceInfo target) =>
+        string.Equals(device.AdbPath, target.AdbPath, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(device.AdbSerial, target.AdbSerial, StringComparison.OrdinalIgnoreCase);
 
     private int FindPreferredAdbDeviceIndexByLaunchConfig(IList<AdbDeviceInfo> devices)
     {
@@ -2494,14 +2507,16 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     }
 
     private bool UpdateDeviceList(ObservableCollection<object> devices, int index, long selectionVersion,
-        bool strictLaunchTarget = false)
+        bool strictLaunchTarget = false, CancellationToken token = default)
     {
         // 使用同步方式更新设备列表，确保在 AutoDetectDevice 返回前设备已更新
         // 这对于 Win32 连接失败后重试时正确检测窗口至关重要
         //DispatcherHelper.RunOnMainThread 已经是同步的（使用 Dispatcher.UIThread.Invoke）
         return DispatcherHelper.RunOnMainThread(() =>
         {
-            if (!IsCurrentAdbSelectionVersion(selectionVersion))
+            // A newer refresh cancels this scan before starting its own. Re-check on the UI thread: this commit
+            // may have waited behind that refresh (e.g. one running synchronously on the UI thread) and is stale.
+            if (!IsCurrentAdbSelectionVersion(selectionVersion) || token.IsCancellationRequested)
                 return false;
             _suppressAutoConnect = true;
             try
@@ -2892,9 +2907,11 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        if (!allowAutoDetect && (CurrentController != MaaControllerTypes.Adb || !strictLaunchTarget))
+        var preferredTarget = CurrentController == MaaControllerTypes.Adb ? GetPreferredAdbTarget() : null;
+        // With discovery disabled, a strict launch still scans to recover a remembered target whose address
+        // changed across the restart. Without one there is nothing to recover, so never pick a device.
+        if (!allowAutoDetect && (preferredTarget == null || !strictLaunchTarget))
         {
-            var target = CurrentController == MaaControllerTypes.Adb ? GetPreferredAdbTarget() : null;
             DispatcherHelper.RunOnMainThread(() =>
             {
                 if (!IsCurrentAdbSelectionVersion(selectionVersion))
@@ -2902,12 +2919,12 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 _suppressAutoConnect = true;
                 try
                 {
-                    if (target == null)
+                    if (preferredTarget == null)
                         SetEmptyDeviceState(MaaControllerTypes.Adb);
                     else
                     {
-                        Devices = [target];
-                        CurrentDevice = target;
+                        Devices = [preferredTarget];
+                        CurrentDevice = preferredTarget;
                     }
                 }
                 finally
@@ -2920,7 +2937,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
 
         // Publish the remembered target before scheduling discovery. The startup connection
         // queue may otherwise overtake the scan and attempt to connect an empty serial.
-        if (CurrentController == MaaControllerTypes.Adb && GetPreferredAdbTarget() is { } rememberedTarget)
+        if (preferredTarget is { } rememberedTarget)
         {
             DispatcherHelper.RunOnMainThread(() =>
             {
