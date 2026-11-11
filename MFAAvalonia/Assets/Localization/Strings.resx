@@ -448,10 +448,10 @@
         <value>Webhook 名称</value>
     </data>
     <data name="ExternalNotificationEmailAccount" xml:space="preserve">
-        <value>邮箱 账户</value>
+        <value>邮箱地址</value>
     </data>
     <data name="ExternalNotificationEmailSecret" xml:space="preserve">
-        <value>邮箱 Secret</value>
+        <value>SMTP 授权码 / 应用密码</value>
     </data>
     <data name="ExternalNotificationEnabled" xml:space="preserve">
         <value>启用的通知配置</value>

@@ -152,7 +152,7 @@
                         <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center">
                             <TextBlock
                                 FontSize="16"
-                                Text="{markup:I18n {x:Static helper:LangKeys.ExternalNotificationBotToken}}"
+                                Text="{markup:I18n {x:Static helper:LangKeys.ExternalNotificationEmailAccount}}"
                                 VerticalAlignment="Center" />
                         </StackPanel>
                     </DockPanel>

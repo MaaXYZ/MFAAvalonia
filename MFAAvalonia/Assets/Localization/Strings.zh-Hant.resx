@@ -439,10 +439,10 @@
         <value>Webhook 名稱</value>
     </data>
     <data name="ExternalNotificationEmailAccount" xml:space="preserve">
-        <value>電郵 帳戶</value>
+        <value>電郵地址</value>
     </data>
     <data name="ExternalNotificationEmailSecret" xml:space="preserve">
-        <value>電郵 Secret</value>
+        <value>SMTP 授權碼 / 應用程式密碼</value>
     </data>
     <data name="ExternalNotificationEnabled" xml:space="preserve">
         <value>啟用的通知配置</value>
