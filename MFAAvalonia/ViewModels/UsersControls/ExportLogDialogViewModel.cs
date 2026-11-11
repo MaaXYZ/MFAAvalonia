@@ -13,10 +13,17 @@ public sealed partial class ExportLogDialogViewModel : ViewModelBase
 {
     private readonly ISukiDialog _dialog;
 
+    [ObservableProperty] 
+    private bool _enableSplitArchive = true;
+    
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartExportCommand))]
     private bool _includeMaaLog = true;
 
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartExportCommand))]
+    private bool _includeMaaBakLog = true;
+    
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartExportCommand))]
     private bool _includeGuiLog = true;
@@ -43,8 +50,10 @@ public sealed partial class ExportLogDialogViewModel : ViewModelBase
     [ObservableProperty] private bool _isExporting;
 
     public IReadOnlyList<ExportLogTimeRangeOption> ImageTimeRangeOptions { get; }
-
+    
+    public string SplitArchiveLabel => LangKeys.ExportLogSplitArchive.ToLocalization();
     public string MaaLogLabel => "maa.log";
+    public string MaaBakLogLabel => "maa.bak.log";
     public string GuiLogLabel => "gui.log";
     public string CustomLogLabel => "custom.log";
     public string OnErrorFolderLabel => "on_error";
@@ -54,7 +63,7 @@ public sealed partial class ExportLogDialogViewModel : ViewModelBase
         : LangKeys.ExportLogDialogStart.ToLocalization();
 
     public bool CanStartExport =>
-        !IsExporting && (IncludeMaaLog || IncludeGuiLog || IncludeCustomLog || IncludeOnErrorImages || IncludeVisionImages || IncludeOtherImages);
+        !IsExporting && (IncludeMaaLog || IncludeMaaBakLog || IncludeGuiLog || IncludeCustomLog || IncludeOnErrorImages || IncludeVisionImages || IncludeOtherImages);
 
     public ExportLogDialogViewModel(ISukiDialog dialog)
     {
@@ -111,6 +120,7 @@ public sealed partial class ExportLogDialogViewModel : ViewModelBase
         return new ExportLogPackageOptions
         {
             IncludeMaaLog = IncludeMaaLog,
+            IncludeMaaBakLog = IncludeMaaBakLog,
             IncludeGuiLog = IncludeGuiLog,
             IncludeCustomLog = IncludeCustomLog,
             IncludeOnErrorImages = IncludeOnErrorImages,
@@ -118,7 +128,8 @@ public sealed partial class ExportLogDialogViewModel : ViewModelBase
             IncludeOtherImages = IncludeOtherImages,
             OnErrorImageTimeRange = SelectedOnErrorImageTimeRange.Value,
             VisionImageTimeRange = SelectedVisionImageTimeRange.Value,
-            OtherImageTimeRange = SelectedOtherImageTimeRange.Value
+            OtherImageTimeRange = SelectedOtherImageTimeRange.Value,
+            EnableSplitArchive = EnableSplitArchive
         };
     }
 }

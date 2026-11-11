@@ -50,9 +50,34 @@
 
     <Grid Margin="10,8" RowDefinitions="Auto,*,Auto" RowSpacing="12">
         <StackPanel Grid.Row="0" Spacing="8">
-            <TextBlock
-                Classes="export-title"
-                Text="{markup:I18n {x:Static helper:LangKeys.ExportLogDialogTitle}}" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock
+                    Grid.Column="0"
+                    VerticalAlignment="Center"
+                    Classes="export-title"
+                    TextTrimming="CharacterEllipsis"
+                    Text="{markup:I18n {x:Static helper:LangKeys.ExportLogDialogTitle}}" />
+
+                <StackPanel
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="6"
+                    VerticalAlignment="Center">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="13"
+                        Foreground="{DynamicResource SukiMuteText}"
+                        Text="{Binding SplitArchiveLabel}" />
+                    <ToggleSwitch
+                        VerticalAlignment="Center"
+                        IsChecked="{Binding EnableSplitArchive}"
+                        OffContent=""
+                        OnContent=""
+                        Padding="0"
+                        MinHeight="0" />
+                </StackPanel>
+            </Grid>
+
             <TextBlock
                 Classes="export-caption"
                 Text="{markup:I18n {x:Static helper:LangKeys.ExportLogDialogDescription}}" />
@@ -72,6 +97,9 @@
                             <CheckBox
                                 Content="{Binding MaaLogLabel}"
                                 IsChecked="{Binding IncludeMaaLog}" />
+                            <CheckBox
+                                Content="{Binding MaaBakLogLabel}"
+                                IsChecked="{Binding IncludeMaaBakLog}" />
                             <CheckBox
                                 Content="{Binding GuiLogLabel}"
                                 IsChecked="{Binding IncludeGuiLog}" />
