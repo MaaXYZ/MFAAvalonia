@@ -114,19 +114,6 @@ jobs:
             arch: arm64
             compress_cmd: "7z a -tzip"
             ext: zip
-          - os: ubuntu-latest
-            platform: android
-            arch: x86_64
-            compress_cmd: "zip -r -9"
-            ext: zip
-            is_android: true
-
-          - os: ubuntu-latest
-            platform: android
-            arch: aarch64
-            compress_cmd: "zip -r -9"
-            ext: zip
-            is_android: true
       fail-fast: false
 
     steps:
