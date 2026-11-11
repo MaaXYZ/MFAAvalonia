@@ -88,20 +88,18 @@ public static class TaskManager
         bool shouldLog = true)
     {
         LoggerHelper.Info($"{FormatTaskPrefix(prompt, name)}开始（异步）。");
-        if (catchException)
+        try
         {
-            var task = Task.Run(action);
-            await task.ContinueWith(t =>
-            {
-                if (t.Exception != null)
-                {
-                    handleError?.Invoke();
-                    if (shouldLog)
-                        LoggerHelper.Error($"{FormatTaskPrefix(prompt, name)}执行失败：{t.Exception.GetBaseException().Message}", t.Exception.GetBaseException());
-                }
-            }, TaskContinuationOptions.OnlyOnFaulted);
+            if (action != null)
+                await Task.Run(action);
         }
-        else await Task.Run(action);
+        catch (Exception ex) when (catchException && ex is not OperationCanceledException)
+        {
+            handleError?.Invoke();
+            if (shouldLog)
+                LoggerHelper.Error($"{FormatTaskPrefix(prompt, name)}执行失败：{ex.GetBaseException().Message}", ex.GetBaseException());
+            return;
+        }
 
         LoggerHelper.Info($"{FormatTaskPrefix(prompt, name)}完成（异步）。");
     }
@@ -126,11 +124,9 @@ public static class TaskManager
             handleError?.Invoke();
             if (shouldLog)
                 LoggerHelper.Error($"{FormatTaskPrefix(prompt, name)}执行失败：{baseEx.Message}", baseEx);
+            return;
         }
-        finally
-        {
-            LoggerHelper.Info($"{FormatTaskPrefix(prompt, name)}完成（异步）。");
-        }
+        LoggerHelper.Info($"{FormatTaskPrefix(prompt, name)}完成（异步）。");
     }
 
     public async static Task RunTaskAsync(

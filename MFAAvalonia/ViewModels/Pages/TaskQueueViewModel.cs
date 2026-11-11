@@ -3589,6 +3589,8 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     private readonly System.Timers.Timer _liveViewTimer;
     private int _liveViewTickInProgress;
     private int _isDisposed;
+    private const int LiveViewNoImageFailureThreshold = 5;
+    private int _liveViewNoImageFailureCount;
     private bool _liveViewNoImageLogged;
 
     private void UpdateLiveViewTimerInterval()
@@ -3637,7 +3639,11 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 });
             }
             if (!IsLiveViewExpanded)
+            {
+                _liveViewNoImageFailureCount = 0;
+                _liveViewNoImageLogged = false;
                 return;
+            }
             if (EnableLiveView && IsConnected)
             {
                 // 流水线：非阻塞提交下一帧截图（若上一帧仍在执行则复用，避免任务堆积），
@@ -3671,7 +3677,8 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 var buffer = Processor.GetLiveViewBuffer(false);
                 if (buffer == null)
                 {
-                    if (!_liveViewNoImageLogged)
+                    if (!_liveViewNoImageLogged
+                        && ++_liveViewNoImageFailureCount >= LiveViewNoImageFailureThreshold)
                     {
                         _liveViewNoImageLogged = true;
                         var screencapType = Processor.ScreenshotType();
@@ -3685,12 +3692,15 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
                 }
                 else
                 {
+                    _liveViewNoImageFailureCount = 0;
                     _liveViewNoImageLogged = false;
                     _ = UpdateLiveViewImageAsync(buffer);
                 }
             }
             else
             {
+                _liveViewNoImageFailureCount = 0;
+                _liveViewNoImageLogged = false;
                 _ = UpdateLiveViewImageAsync(null);
             }
         }
@@ -3770,6 +3780,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
     partial void OnIsConnectedChanged(bool value)
     {
         OnPropertyChanged(nameof(IsLiveViewVisible));
+        _liveViewNoImageFailureCount = 0;
         _liveViewNoImageLogged = false;
         LoggerHelper.Info(value ? "连接状态变更：已连接。" : "连接状态变更：未连接。");
     }
