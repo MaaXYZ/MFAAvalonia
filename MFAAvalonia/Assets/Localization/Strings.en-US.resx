@@ -2302,6 +2302,9 @@ Update using this archive?</value>
   <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>Restore {1} changed item(s) in “{0}” to the defaults declared by the resource, rather than preset values. Fields without declared defaults and sub-option settings will be kept.</value></data>
   <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>Restore group</value></data>
   <data name="ResumeInterruptedQueue" xml:space="preserve"><value>When restarting the queue, resume from the first unfinished task (succeeded tasks are skipped)</value></data>
+  <data name="ExportLogSplitArchive" xml:space="preserve">
+      <value>Export log as split archive</value>
+  </data>
 </root>
 
 

@@ -2290,6 +2290,9 @@
   <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>將「{0}」中 {1} 項已修改的內容還原為資源預設值。此操作使用資源宣告的預設值，不是預設方案中的值；未宣告預設值的欄位和子選項設定會保留。</value></data>
   <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>還原本組</value></data>
   <data name="ResumeInterruptedQueue" xml:space="preserve"><value>重新啟動任務清單時，從上次未完成的任務繼續（自動跳過已成功的任務）</value></data>
-</root>
+  <data name="ExportLogSplitArchive" xml:space="preserve">
+      <value>日誌導出分卷</value>
+  </data>
+ </root>
 
 
