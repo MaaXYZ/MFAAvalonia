@@ -1193,7 +1193,6 @@
                              extensions:ScrollViewerExtensions.EnableEdgeFade="True"
                              ItemsSource="{Binding Path=TaskItemViewModels}"
                              Margin="0,3,0,0"
-                             MinHeight="150"
                              HorizontalAlignment="Stretch"
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              SelectionChanged="SelectingItemsControl_OnSelectionChanged"
