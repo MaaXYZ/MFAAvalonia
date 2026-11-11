@@ -62,7 +62,8 @@
                     Grid.Column="1"
                     Orientation="Horizontal"
                     Spacing="6"
-                    VerticalAlignment="Center">
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding IsSplitArchiveOptionVisible}">
                     <TextBlock
                         VerticalAlignment="Center"
                         FontSize="13"

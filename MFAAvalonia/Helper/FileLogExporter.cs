@@ -341,6 +341,10 @@ public static class FileLogExporter
             .Where(file =>
             {
                 var fileName = Path.GetFileName(file);
+
+                if (!fileName.EndsWith(".log", StringComparison.OrdinalIgnoreCase))
+                    return false;
+
                 return fileName.StartsWith("maa.bak.", StringComparison.OrdinalIgnoreCase)
                        || fileName.StartsWith("maafw.bak.", StringComparison.OrdinalIgnoreCase);
             });
