@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using MFAAvalonia.Extensions;
 using MFAAvalonia.Helper;
 using MFAAvalonia.ViewModels;
+using System;
 using SukiUI.Dialogs;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -52,6 +53,7 @@ public sealed partial class ExportLogDialogViewModel : ViewModelBase
     public IReadOnlyList<ExportLogTimeRangeOption> ImageTimeRangeOptions { get; }
     
     public string SplitArchiveLabel => LangKeys.ExportLogSplitArchive.ToLocalization();
+    public bool IsSplitArchiveOptionVisible => !OperatingSystem.IsAndroid();
     public string MaaLogLabel => "maa.log";
     public string MaaBakLogLabel => "maa.bak.log";
     public string GuiLogLabel => "gui.log";
