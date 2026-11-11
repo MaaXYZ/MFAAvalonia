@@ -143,7 +143,7 @@ public static class FileLogExporter
 
                     // Android's storage picker usually returns a content URI. It can write the
                     // selected document, but cannot create sibling files for split volumes.
-                    var allowSplitArchives = saveFile.Path.IsFile;
+                    var allowSplitArchives = saveFile.Path.IsFile && (options?.EnableSplitArchive ?? true);
                     var archiveFiles = await Task.Run(() => CreateArchiveVolumes(tempDir, allowSplitArchives));
                     await PublishArchiveVolumesAsync(saveFile, archiveFiles);
 
@@ -267,6 +267,12 @@ public static class FileLogExporter
                 candidateFiles.Add(file);
         }
 
+        if (options.IncludeMaaBakLog)
+        {
+            foreach (var file in GetMaaBakLogFiles(debugDir))
+                candidateFiles.Add(file);
+        }
+
         if (options.IncludeGuiLog && Directory.Exists(logsDir))
         {
             foreach (var file in Directory.GetFiles(logsDir, "*.log", SearchOption.AllDirectories))
@@ -316,9 +322,32 @@ public static class FileLogExporter
             return namedMaaLogs;
 
         return allFiles.Where(file =>
-            Path.GetExtension(file).Equals(".log", StringComparison.OrdinalIgnoreCase)
-            && !Path.GetFileName(file).StartsWith("custom.log", StringComparison.OrdinalIgnoreCase)
-            && !IsPathUnderFolder(file, ExcludedFolder));
+        {
+            var fileName = Path.GetFileName(file);
+            return Path.GetExtension(file).Equals(".log", StringComparison.OrdinalIgnoreCase)
+                   && !fileName.StartsWith("custom.log", StringComparison.OrdinalIgnoreCase)
+                   && !fileName.StartsWith("maa.bak.", StringComparison.OrdinalIgnoreCase)
+                   && !fileName.StartsWith("maafw.bak.", StringComparison.OrdinalIgnoreCase)
+                   && !IsPathUnderFolder(file, ExcludedFolder);
+        });
+    }
+
+    private static IEnumerable<string> GetMaaBakLogFiles(string debugDir)
+    {
+        if (!Directory.Exists(debugDir))
+            return [];
+
+        return Directory.GetFiles(debugDir, "*", SearchOption.AllDirectories)
+            .Where(file =>
+            {
+                var fileName = Path.GetFileName(file);
+
+                if (!fileName.EndsWith(".log", StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                return fileName.StartsWith("maa.bak.", StringComparison.OrdinalIgnoreCase)
+                       || fileName.StartsWith("maafw.bak.", StringComparison.OrdinalIgnoreCase);
+            });
     }
 
     private static IEnumerable<string> GetCustomLogFiles(string baseDirectory)
@@ -615,11 +644,13 @@ public static class FileLogExporter
 public sealed class ExportLogPackageOptions
 {
     public bool IncludeMaaLog { get; init; } = true;
+    public bool IncludeMaaBakLog { get; init; } = true;
     public bool IncludeGuiLog { get; init; } = true;
     public bool IncludeCustomLog { get; init; } = true;
     public bool IncludeOnErrorImages { get; init; } = true;
     public bool IncludeVisionImages { get; init; }
     public bool IncludeOtherImages { get; init; } = true;
+    public bool EnableSplitArchive { get; init; } = true;
     public ExportLogTimeRange OnErrorImageTimeRange { get; init; } = ExportLogTimeRange.All;
     public ExportLogTimeRange VisionImageTimeRange { get; init; } = ExportLogTimeRange.All;
     public ExportLogTimeRange OtherImageTimeRange { get; init; } = ExportLogTimeRange.All;
