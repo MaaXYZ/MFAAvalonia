@@ -747,7 +747,7 @@ public static class LangKeys
 	public static readonly string ImportInstanceConfigInvalid = "ImportInstanceConfigInvalid";
 	public static readonly string ImportInstanceConfigProjectMismatch = "ImportInstanceConfigProjectMismatch";
 	public static readonly string ImportInstanceConfigUnsupportedVersion = "ImportInstanceConfigUnsupportedVersion";
-	
+	public static readonly string ExportLogSplitArchive = "ExportLogSplitArchive";
 }
 
 

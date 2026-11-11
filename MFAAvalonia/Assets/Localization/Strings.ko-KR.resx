@@ -448,10 +448,10 @@
         <value>Webhook 이름</value>
     </data>
     <data name="ExternalNotificationEmailAccount" xml:space="preserve">
-        <value>이메일 계정</value>
+        <value>이메일 주소</value>
     </data>
     <data name="ExternalNotificationEmailSecret" xml:space="preserve">
-        <value>이메일 Secret</value>
+        <value>SMTP 인증 코드 / 앱 비밀번호</value>
     </data>
     <data name="ExternalNotificationEnabled" xml:space="preserve">
         <value>사용할 알림 방식</value>
@@ -2258,6 +2258,9 @@
   <data name="RestoreResourceDefaultsConfirmation" xml:space="preserve"><value>“{0}”에서 변경된 {1}개 항목을 프리셋 값이 아닌 리소스에 선언된 기본값으로 복원합니다. 기본값이 선언되지 않은 필드와 하위 옵션 설정은 유지됩니다.</value></data>
   <data name="RestoreResourceDefaultsConfirm" xml:space="preserve"><value>그룹 복원</value></data>
   <data name="ResumeInterruptedQueue" xml:space="preserve"><value>대기열을 다시 시작할 때 완료되지 않은 첫 작업부터 재개 (성공한 작업은 건너뜀)</value></data>
+  <data name="ExportLogSplitArchive" xml:space="preserve">
+      <value>로그를 분할 아카이브로 내보내기</value>
+  </data>
 </root>
 
 

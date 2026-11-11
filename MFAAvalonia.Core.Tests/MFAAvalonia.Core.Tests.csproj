@@ -15,5 +15,7 @@
   <ItemGroup>
     <Compile Include="../MFAAvalonia/Extensions/MaaFW/MaaProcessorConfig.cs" Link="MaaProcessorConfig.cs" />
     <Compile Include="../MFAAvalonia/Extensions/MaaFW/MaaControllerScreenshotOptions.cs" Link="MaaControllerScreenshotOptions.cs" />
+    <Compile Include="../MFAAvalonia/Helper/DownloadStreamCopier.cs" Link="DownloadStreamCopier.cs" />
+    <Compile Include="../MFAAvalonia/Helper/TaskManager.cs" Link="TaskManager.cs" />
   </ItemGroup>
 </Project>

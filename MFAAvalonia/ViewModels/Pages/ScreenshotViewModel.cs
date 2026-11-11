@@ -49,9 +49,12 @@ public partial class ScreenshotViewModel : ViewModelBase
                     Type = MFATask.MFATaskType.MFA,
                     Action = async () => await TaskManager.RunTaskAsync(() =>
                     {
-                        var bitmap = vm.Processor.GetLiveView();
+                        var bitmap = vm.Processor.GetBitmapImage(false);
                         if (bitmap == null)
+                        {
                             ToastHelper.Warn(LangKeys.ScreenshotFailed.ToLocalization());
+                            return;
+                        }
 
                         DispatcherHelper.PostOnMainThread((() =>
                         {
@@ -69,9 +72,13 @@ public partial class ScreenshotViewModel : ViewModelBase
             else
                 TaskManager.RunTaskAsync(() =>
                 {
-                    var bitmap = vm.Processor.GetLiveViewCached();
+                    // Manual screenshots must request a fresh frame even when live view is disabled.
+                    var bitmap = vm.Processor.GetBitmapImage(false);
                     if (bitmap == null)
+                    {
                         ToastHelper.Warn(LangKeys.ScreenshotFailed.ToLocalization());
+                        return;
+                    }
 
                     DispatcherHelper.PostOnMainThread((() =>
                     {

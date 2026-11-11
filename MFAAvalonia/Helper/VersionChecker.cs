@@ -3322,19 +3322,13 @@ public static class VersionChecker
             await using var contentStream = await response.Content.ReadAsStreamAsync();
             await using var fileStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write);
 
-            var buffer = new byte[8192];
             var stopwatch = Stopwatch.StartNew();
             var lastSpeedUpdateTime = startTime;
             long lastTotalBytesRead = 0;
 
-            while (true)
+            await DownloadStreamCopier.CopyAsync(contentStream, fileStream, totalBytes, TimeSpan.FromMinutes(2), downloaded =>
             {
-                var bytesRead = await contentStream.ReadAsync(buffer);
-                if (bytesRead == 0) break;
-
-                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
-
-                totalBytesRead += bytesRead;
+                totalBytesRead = downloaded;
                 var currentTime = DateTime.Now;
 
 
@@ -3350,7 +3344,7 @@ public static class VersionChecker
                 double progressPercentage;
                 if (totalBytes.HasValue && totalBytes.Value > 0)
                 {
-                    progressPercentage = Math.Min((double)totalBytesRead / totalBytes.Value * 100, 100);
+                    progressPercentage = Math.Min((double)totalBytesRead / totalBytes.Value * 100, 99);
                 }
                 else
                 {
@@ -3371,7 +3365,7 @@ public static class VersionChecker
                     SetDownloadInfo(downloadSizeTextBlock, downloadSpeedTextBlock, totalBytesRead, totalBytes ?? totalBytesRead, bytesPerSecond);
                     stopwatch.Restart();
                 }
-            }
+            });
 
             SetProgress(progressBar, 100);
             SetDownloadInfo(downloadSizeTextBlock, downloadSpeedTextBlock, totalBytesRead, totalBytes ?? totalBytesRead, bytesPerSecond);
@@ -3384,6 +3378,11 @@ public static class VersionChecker
                 ));
 
             return (true, targetFilePath);
+        }
+        catch (TimeoutException timeoutEx)
+        {
+            LoggerHelper.Error($"下载超时：原因={timeoutEx.Message}", timeoutEx);
+            return (false, targetFilePath);
         }
         catch (HttpRequestException httpEx)
         {
