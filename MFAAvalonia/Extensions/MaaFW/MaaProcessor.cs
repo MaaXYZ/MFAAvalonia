@@ -1578,28 +1578,23 @@ public class MaaProcessor
         if (controllerType == MaaControllerTypes.Adb && adbSnapshot == null)
             return null;
 
-        MaaController controller = null;
+        MaaController? controller = null;
         try
         {
             controller = await TaskManager.RunTaskAsync(() =>
             {
                 token.ThrowIfCancellationRequested();
-                return InitializeController(controllerType, logConfig: false, adbSnapshot);
+                return InitializeController(controllerType, logConfig: false, adbSnapshot, LinkOption.None);
             }, token: token, name: "截图控制器检测", catchException: true, shouldLog: false, noMessage: true);
 
+            if (controller == null)
+                return null;
             ApplyScreenshotOptions(controller, GetCurrentInterfaceController());
         }
         catch (Exception ex)
         {
             LoggerHelper.Warning($"截图控制器初始化失败：{ex.Message}");
-            try
-            {
-                controller?.Dispose();
-            }
-            catch (Exception disposeEx)
-            {
-                LoggerHelper.Warning($"释放截图控制器失败：{disposeEx.Message}");
-            }
+            DisposeQuietly(controller, "截图控制器");
             return null;
         }
         try
@@ -1608,7 +1603,7 @@ public class MaaProcessor
             var linkStatus = controller.LinkStart().Wait();
             if (linkStatus != MaaJobStatus.Succeeded)
             {
-                controller.Dispose();
+                DisposeQuietly(controller, "截图控制器");
                 return null;
             }
 
@@ -1617,6 +1612,7 @@ public class MaaProcessor
         catch (Exception ex)
         {
             LoggerHelper.Warning($"截图控制器连接失败：{ex.Message}");
+            DisposeQuietly(controller, "截图控制器");
             return null;
         }
     }
@@ -1673,61 +1669,111 @@ public class MaaProcessor
             return null;
         }
 
-        MaaController controller = null;
+        if (maaResource == null)
+        {
+            LoggerHelper.Warning("截图任务资源初始化结果为空。");
+            return null;
+        }
+
+        MaaController? controller = null;
         try
         {
             controller = await TaskManager.RunTaskAsync(() =>
             {
                 token.ThrowIfCancellationRequested();
-                return InitializeController(controllerType, logConfig: false, adbSnapshot);
+                return InitializeController(controllerType, logConfig: false, adbSnapshot, LinkOption.None);
             }, token: token, name: "截图控制器检测", catchException: true, shouldLog: false, noMessage: true);
+
+            if (controller == null)
+            {
+                LoggerHelper.Warning("截图任务控制器初始化结果为空。");
+                DisposeQuietly(maaResource, "截图资源");
+                return null;
+            }
 
             ApplyScreenshotOptions(controller, GetCurrentInterfaceController());
         }
         catch (Exception ex)
         {
             LoggerHelper.Warning($"截图任务控制器初始化失败：{ex.Message}");
+            DisposeQuietly(controller, "截图控制器");
+            DisposeQuietly(maaResource, "截图资源");
             return null;
         }
 
+        // Each failed attempt used to leak one native tasker, controller and resource (one worker
+        // thread each). The live view retries every frame while the game is down, so a pipeline
+        // restart exhausted the 4096 threads/process limit in about a minute and
+        // MaaTaskerCreate aborted the whole app. Keep a reference to every native object from the
+        // moment it exists, and release all of them on every failure path.
         MaaTasker? tasker = null;
+        var initialized = false;
         try
         {
             token.ThrowIfCancellationRequested();
 
+            // Hold the tasker reference before assigning optional properties or real bindings.
             tasker = new MaaTasker
             {
-                Controller = controller,
-                Resource = maaResource,
-                Toolkit = MaaProcessor.Toolkit,
-                Global = MaaProcessor.Global,
-                DisposeOptions = DisposeOptions.All,
+                Controller = MaaController.Null,
+                Resource = MaaResource.Null,
+                DisposeOptions = DisposeOptions.None,
             };
+            tasker.Toolkit = MaaProcessor.Toolkit;
+            tasker.Global = MaaProcessor.Global;
+            tasker.Resource = maaResource;
+            tasker.Controller = controller;
+            tasker.DisposeOptions = DisposeOptions.All;
 
             // ConfigureScreenshotTasker(tasker);
 
             var linkStatus = tasker.Controller?.LinkStart().Wait();
             if (linkStatus != MaaJobStatus.Succeeded)
             {
-                tasker.Dispose();
                 return null;
             }
 
             if (!await WaitForScreenshotFrameAsync(tasker, token))
             {
                 LoggerHelper.Warning("截图控制器已连接，但首帧缓存仍为空。");
-                tasker.Dispose();
                 return null;
             }
 
+            initialized = true;
             return tasker;
         }
         catch (Exception ex)
         {
             LoggerHelper.Warning($"截图任务执行器初始化失败：{ex.Message}");
-            // The tasker owns the controller and resource; no screencap is still in flight here.
-            tasker?.Dispose();
             return null;
+        }
+        finally
+        {
+            if (!initialized)
+            {
+                if (tasker != null)
+                {
+                    // Keep child ownership here so one failed disposal cannot skip the other handles.
+                    tasker.DisposeOptions = DisposeOptions.None;
+                    DisposeQuietly(tasker, "截图任务执行器");
+                }
+                DisposeQuietly(controller, "截图控制器");
+                DisposeQuietly(maaResource, "截图资源");
+            }
+        }
+    }
+
+    private static void DisposeQuietly(IDisposable? disposable, string name)
+    {
+        if (disposable == null)
+            return;
+        try
+        {
+            disposable.Dispose();
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"释放{name}失败：{ex.Message}");
         }
     }
 
@@ -2362,7 +2408,13 @@ public class MaaProcessor
         LoggerHelper.Error($"初始化控制器失败：title={title}, message={message}, reason={e.Message}", e);
     }
 
-    private MaaController InitializeController(MaaControllerTypes controllerType, bool logConfig, AdbControllerSnapshot? adbSnapshot = null)
+    /// <param name="link">
+    /// Screenshot paths pass <see cref="LinkOption.None"/> and link explicitly afterwards.
+    /// With <see cref="LinkOption.Start"/> the binding links inside the constructor and throws
+    /// after the native handle exists, so a failed link leaks a controller (and its worker thread)
+    /// that the caller can never dispose.
+    /// </param>
+    private MaaController InitializeController(MaaControllerTypes controllerType, bool logConfig, AdbControllerSnapshot? adbSnapshot = null, LinkOption? link = null)
     {
         ConnectToMAA(logConfig);
 
@@ -2402,7 +2454,8 @@ public class MaaProcessor
                     adbSnapshot.AdbSerial,
                     adbSnapshot.ScreenCap, adbSnapshot.Input,
                     adbSnapshot.Config,
-                    Path.Combine(AppPaths.InstallRoot, "libs", "MaaAgentBinary")
+                    Path.Combine(AppPaths.InstallRoot, "libs", "MaaAgentBinary"),
+                    link ?? LinkOption.Start
                 );
                 _adbControllerSnapshots.Add(adbController, adbSnapshot);
                 return adbController;
@@ -2414,7 +2467,7 @@ public class MaaProcessor
                     LoggerHelper.Info($"PlayCover BundleId：{Config.PlayCover.UUID}");
                 }
 
-                return new MaaPlayCoverController(Config.PlayCover.PlayCoverAddress, Config.PlayCover.UUID);
+                return new MaaPlayCoverController(Config.PlayCover.PlayCoverAddress, Config.PlayCover.UUID, link ?? LinkOption.Start);
 
             case MaaControllerTypes.MacOS:
                 if (logConfig)
@@ -2430,7 +2483,7 @@ public class MaaProcessor
                     Config.MacOSWindow.WindowId,
                     Config.MacOSWindow.ScreenCap,
                     Config.MacOSWindow.Input,
-                    Config.MacOSWindow.Link,
+                    link ?? Config.MacOSWindow.Link,
                     Config.MacOSWindow.Check);
 
             case MaaControllerTypes.WlRoots:
@@ -2444,7 +2497,7 @@ public class MaaProcessor
                 return new MaaWlRootsController(
                     Config.WlRoots.SocketPath,
                     Config.WlRoots.UseWin32VirtualKeyCodes,
-                    Config.WlRoots.Link,
+                    link ?? Config.WlRoots.Link,
                     Config.WlRoots.Check);
 
             case MaaControllerTypes.Gamepad:
@@ -2458,7 +2511,7 @@ public class MaaProcessor
                 }
 
                 return new MaaGamepadController(Config.DesktopWindow.HWnd, Config.Gamepad.Type,
-                    Config.Gamepad.ScreenCap, Config.DesktopWindow.Link, Config.DesktopWindow.Check);
+                    Config.Gamepad.ScreenCap, link ?? Config.DesktopWindow.Link, Config.DesktopWindow.Check);
 
             case MaaControllerTypes.Win32:
             default:
@@ -2476,7 +2529,7 @@ public class MaaProcessor
                 return new MaaWin32Controller(
                     Config.DesktopWindow.HWnd,
                     Config.DesktopWindow.ScreenCap, Config.DesktopWindow.Mouse, Config.DesktopWindow.KeyBoard,
-                    Config.DesktopWindow.Link,
+                    link ?? Config.DesktopWindow.Link,
                     Config.DesktopWindow.Check);
         }
     }
