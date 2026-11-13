@@ -36,6 +36,12 @@ internal static class ContentResolver
         if (File.Exists(filePath))
             return await File.ReadAllTextAsync(filePath).ConfigureAwait(false);
 
+        // Preserve the existing working-directory fallback for relative files.
+        // Exact project files take precedence; explicit absolute/project paths
+        // must not resolve to an unrelated file in the working directory.
+        if (!Path.IsPathRooted(expanded) && File.Exists(expanded))
+            return await File.ReadAllTextAsync(expanded).ConfigureAwait(false);
+
         // Resource projects authored on Windows may use different casing than
         // the files on disk. Keep this fallback confined to the project root.
         var compatibleFilePath = ResolveProjectFileIgnoringCase(filePath, projectRoot, content);

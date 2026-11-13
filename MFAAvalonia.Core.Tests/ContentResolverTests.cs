@@ -88,6 +88,53 @@ public class ContentResolverTests : IDisposable
         Assert.Empty(_missingFiles);
     }
 
+    [Theory]
+    [InlineData("relative")]
+    [InlineData("project-file")]
+    [InlineData("project-placeholder")]
+    [InlineData("absolute-project-path")]
+    public async Task WorkingDirectoryFallbackPreservesProjectPathPrecedence(string mode)
+    {
+        // Use a unique relative path without changing the process-wide current
+        // directory, so other tests can run concurrently.
+        var directoryName = $"mfa-cwd-{Guid.NewGuid():N}";
+        var workingDirectory = Path.Combine(Environment.CurrentDirectory, directoryName);
+        Directory.CreateDirectory(workingDirectory);
+        try
+        {
+            var reference = Path.Combine(directoryName, "notice.html");
+            await File.WriteAllTextAsync(Path.Combine(workingDirectory, "notice.html"), Html,
+                TestContext.Current.CancellationToken);
+
+            if (mode == "project-file")
+            {
+                Directory.CreateDirectory(Path.Combine(_root, directoryName));
+                await File.WriteAllTextAsync(Path.Combine(_root, reference), "project content",
+                    TestContext.Current.CancellationToken);
+            }
+
+            var input = mode switch
+            {
+                "project-placeholder" => $"{{PROJECT_DIR}}/{reference}",
+                "absolute-project-path" => Path.Combine(_root, reference),
+                _ => reference
+            };
+            var expected = mode switch
+            {
+                "relative" => Html,
+                "project-file" => "project content",
+                _ => input
+            };
+
+            Assert.Equal(expected, await Resolve(input));
+            Assert.Equal(mode is "project-placeholder" or "absolute-project-path" ? 1 : 0, _missingFiles.Count);
+        }
+        finally
+        {
+            Directory.Delete(workingDirectory, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task RelativeProjectDirectoryExpandsPlaceholderOnce()
     {

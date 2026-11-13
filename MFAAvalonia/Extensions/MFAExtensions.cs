@@ -569,7 +569,7 @@ public static class MFAExtensions
             {
                 using var httpClient = VersionChecker.CreateHttpClientWithProxy();
                 httpClient.Timeout = TimeSpan.FromSeconds(10);
-                return await httpClient.GetStringAsync(url);
+                return await httpClient.GetStringAsync(url).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
