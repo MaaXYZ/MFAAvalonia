@@ -423,7 +423,7 @@ public class FocusHandler
 
     private static void LogUnresolvedFocusPath(string original, string resolved, string baseDir)
     {
-        if (!LooksLikeFilePath(original))
+        if (!FocusContentPath.LooksLikeFilePath(original))
             return;
 
         if (resolved != original)
@@ -432,23 +432,6 @@ public class FocusHandler
         var candidatePath = MaaInterface.ReplacePlaceholder(original, baseDir, true);
         LoggerHelper.Warning(
             $"Focus 内容文件解析失败：input={original}, baseDir={baseDir}, candidate={candidatePath}, exists={File.Exists(candidatePath)}");
-    }
-
-    private static bool LooksLikeFilePath(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-            return false;
-
-        if (input.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-            || input.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-            || input.StartsWith("$", StringComparison.Ordinal))
-            return false;
-
-        return input.Contains(Path.DirectorySeparatorChar)
-               || input.Contains(Path.AltDirectorySeparatorChar)
-               || input.StartsWith("./", StringComparison.Ordinal)
-               || input.StartsWith("../", StringComparison.Ordinal)
-               || Path.HasExtension(input);
     }
 
     private static Control CreateFocusMarkdownContent(string markdown, double maxHeight, double? maxWidth = null)
