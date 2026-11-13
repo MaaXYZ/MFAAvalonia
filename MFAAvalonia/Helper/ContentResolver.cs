@@ -63,7 +63,7 @@ internal static class ContentResolver
             || expanded.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
             || expanded.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
             || Path.IsPathRooted(expanded)
-            || (!content.Any(char.IsWhiteSpace) && expanded.Contains(Path.DirectorySeparatorChar)))
+            || HasRelativePathSegments(expanded))
             onMissingFile?.Invoke(filePath);
 
         return content;
@@ -71,6 +71,14 @@ internal static class ContentResolver
 
     private static bool HasTextFileExtension(string content) =>
         TextFileExtensions.Any(extension => content.EndsWith(extension, StringComparison.OrdinalIgnoreCase));
+
+    private static bool HasRelativePathSegments(string path)
+    {
+        var segments = path.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        // Spaces within a filename are valid (resource/my folder). Whitespace
+        // beside a separator instead suggests prose such as "成功 / 失败".
+        return segments.Length > 1 && segments.All(segment => segment == segment.Trim());
+    }
 
     private static bool IsInlineMarkup(string content) =>
         Regex.IsMatch(content,

@@ -29,6 +29,10 @@ public class ContentResolverTests : IDisposable
     [InlineData("进行周度签到")]
     [InlineData("版本 v1.4.11")]
     [InlineData("成功 / 失败")]
+    [InlineData("成功/ 失败")]
+    [InlineData("成功 /失败")]
+    [InlineData("成功\t/\t失败")]
+    [InlineData("成功 \\ 失败")]
     [InlineData("$focus.message")]
     [InlineData("$focus.message.html")]
     public async Task InlineContentIsPreservedWithoutFileWarnings(string content)
@@ -177,6 +181,12 @@ public class ContentResolverTests : IDisposable
     [InlineData("resource/missing.custom")]
     [InlineData("resource/missing-content")]
     [InlineData("resource\\missing-content")]
+    [InlineData("resource/my folder")]
+    [InlineData("resource\\my folder")]
+    [InlineData("my resource/missing content")]
+    [InlineData("my resource\\missing content.custom")]
+    [InlineData("resource/my folder/missing.custom")]
+    [InlineData("resource//my folder")]
     public async Task MissingContentFilesReportResolvedCandidate(string reference)
     {
         Assert.Equal(reference, await Resolve(reference));

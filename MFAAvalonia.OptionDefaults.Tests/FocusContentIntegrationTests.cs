@@ -26,9 +26,11 @@ public class FocusContentCollection;
 public class FocusContentIntegrationTests(OptionControlsTestSession fixture) : IClassFixture<OptionControlsTestSession>
 {
     [Theory]
-    [InlineData("ResolveFocusContent")]
-    [InlineData("ResolveLegacyFocusText")]
-    public Task FocusHtmlDoesNotLogMissingFilesButRealReferencesDo(string entryPoint)
+    [InlineData("ResolveFocusContent", "./missing-focus-{id}.html")]
+    [InlineData("ResolveLegacyFocusText", "./missing-focus-{id}.html")]
+    [InlineData("ResolveFocusContent", "resource/my folder-{id}")]
+    [InlineData("ResolveLegacyFocusText", "resource/my folder-{id}")]
+    public Task FocusHtmlDoesNotLogMissingFilesButRealReferencesDo(string entryPoint, string missingReference)
         => fixture.Session.Dispatch(() =>
         {
             using var context = new OptionControlsTestContext();
@@ -46,7 +48,7 @@ public class FocusContentIntegrationTests(OptionControlsTestSession fixture) : I
                 Assert.Equal(html, method.Invoke(handler, arguments));
                 Assert.DoesNotContain(sink.Events, e => e.Level >= LogEventLevel.Warning);
 
-                var missing = $"./missing-focus-{Guid.NewGuid():N}.html";
+                var missing = missingReference.Replace("{id}", Guid.NewGuid().ToString("N"));
                 arguments[0] = missing;
                 Assert.Equal(missing, method.Invoke(handler, arguments));
                 Assert.Contains(sink.Events, e => e.Level == LogEventLevel.Warning
