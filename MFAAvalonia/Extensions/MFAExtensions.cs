@@ -33,17 +33,13 @@ public static class MFAExtensions
     }
 
     /// <summary>
-    /// 解析 Markdown 内容：支持国际化字符串、文件路径、URL 或直接文本
+    /// 解析 Markdown/HTML 内容：支持国际化字符串、文件路径、URL 或直接文本。
     /// </summary>
-    /// <param name="input">输入内容（可能是 $key、文件路径、URL 或直接文本）</param>
-    /// <param name="projectDir">项目目录（用于解析相对路径）</param>
-    /// <returns>解析后的 Markdown 文本</returns>
-    /// <summary>
-    /// 可获取内容的文本文件扩展名
-    /// </summary>
-    private static readonly string[] TextFileExtensions = [".md", ".markdown", ".txt", ".text"];
+    public static Task<string> ResolveContentAsync(this string? input, string? projectDir = null, bool transform = true)
+        => ResolveContentAsync(input, projectDir, null, transform);
 
-    public async static Task<string> ResolveContentAsync(this string? input, string? projectDir = null, bool transform = true)
+    public async static Task<string> ResolveContentAsync(this string? input, string? projectDir,
+        Action<string>? onMissingFile, bool transform = true)
     {
         if (string.IsNullOrWhiteSpace(input))
             return string.Empty;
@@ -51,38 +47,9 @@ public static class MFAExtensions
             projectDir = AppPaths.DataRoot;
         try
         {
-            // 1. 国际化处理（以$开头）
             var content = transform ? LanguageHelper.GetLocalizedString(input) : input;
-            // 2. 判断是否为 URL
-            if (Uri.TryCreate(content, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
-            {
-                // 如果是文本文件 URL，获取内容；否则返回超链接格式
-                var path = uri.AbsolutePath;
-                if (TextFileExtensions.Any(ext => path.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
-                {
-                    return await content.FetchUrlContentAsync().ConfigureAwait(false);
-                }
-                // 返回 Markdown 超链接格式
-                return $"[{content}]({content})";
-            }
-            // 3. 判断是否为文件路径
-            var filePath = MaaInterface.ReplacePlaceholder(content, projectDir, true);
-            if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
-            {
-                // 使用 ConfigureAwait(false) 避免在 UI 线程上使用 .Result 时死锁
-                return await File.ReadAllTextAsync(filePath).ConfigureAwait(false);
-            }
-
-            // Windows accepts Resource/descs/... when the directory on disk is resource/descs/....
-            // Android and Linux do not. Resource projects created on Windows commonly rely on
-            // that behavior, so resolve each relative segment case-insensitively as a fallback.
-            // Exact paths always win above; the fallback is restricted to the project root.
-            var compatibleFilePath = ResolveProjectFileIgnoringCase(content, projectDir);
-            if (compatibleFilePath != null)
-                return await File.ReadAllTextAsync(compatibleFilePath).ConfigureAwait(false);
-
-            // 4. 直接返回文本（可能是 Markdown）
-            return content;
+            return await ContentResolver.ResolveAsync(content, projectDir,
+                url => url.FetchUrlContentAsync(), onMissingFile).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -90,58 +57,6 @@ public static class MFAExtensions
             return string.Empty;
         }
     }
-
-    private static string? ResolveProjectFileIgnoringCase(string content, string projectDir)
-    {
-        if (!TextFileExtensions.Any(extension =>
-                content.EndsWith(extension, StringComparison.OrdinalIgnoreCase)))
-        {
-            return null;
-        }
-
-        var candidate = MaaInterface.ReplacePlaceholder(content, projectDir, false);
-        if (string.IsNullOrWhiteSpace(candidate))
-            return null;
-
-        var root = Path.GetFullPath(projectDir)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var fullCandidate = Path.GetFullPath(candidate);
-        var relativePath = Path.GetRelativePath(root, fullCandidate);
-        if (Path.IsPathRooted(relativePath)
-            || relativePath.Equals("..", StringComparison.Ordinal)
-            || relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-            || relativePath.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        var current = root;
-        foreach (var segment in relativePath.Split(
-                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
-                     StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (!Directory.Exists(current))
-                return null;
-
-            var exact = Path.Combine(current, segment);
-            if (File.Exists(exact) || Directory.Exists(exact))
-            {
-                current = exact;
-                continue;
-            }
-
-            current = Directory.EnumerateFileSystemEntries(current)
-                .FirstOrDefault(entry => string.Equals(
-                    Path.GetFileName(entry),
-                    segment,
-                    StringComparison.OrdinalIgnoreCase));
-            if (current == null)
-                return null;
-        }
-
-        return File.Exists(current) ? current : null;
-    }
-
 
     public static MaaToken ToMaaToken(
         this Dictionary<string, JToken>? taskModels)
@@ -657,7 +572,7 @@ public static class MFAExtensions
             {
                 using var httpClient = VersionChecker.CreateHttpClientWithProxy();
                 httpClient.Timeout = TimeSpan.FromSeconds(10);
-                return await httpClient.GetStringAsync(url);
+                return await httpClient.GetStringAsync(url).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
