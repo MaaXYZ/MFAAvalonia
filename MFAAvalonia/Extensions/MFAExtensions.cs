@@ -35,8 +35,11 @@ public static class MFAExtensions
     /// <summary>
     /// 解析 Markdown/HTML 内容：支持国际化字符串、文件路径、URL 或直接文本。
     /// </summary>
-    public async static Task<string> ResolveContentAsync(this string? input, string? projectDir = null,
-        bool transform = true, Action<string>? onMissingFile = null)
+    public static Task<string> ResolveContentAsync(this string? input, string? projectDir = null, bool transform = true)
+        => ResolveContentAsync(input, projectDir, null, transform);
+
+    public async static Task<string> ResolveContentAsync(this string? input, string? projectDir,
+        Action<string>? onMissingFile, bool transform = true)
     {
         if (string.IsNullOrWhiteSpace(input))
             return string.Empty;

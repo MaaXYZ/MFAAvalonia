@@ -57,6 +57,7 @@ public class ContentResolverTests : IDisposable
     [InlineData("notice.txt")]
     [InlineData("notice.text")]
     [InlineData("notice.custom")]
+    [InlineData("$notice.html")]
     public async Task ExistingFilesAreReadAsContent(string name)
     {
         await File.WriteAllTextAsync(Path.Combine(_root, name), Html, TestContext.Current.CancellationToken);
@@ -75,6 +76,20 @@ public class ContentResolverTests : IDisposable
         Directory.CreateDirectory(directory);
         var extension = reference.EndsWith("htm", StringComparison.OrdinalIgnoreCase) ? ".htm" : ".html";
         await File.WriteAllTextAsync(Path.Combine(directory, "Notice" + extension), Html, TestContext.Current.CancellationToken);
+        Assert.Equal(Html, await Resolve(reference));
+        Assert.Empty(_missingFiles);
+    }
+
+    [Fact]
+    public async Task CaseSensitiveFileSystemExercisesHtmlFallback()
+    {
+        var directory = Path.Combine(_root, "Resource");
+        Directory.CreateDirectory(directory);
+        await File.WriteAllTextAsync(Path.Combine(directory, "Notice.html"), Html, TestContext.Current.CancellationToken);
+        const string reference = "resource/notice.HTML";
+        Assert.SkipWhen(File.Exists(Path.Combine(_root, reference)),
+            "Requires a case-sensitive filesystem; exercised by the Linux content test workflow.");
+
         Assert.Equal(Html, await Resolve(reference));
         Assert.Empty(_missingFiles);
     }
@@ -159,6 +174,9 @@ public class ContentResolverTests : IDisposable
     [InlineData("{PROJECT_DIR}/resource/notice.md")]
     [InlineData("./missing-content")]
     [InlineData("{PROJECT_DIR}/missing-content")]
+    [InlineData("resource/missing.custom")]
+    [InlineData("resource/missing-content")]
+    [InlineData("resource\\missing-content")]
     public async Task MissingContentFilesReportResolvedCandidate(string reference)
     {
         Assert.Equal(reference, await Resolve(reference));
@@ -190,6 +208,25 @@ public class ContentResolverTests : IDisposable
         Assert.Empty(_missingFiles);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \r\n")]
+    public async Task UnavailableContentUrlRemainsAVisibleLink(string response)
+    {
+        const string url = "https://example.com/notice.html";
+        var resolved = await ContentResolver.ResolveAsync(url, _root, _ => Task.FromResult(response), _missingFiles.Add);
+        Assert.Equal($"[{url}]({url})", resolved);
+        Assert.Empty(_missingFiles);
+    }
+
+    [Fact]
+    public async Task MissingDollarFileRemainsAnUnresolvedLocalizationKey()
+    {
+        const string reference = "$resource/missing.html";
+        Assert.Equal(reference, await Resolve(reference));
+        Assert.Empty(_missingFiles);
+    }
+
     [Fact]
     public async Task CaseFallbackDoesNotReadOutsideProjectRoot()
     {
@@ -197,12 +234,11 @@ public class ContentResolverTests : IDisposable
         Directory.CreateDirectory(child);
         await File.WriteAllTextAsync(Path.Combine(_root, "Outside.html"), Html, TestContext.Current.CancellationToken);
         const string reference = "../outside.html";
-        // On a case-insensitive volume, the exact lookup succeeds and is
-        // intentionally allowed outside the root. Only the fallback is confined.
-        var exactExists = File.Exists(Path.Combine(child, reference));
-        Assert.Equal(exactExists ? Html : reference,
+        Assert.SkipWhen(File.Exists(Path.Combine(child, reference)),
+            "Requires a case-sensitive filesystem; an exact outside-root match is intentionally allowed.");
+        Assert.Equal(reference,
             await ContentResolver.ResolveAsync(reference, child, FetchUrl, _missingFiles.Add));
-        Assert.Equal(exactExists ? 0 : 1, _missingFiles.Count);
+        Assert.Single(_missingFiles);
     }
 
     [Fact]

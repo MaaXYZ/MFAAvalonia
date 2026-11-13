@@ -19,14 +19,17 @@ internal static class ContentResolver
         if (Uri.TryCreate(content, UriKind.Absolute, out var uri)
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
         {
-            return HasTextFileExtension(uri.AbsolutePath)
-                ? await fetchUrl(content).ConfigureAwait(false)
-                : $"[{content}]({content})";
+            var link = $"[{content}]({content})";
+            if (!HasTextFileExtension(uri.AbsolutePath))
+                return link;
+
+            var fetched = await fetchUrl(content).ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(fetched) ? link : fetched;
         }
 
         // HTML and Markdown are valid inline content. Preserve the original
         // markup, including closing-tag slashes, without passing it to Path APIs.
-        if (content.StartsWith("$", StringComparison.Ordinal) || IsInlineMarkup(content))
+        if (IsInlineMarkup(content))
             return content;
 
         var projectRoot = Path.GetFullPath(projectDir);
@@ -48,13 +51,19 @@ internal static class ContentResolver
         if (compatibleFilePath != null)
             return await File.ReadAllTextAsync(compatibleFilePath).ConfigureAwait(false);
 
+        // Localization has already run. Preserve existing dollar-prefixed files,
+        // but do not warn for an unresolved localization key.
+        if (content.StartsWith("$", StringComparison.Ordinal))
+            return content;
+
         // A failed optional probe is normal for inline text. Only a recognized
         // content-file reference warrants a missing-file diagnostic.
         if (HasTextFileExtension(content)
             || content.StartsWith("{PROJECT_DIR}", StringComparison.Ordinal)
             || expanded.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
             || expanded.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-            || Path.IsPathRooted(expanded))
+            || Path.IsPathRooted(expanded)
+            || (!content.Any(char.IsWhiteSpace) && expanded.Contains(Path.DirectorySeparatorChar)))
             onMissingFile?.Invoke(filePath);
 
         return content;
