@@ -452,7 +452,8 @@ MFAAvalonia 命令行参数
                     _mutex.ReleaseMutex();
                 _mutex.Close();
                 _mutex = null;
-                _mutexReleased = true;
+                // 先删除实例记录再置位：调用方一旦观察到 _mutexReleased 就会立刻
+                // 启动替代进程，若此刻删除尚未执行，可能把新进程随后写入的记录删掉。
                 if (_ownsMutex && !string.IsNullOrEmpty(_instanceRecordPath))
                 {
                     try
@@ -463,6 +464,7 @@ MFAAvalonia 命令行参数
                     {
                     }
                 }
+                _mutexReleased = true;
                 _ownsMutex = false;
             }
             catch (ApplicationException)

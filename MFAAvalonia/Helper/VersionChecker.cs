@@ -1338,15 +1338,17 @@ public static class VersionChecker
     {
         LoggerHelper.Info($"准备重新启动应用：可执行文件={exeName}");
         LoggerHelper.Info("当前 MFA 进程即将退出。");
-        LoggerHelper.DisposeLogger();
+        // 日志句柄在各分支真正启动/退出前才释放，避免释放单实例锁阶段的告警写不进日志
         if (OperatingSystem.IsAndroid())
         {
             if (PlatformApplicationRestart.RestartAsync != null)
             {
+                LoggerHelper.DisposeLogger();
                 await PlatformApplicationRestart.RestartAsync();
             }
             else
             {
+                LoggerHelper.DisposeLogger();
                 Instances.ShutdownApplication(forceStop: true);
             }
             return;
@@ -1361,6 +1363,7 @@ public static class VersionChecker
                 await GrantMacOSExecutePermissionAsync(exeName);
 
                 // 2. macOS 专属启动方式
+                LoggerHelper.DisposeLogger();
                 StartMacOSApplication(exeName);
                 // 3. 短暂延迟确保新进程启动，再关闭当前应用
                 await Task.Delay(1000);
@@ -1380,7 +1383,22 @@ public static class VersionChecker
             // 顺序与 Instances.RestartApplication 的既有实现保持一致。
             if (!await AppRuntime.ReleaseMutexAsync())
                 LoggerHelper.Warning("重启前释放单实例锁超时，新进程可能被判定为第二实例");
-            Process.Start(exeName);
+
+            try
+            {
+                Process.Start(exeName);
+            }
+            catch (Exception ex)
+            {
+                // 锁已释放但替代进程没能启动：不能继续留着，否则本进程会变成一个
+                // 不持有单实例锁的实例，用户再次启动时就会出现双开。
+                LoggerHelper.Error($"启动替代进程失败，准备关闭当前实例：{ex.Message}", ex);
+                LoggerHelper.DisposeLogger();
+                Instances.ShutdownApplication();
+                return;
+            }
+
+            LoggerHelper.DisposeLogger();
             Instances.ShutdownApplication();
         }
     }
