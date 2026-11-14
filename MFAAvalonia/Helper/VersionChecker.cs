@@ -67,6 +67,7 @@ public static class VersionChecker
     private static readonly object StartupCheckLock = new();
     private static Task? _startupCheckTask;
     private static int _restartPending;
+    private static int _restartStarted;
     private static ISukiToast? _activeResourceUpdateToast;
 
     public static bool IsRestartPending => Volatile.Read(ref _restartPending) != 0;
@@ -1336,6 +1337,14 @@ public static class VersionChecker
     /// <param name="exeName">应用可执行文件路径</param>
     public async static Task RestartApplicationAsync(string exeName)
     {
+        // 本方法有两处调用点，若被重复触发，第二次会在锁已释放的情况下再拉起一个进程，
+        // 那个进程必然拿不到单实例锁而弹窗。这里做一次单次化保护。
+        if (Interlocked.Exchange(ref _restartStarted, 1) != 0)
+        {
+            LoggerHelper.Info("已存在重启请求，忽略本次重复调用");
+            return;
+        }
+
         LoggerHelper.Info($"准备重新启动应用：可执行文件={exeName}");
         LoggerHelper.Info("当前 MFA 进程即将退出。");
         // 日志句柄在各分支真正启动/退出前才释放，避免释放单实例锁阶段的告警写不进日志
