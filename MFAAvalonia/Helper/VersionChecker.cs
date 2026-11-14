@@ -1372,6 +1372,7 @@ public static class VersionChecker
             catch (Exception ex)
             {
                 Console.WriteLine($"macOS 启动应用失败：{ex.Message}");
+                LoggerHelper.DisposeLogger();
                 throw;
             }
         }
@@ -1382,7 +1383,14 @@ public static class VersionChecker
             // 会拿到 isNewInstance=false 并弹出「同一路径下只能启动一个实例！」后自我关闭。
             // 顺序与 Instances.RestartApplication 的既有实现保持一致。
             if (!await AppRuntime.ReleaseMutexAsync())
-                LoggerHelper.Warning("重启前释放单实例锁超时，新进程可能被判定为第二实例");
+            {
+                // 锁没真正释放时继续启动，替代进程必然被判为第二实例，最终弹窗并自我关闭。
+                // 直接强制退出，由操作系统在进程结束时回收互斥量，用户手动重开即可。
+                LoggerHelper.Error("重启前释放单实例锁超时，改为强制退出，请手动重新启动应用");
+                LoggerHelper.DisposeLogger();
+                Instances.ShutdownApplication(forceStop: true);
+                return;
+            }
 
             try
             {

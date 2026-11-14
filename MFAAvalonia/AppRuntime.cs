@@ -405,9 +405,12 @@ MFAAvalonia 命令行参数
             {
                 try
                 {
-                    _mutex?.Close();
-                    _mutex = null;
-                    _mutexReleased = true;
+                    lock (_mutexLock)
+                    {
+                        _mutex?.Close();
+                        _mutex = null;
+                        Volatile.Write(ref _mutexReleased, true);
+                    }
                 }
                 catch
                 {
@@ -420,19 +423,35 @@ MFAAvalonia 命令行参数
     }
 
     /// <summary>
-    /// 释放单实例锁，并等待释放真正完成。
-    /// ReleaseMutex 在非主线程调用时会把释放动作异步派发到主线程执行，若调用方紧接着
-    /// 启动新进程，可能在新进程初始化时锁尚未释放，导致新进程被判为第二实例。
+    /// 释放单实例锁，并等待释放动作真正执行完成。
+    /// 非创建线程调用时，释放动作会被派发到主线程执行；若调用方不等待就启动新进程，
+    /// 锁可能尚未释放，导致新进程被判为第二实例。
     /// </summary>
     public static async Task<bool> ReleaseMutexAsync(int timeoutMilliseconds = 2000)
     {
-        ReleaseMutex();
-        if (Volatile.Read(ref _mutexReleased))
+        _pipeCancellation?.Cancel();
+        if (Volatile.Read(ref _mutexReleased) || _mutex == null)
             return true;
 
-        var deadline = Environment.TickCount64 + timeoutMilliseconds;
-        while (!Volatile.Read(ref _mutexReleased) && Environment.TickCount64 < deadline)
-            await Task.Delay(20);
+        if (Environment.CurrentManagedThreadId == _mutexOwnerThreadId)
+        {
+            ReleaseMutexInternal();
+            return Volatile.Read(ref _mutexReleased);
+        }
+
+        try
+        {
+            await DispatcherHelper.RunOnMainThreadAsync(ReleaseMutexInternal)
+                .WaitAsync(TimeSpan.FromMilliseconds(timeoutMilliseconds));
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        catch (Exception)
+        {
+            // 派发本身失败时以实际状态为准，不假设释放成功
+        }
 
         return Volatile.Read(ref _mutexReleased);
     }
@@ -464,7 +483,7 @@ MFAAvalonia 命令行参数
                     {
                     }
                 }
-                _mutexReleased = true;
+                Volatile.Write(ref _mutexReleased, true);
                 _ownsMutex = false;
             }
             catch (ApplicationException)
