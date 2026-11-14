@@ -405,9 +405,12 @@ MFAAvalonia 命令行参数
             {
                 try
                 {
-                    _mutex?.Close();
-                    _mutex = null;
-                    _mutexReleased = true;
+                    lock (_mutexLock)
+                    {
+                        _mutex?.Close();
+                        _mutex = null;
+                        Volatile.Write(ref _mutexReleased, true);
+                    }
                 }
                 catch
                 {
@@ -417,6 +420,40 @@ MFAAvalonia 命令行参数
         }
 
         ReleaseMutexInternal();
+    }
+
+    /// <summary>
+    /// 释放单实例锁，并等待释放动作真正执行完成。
+    /// 非创建线程调用时，释放动作会被派发到主线程执行；若调用方不等待就启动新进程，
+    /// 锁可能尚未释放，导致新进程被判为第二实例。
+    /// </summary>
+    public static async Task<bool> ReleaseMutexAsync(int timeoutMilliseconds = 2000)
+    {
+        _pipeCancellation?.Cancel();
+        if (Volatile.Read(ref _mutexReleased) || _mutex == null)
+            return true;
+
+        if (Environment.CurrentManagedThreadId == _mutexOwnerThreadId)
+        {
+            ReleaseMutexInternal();
+            return Volatile.Read(ref _mutexReleased);
+        }
+
+        try
+        {
+            await DispatcherHelper.RunOnMainThreadAsync(ReleaseMutexInternal)
+                .WaitAsync(TimeSpan.FromMilliseconds(timeoutMilliseconds));
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        catch (Exception)
+        {
+            // 派发本身失败时以实际状态为准，不假设释放成功
+        }
+
+        return Volatile.Read(ref _mutexReleased);
     }
 
     private static void ReleaseMutexInternal()
@@ -434,7 +471,8 @@ MFAAvalonia 命令行参数
                     _mutex.ReleaseMutex();
                 _mutex.Close();
                 _mutex = null;
-                _mutexReleased = true;
+                // 先删除实例记录再置位：调用方一旦观察到 _mutexReleased 就会立刻
+                // 启动替代进程，若此刻删除尚未执行，可能把新进程随后写入的记录删掉。
                 if (_ownsMutex && !string.IsNullOrEmpty(_instanceRecordPath))
                 {
                     try
@@ -445,6 +483,7 @@ MFAAvalonia 命令行参数
                     {
                     }
                 }
+                Volatile.Write(ref _mutexReleased, true);
                 _ownsMutex = false;
             }
             catch (ApplicationException)

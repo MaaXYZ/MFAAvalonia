@@ -47,7 +47,25 @@ public static class JsonHelper
             EnsureDirectory(filePath);
             // 先尝试正常序列化
             var json = TrySerialize(config, converters);
-            File.WriteAllText(filePath, json);
+            // 原子替换：先写临时文件再重命名。多实例场景下（例如更新后重启，替代进程
+            // 已在读取配置），直接覆盖会让并发读者读到半截 JSON，导致解析失败、配置被重置。
+            var tempPath = filePath + ".tmp";
+            try
+            {
+                File.WriteAllText(tempPath, json);
+                File.Move(tempPath, filePath, true);
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(tempPath))
+                        File.Delete(tempPath);
+                }
+                catch
+                {
+                }
+            }
         }
         catch (Exception ex) when (IsThreadAccessException(ex))
         {
