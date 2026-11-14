@@ -419,6 +419,24 @@ MFAAvalonia 命令行参数
         ReleaseMutexInternal();
     }
 
+    /// <summary>
+    /// 释放单实例锁，并等待释放真正完成。
+    /// ReleaseMutex 在非主线程调用时会把释放动作异步派发到主线程执行，若调用方紧接着
+    /// 启动新进程，可能在新进程初始化时锁尚未释放，导致新进程被判为第二实例。
+    /// </summary>
+    public static async Task<bool> ReleaseMutexAsync(int timeoutMilliseconds = 2000)
+    {
+        ReleaseMutex();
+        if (Volatile.Read(ref _mutexReleased))
+            return true;
+
+        var deadline = Environment.TickCount64 + timeoutMilliseconds;
+        while (!Volatile.Read(ref _mutexReleased) && Environment.TickCount64 < deadline)
+            await Task.Delay(20);
+
+        return Volatile.Read(ref _mutexReleased);
+    }
+
     private static void ReleaseMutexInternal()
     {
         lock (_mutexLock)

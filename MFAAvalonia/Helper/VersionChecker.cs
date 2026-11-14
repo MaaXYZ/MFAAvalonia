@@ -1374,7 +1374,12 @@ public static class VersionChecker
         }
         else
         {
-            // ==== Windows/Linux 完全保留原有逻辑 ====
+            // ==== Windows/Linux ====
+            // 先在本进程侧释放单实例锁，再拉起新进程；否则新进程启动时本进程尚未退出，
+            // 会拿到 isNewInstance=false 并弹出「同一路径下只能启动一个实例！」后自我关闭。
+            // 顺序与 Instances.RestartApplication 的既有实现保持一致。
+            if (!await AppRuntime.ReleaseMutexAsync())
+                LoggerHelper.Warning("重启前释放单实例锁超时，新进程可能被判定为第二实例");
             Process.Start(exeName);
             Instances.ShutdownApplication();
         }
