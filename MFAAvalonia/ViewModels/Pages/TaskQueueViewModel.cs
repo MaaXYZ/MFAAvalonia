@@ -752,7 +752,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             if (error != null)
             {
                 task.HasValidationError = true;
-                failedTasks.Add($"{task.Name}: {error}");
+                failedTasks.Add($"无法启动任务“{task.Name}”:请查看任务配置：{error}");
             }
         }
 
