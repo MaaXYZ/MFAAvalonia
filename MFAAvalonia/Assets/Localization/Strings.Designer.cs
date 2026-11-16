@@ -447,6 +447,15 @@ namespace MFAAvalonia.Assets.Localization {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to 无法启动任务“{0}”:请查看任务配置：{1}.
+        /// </summary>
+        public static string TaskStartValidationFailure {
+            get {
+                return ResourceManager.GetString("TaskStartValidationFailure", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to 捕获方式.
         /// </summary>
         public static string CaptureModeOption {
