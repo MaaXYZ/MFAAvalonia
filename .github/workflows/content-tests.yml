@@ -1,0 +1,28 @@
+name: Content Resolution Tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'MFAAvalonia/**'
+      - 'MFAAvalonia.Core.Tests/**'
+      - 'MFAAvalonia.OptionDefaults.Tests/**'
+      - 'Markdown.Avalonia*/**'
+      - '.github/workflows/content-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      # Linux's case-sensitive filesystem exercises the actual case fallback.
+      - run: dotnet test MFAAvalonia.Core.Tests/MFAAvalonia.Core.Tests.csproj -c Release
+      - run: dotnet test Markdown.Avalonia.Html.Tests/Markdown.Avalonia.Html.Tests.csproj -c Release
+      - run: dotnet test MFAAvalonia.OptionDefaults.Tests/MFAAvalonia.OptionDefaults.Tests.csproj -c Release --filter FullyQualifiedName~FocusContentIntegrationTests -p:RuntimeIdentifier=linux-x64
