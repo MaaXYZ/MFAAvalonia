@@ -67,6 +67,7 @@ public static class VersionChecker
     private static readonly object StartupCheckLock = new();
     private static Task? _startupCheckTask;
     private static int _restartPending;
+    private static int _restartStarted;
     private static ISukiToast? _activeResourceUpdateToast;
 
     public static bool IsRestartPending => Volatile.Read(ref _restartPending) != 0;
@@ -1336,17 +1337,27 @@ public static class VersionChecker
     /// <param name="exeName">应用可执行文件路径</param>
     public async static Task RestartApplicationAsync(string exeName)
     {
+        // 本方法有两处调用点，若被重复触发，第二次会在锁已释放的情况下再拉起一个进程，
+        // 那个进程必然拿不到单实例锁而弹窗。这里做一次单次化保护。
+        if (Interlocked.Exchange(ref _restartStarted, 1) != 0)
+        {
+            LoggerHelper.Info("已存在重启请求，忽略本次重复调用");
+            return;
+        }
+
         LoggerHelper.Info($"准备重新启动应用：可执行文件={exeName}");
         LoggerHelper.Info("当前 MFA 进程即将退出。");
-        LoggerHelper.DisposeLogger();
+        // 日志句柄在各分支真正启动/退出前才释放，避免释放单实例锁阶段的告警写不进日志
         if (OperatingSystem.IsAndroid())
         {
             if (PlatformApplicationRestart.RestartAsync != null)
             {
+                LoggerHelper.DisposeLogger();
                 await PlatformApplicationRestart.RestartAsync();
             }
             else
             {
+                LoggerHelper.DisposeLogger();
                 Instances.ShutdownApplication(forceStop: true);
             }
             return;
@@ -1361,6 +1372,7 @@ public static class VersionChecker
                 await GrantMacOSExecutePermissionAsync(exeName);
 
                 // 2. macOS 专属启动方式
+                LoggerHelper.DisposeLogger();
                 StartMacOSApplication(exeName);
                 // 3. 短暂延迟确保新进程启动，再关闭当前应用
                 await Task.Delay(1000);
@@ -1369,13 +1381,41 @@ public static class VersionChecker
             catch (Exception ex)
             {
                 Console.WriteLine($"macOS 启动应用失败：{ex.Message}");
+                LoggerHelper.DisposeLogger();
                 throw;
             }
         }
         else
         {
-            // ==== Windows/Linux 完全保留原有逻辑 ====
-            Process.Start(exeName);
+            // ==== Windows/Linux ====
+            // 先在本进程侧释放单实例锁，再拉起新进程；否则新进程启动时本进程尚未退出，
+            // 会拿到 isNewInstance=false 并弹出「同一路径下只能启动一个实例！」后自我关闭。
+            // 顺序与 Instances.RestartApplication 的既有实现保持一致。
+            if (!await AppRuntime.ReleaseMutexAsync())
+            {
+                // 锁没真正释放时继续启动，替代进程必然被判为第二实例，最终弹窗并自我关闭。
+                // 直接强制退出，由操作系统在进程结束时回收互斥量，用户手动重开即可。
+                LoggerHelper.Error("重启前释放单实例锁超时，改为强制退出，请手动重新启动应用");
+                LoggerHelper.DisposeLogger();
+                Instances.ShutdownApplication(forceStop: true);
+                return;
+            }
+
+            try
+            {
+                Process.Start(exeName);
+            }
+            catch (Exception ex)
+            {
+                // 锁已释放但替代进程没能启动：不能继续留着，否则本进程会变成一个
+                // 不持有单实例锁的实例，用户再次启动时就会出现双开。
+                LoggerHelper.Error($"启动替代进程失败，准备关闭当前实例：{ex.Message}", ex);
+                LoggerHelper.DisposeLogger();
+                Instances.ShutdownApplication();
+                return;
+            }
+
+            LoggerHelper.DisposeLogger();
             Instances.ShutdownApplication();
         }
     }
