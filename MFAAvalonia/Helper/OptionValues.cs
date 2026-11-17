@@ -153,8 +153,11 @@ public static class OptionValues
     public static bool IsDefaultCaseSet(MaaInterface.MaaInterfaceOption definition, IEnumerable<string> cases)
     {
         var valid = new HashSet<string>(definition.Cases?.Select(item => item.Name).OfType<string>() ?? [], StringComparer.Ordinal);
-        return new HashSet<string>(cases.Where(valid.Contains), StringComparer.Ordinal)
-            .SetEquals((definition.DefaultCases ?? []).Where(valid.Contains));
+        var saved = new HashSet<string>(cases, StringComparer.Ordinal);
+        var defaults = new HashSet<string>(definition.DefaultCases ?? [], StringComparer.Ordinal);
+        // A removed case may return in a later resource version. Never erase
+        // that saved intent merely because the remaining valid cases match.
+        return saved.IsSubsetOf(valid) && defaults.IsSubsetOf(valid) && saved.SetEquals(defaults);
     }
 
     /// <summary>

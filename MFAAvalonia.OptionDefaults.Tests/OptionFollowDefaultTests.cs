@@ -96,7 +96,7 @@ public class OptionFollowDefaultTests
 
     [Theory]
     [InlineData(new[] { "y", "x", "x" }, true)]
-    [InlineData(new[] { "x", "y", "gone" }, true)]
+    [InlineData(new[] { "x", "y", "gone" }, false)]
     [InlineData(new[] { "x" }, false)]
     [InlineData(new string[0], false)]
     public void CheckboxComparesValidCaseSets(string[] saved, bool followed)
@@ -106,6 +106,16 @@ public class OptionFollowDefaultTests
         OptionValues.Normalize(Definitions(), selection);
 
         Assert.Equal(followed, selection.SelectedCases == null);
+    }
+
+    [Fact]
+    public void UnknownCheckboxDefaultDoesNotEraseTheSavedSelection()
+    {
+        var definitions = Definitions();
+        definitions["flags"].DefaultCases = ["x", "y", "missing"];
+        var selection = new MaaInterface.MaaInterfaceSelectOption { Name = "flags", SelectedCases = ["x", "y"] };
+        Assert.Equal(0, OptionValues.Normalize(definitions, selection));
+        Assert.Equal(new[] { "x", "y" }, selection.SelectedCases);
     }
 
     [Fact]
