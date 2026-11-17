@@ -390,7 +390,7 @@ MFAAvalonia 命令行参数
     public static void ReleaseMutex()
     {
         _pipeCancellation?.Cancel();
-        if (_mutexReleased || _mutex == null)
+        if (Volatile.Read(ref _mutexReleased) || _mutex == null)
         {
             return;
         }
@@ -401,17 +401,11 @@ MFAAvalonia 命令行参数
             {
                 _ = DispatcherHelper.RunOnMainThreadAsync(ReleaseMutexInternal);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                try
-                {
-                    _mutex?.Close();
-                    _mutex = null;
-                    _mutexReleased = true;
-                }
-                catch
-                {
-                }
+                // Mutex ownership belongs to the creating thread. Closing its
+                // handle here cannot establish that ownership was released.
+                LoggerHelper.Error("无法派发单实例锁释放操作", ex);
             }
             return;
         }
@@ -419,22 +413,53 @@ MFAAvalonia 命令行参数
         ReleaseMutexInternal();
     }
 
+    /// <summary>
+    /// 释放单实例锁，并等待释放动作真正执行完成。
+    /// 非创建线程调用时，释放动作会被派发到主线程执行；若调用方不等待就启动新进程，
+    /// 锁可能尚未释放，导致新进程被判为第二实例。
+    /// </summary>
+    public static async Task<bool> ReleaseMutexAsync(int timeoutMilliseconds = 2000)
+    {
+        _pipeCancellation?.Cancel();
+        if (Volatile.Read(ref _mutexReleased) || _mutex == null)
+            return true;
+
+        if (Environment.CurrentManagedThreadId == _mutexOwnerThreadId)
+        {
+            ReleaseMutexInternal();
+            return Volatile.Read(ref _mutexReleased);
+        }
+
+        try
+        {
+            await DispatcherHelper.RunOnMainThreadAsync(ReleaseMutexInternal)
+                .WaitAsync(TimeSpan.FromMilliseconds(timeoutMilliseconds));
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        catch (Exception)
+        {
+            // 派发本身失败时以实际状态为准，不假设释放成功
+        }
+
+        return Volatile.Read(ref _mutexReleased);
+    }
+
     private static void ReleaseMutexInternal()
     {
         lock (_mutexLock)
         {
-            if (_mutexReleased || _mutex == null)
+            if (Volatile.Read(ref _mutexReleased) || _mutex == null)
             {
                 return;
             }
 
             try
             {
-                if (_ownsMutex)
-                    _mutex.ReleaseMutex();
-                _mutex.Close();
-                _mutex = null;
-                _mutexReleased = true;
+                // Remove our record while still holding the mutex. Once it is
+                // released, another launch may already be writing its own record.
                 if (_ownsMutex && !string.IsNullOrEmpty(_instanceRecordPath))
                 {
                     try
@@ -445,19 +470,12 @@ MFAAvalonia 命令行参数
                     {
                     }
                 }
+                if (_ownsMutex)
+                    _mutex.ReleaseMutex();
+                _mutex.Close();
+                _mutex = null;
+                Volatile.Write(ref _mutexReleased, true);
                 _ownsMutex = false;
-            }
-            catch (ApplicationException)
-            {
-                try
-                {
-                    _mutex?.Close();
-                    _mutex = null;
-                    _mutexReleased = true;
-                }
-                catch (Exception)
-                {
-                }
             }
             catch (Exception e)
             {

@@ -4,11 +4,13 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
+using System.Threading;
 
 namespace MFAAvalonia.Helper;
 
 public static class JsonHelper
 {
+    private static readonly object SaveFileLock = new();
     // 加载JSON配置（自动处理线程问题，Newtonsoft.Json 反序列化到实体类时会自动忽略注释）
     public static T LoadJson<T>(string filePath, T defaultValue = default, params JsonConverter[] converters)
     {
@@ -47,7 +49,51 @@ public static class JsonHelper
             EnsureDirectory(filePath);
             // 先尝试正常序列化
             var json = TrySerialize(config, converters);
-            File.WriteAllText(filePath, json);
+            // 原子替换：先写临时文件再重命名。多实例场景下（例如更新后重启，替代进程
+            // 已在读取配置），直接覆盖会让并发读者读到半截 JSON，导致解析失败、配置被重置。
+            // A restart can leave two writers alive briefly. Each save owns its
+            // temporary file, including cleanup when another writer finishes first.
+            var tempPath = filePath + $".{Guid.NewGuid():N}.tmp";
+            try
+            {
+                File.WriteAllText(tempPath, json);
+                lock (SaveFileLock)
+                {
+                    Exception? lastError = null;
+                    for (var attempt = 0; attempt < 8; attempt++)
+                    {
+                        try
+                        {
+                            File.Move(tempPath, filePath, true);
+                            lastError = null;
+                            break;
+                        }
+                        catch (IOException ex) when (attempt < 7)
+                        {
+                            lastError = ex;
+                            Thread.Sleep(10 * (attempt + 1));
+                        }
+                        catch (UnauthorizedAccessException ex) when (attempt < 7)
+                        {
+                            lastError = ex;
+                            Thread.Sleep(10 * (attempt + 1));
+                        }
+                    }
+                    if (lastError != null)
+                        throw lastError;
+                }
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(tempPath))
+                        File.Delete(tempPath);
+                }
+                catch
+                {
+                }
+            }
         }
         catch (Exception ex) when (IsThreadAccessException(ex))
         {
