@@ -158,6 +158,9 @@
     <data name="CannotStart" xml:space="preserve">
         <value>작업을 시작할 수 없습니다</value>
     </data>
+    <data name="TaskStartValidationFailure" xml:space="preserve">
+        <value>작업 "{0}"을(를) 시작할 수 없습니다: 작업 구성을 확인하세요: {1}</value>
+    </data>
     <data name="CaptureModeOption" xml:space="preserve">
         <value>캡처 모드</value>
     </data>

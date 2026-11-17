@@ -150,6 +150,9 @@
     <data name="CannotStart" xml:space="preserve">
         <value>Unable to start task</value>
     </data>
+    <data name="TaskStartValidationFailure" xml:space="preserve">
+        <value>Unable to start task "{0}": please check the task configuration: {1}</value>
+    </data>
     <data name="CaptureModeOption" xml:space="preserve">
         <value>Capture Mode</value>
     </data>
