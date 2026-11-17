@@ -390,7 +390,7 @@ MFAAvalonia 命令行参数
     public static void ReleaseMutex()
     {
         _pipeCancellation?.Cancel();
-        if (_mutexReleased || _mutex == null)
+        if (Volatile.Read(ref _mutexReleased) || _mutex == null)
         {
             return;
         }
@@ -401,20 +401,11 @@ MFAAvalonia 命令行参数
             {
                 _ = DispatcherHelper.RunOnMainThreadAsync(ReleaseMutexInternal);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                try
-                {
-                    lock (_mutexLock)
-                    {
-                        _mutex?.Close();
-                        _mutex = null;
-                        Volatile.Write(ref _mutexReleased, true);
-                    }
-                }
-                catch
-                {
-                }
+                // Mutex ownership belongs to the creating thread. Closing its
+                // handle here cannot establish that ownership was released.
+                LoggerHelper.Error("无法派发单实例锁释放操作", ex);
             }
             return;
         }
@@ -460,19 +451,15 @@ MFAAvalonia 命令行参数
     {
         lock (_mutexLock)
         {
-            if (_mutexReleased || _mutex == null)
+            if (Volatile.Read(ref _mutexReleased) || _mutex == null)
             {
                 return;
             }
 
             try
             {
-                if (_ownsMutex)
-                    _mutex.ReleaseMutex();
-                _mutex.Close();
-                _mutex = null;
-                // 先删除实例记录再置位：调用方一旦观察到 _mutexReleased 就会立刻
-                // 启动替代进程，若此刻删除尚未执行，可能把新进程随后写入的记录删掉。
+                // Remove our record while still holding the mutex. Once it is
+                // released, another launch may already be writing its own record.
                 if (_ownsMutex && !string.IsNullOrEmpty(_instanceRecordPath))
                 {
                     try
@@ -483,20 +470,12 @@ MFAAvalonia 命令行参数
                     {
                     }
                 }
+                if (_ownsMutex)
+                    _mutex.ReleaseMutex();
+                _mutex.Close();
+                _mutex = null;
                 Volatile.Write(ref _mutexReleased, true);
                 _ownsMutex = false;
-            }
-            catch (ApplicationException)
-            {
-                try
-                {
-                    _mutex?.Close();
-                    _mutex = null;
-                    _mutexReleased = true;
-                }
-                catch (Exception)
-                {
-                }
             }
             catch (Exception e)
             {
