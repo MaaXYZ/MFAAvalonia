@@ -19,8 +19,8 @@ This page explains **how to fill the fields**. Use **Send Test** to verify after
 ## Email
 
 **How to fill**
-- **Bot Token**: your email address (e.g. `xxx@qq.com`)
-- **Email Secret**: app password / authorization code (not login password)
+- **Email Address**: your email address (e.g. `xxx@qq.com`)
+- **SMTP App Password / Authorization Code**: your email provider’s app password or SMTP authorization code (not login password)
 
 **Behavior**
 - SMTP server is auto-selected by email domain

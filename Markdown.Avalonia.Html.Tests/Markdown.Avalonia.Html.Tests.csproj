@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../MFAAvalonia/Helper/ContentResolver.cs" Link="ContentResolver.cs" />
     <ProjectReference Include="..\Markdown.Avalonia.Html\Markdown.Avalonia.Html.csproj" />
     <ProjectReference Include="..\Markdown.Avalonia\Markdown.Avalonia.csproj" />
   </ItemGroup>

@@ -382,8 +382,8 @@ public class FocusHandler
             return string.Empty;
 
         var contentBaseDir = GetFocusContentBaseDir();
-        var resolved = template.ResolveContentAsync(contentBaseDir).GetAwaiter().GetResult();
-        LogUnresolvedFocusPath(template, resolved, contentBaseDir);
+        var resolved = template.ResolveContentAsync(contentBaseDir,
+            onMissingFile: path => LogMissingFocusFile(template, path, contentBaseDir)).GetAwaiter().GetResult();
         return ReplacePlaceholders(resolved, detailsObj, imageBuffer);
     }
 
@@ -394,8 +394,8 @@ public class FocusHandler
 
         var value = HandleStringsWithVariables(template);
         var contentBaseDir = GetFocusContentBaseDir();
-        var resolved = value.ResolveContentAsync(contentBaseDir).GetAwaiter().GetResult();
-        LogUnresolvedFocusPath(value, resolved, contentBaseDir);
+        var resolved = value.ResolveContentAsync(contentBaseDir,
+            onMissingFile: path => LogMissingFocusFile(value, path, contentBaseDir)).GetAwaiter().GetResult();
 
         // 兼容 focus 老协议里直接使用普通 i18n key 的情况。
         if (resolved == value)
@@ -421,34 +421,10 @@ public class FocusHandler
         return AppPaths.DataRoot;
     }
 
-    private static void LogUnresolvedFocusPath(string original, string resolved, string baseDir)
+    private static void LogMissingFocusFile(string original, string candidatePath, string baseDir)
     {
-        if (!LooksLikeFilePath(original))
-            return;
-
-        if (resolved != original)
-            return;
-
-        var candidatePath = MaaInterface.ReplacePlaceholder(original, baseDir, true);
         LoggerHelper.Warning(
-            $"Focus 内容文件解析失败：input={original}, baseDir={baseDir}, candidate={candidatePath}, exists={File.Exists(candidatePath)}");
-    }
-
-    private static bool LooksLikeFilePath(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-            return false;
-
-        if (input.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-            || input.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-            || input.StartsWith("$", StringComparison.Ordinal))
-            return false;
-
-        return input.Contains(Path.DirectorySeparatorChar)
-               || input.Contains(Path.AltDirectorySeparatorChar)
-               || input.StartsWith("./", StringComparison.Ordinal)
-               || input.StartsWith("../", StringComparison.Ordinal)
-               || Path.HasExtension(input);
+            $"Focus 内容文件不存在：input={original}, baseDir={baseDir}, candidate={candidatePath}");
     }
 
     private static Control CreateFocusMarkdownContent(string markdown, double maxHeight, double? maxWidth = null)
