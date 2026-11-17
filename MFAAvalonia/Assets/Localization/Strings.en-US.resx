@@ -150,6 +150,9 @@
     <data name="CannotStart" xml:space="preserve">
         <value>Unable to start task</value>
     </data>
+    <data name="TaskStartValidationFailure" xml:space="preserve">
+        <value>Unable to start task "{0}": please check the task configuration: {1}</value>
+    </data>
     <data name="CaptureModeOption" xml:space="preserve">
         <value>Capture Mode</value>
     </data>
@@ -439,10 +442,10 @@
         <value>Webhook Name</value>
     </data>
     <data name="ExternalNotificationEmailAccount" xml:space="preserve">
-        <value>Email Account</value>
+        <value>Email Address</value>
     </data>
     <data name="ExternalNotificationEmailSecret" xml:space="preserve">
-        <value>Email Secret</value>
+        <value>SMTP App Password / Authorization Code</value>
     </data>
     <data name="ExternalNotificationEnabled" xml:space="preserve">
         <value>Enabled configuration</value>
@@ -2320,6 +2323,9 @@ Update using this archive?</value>
   <data name="OptionDefaultCaseUnavailable" xml:space="preserve"><value>The default choice specified by the resource is unavailable. Check the resource package or select another choice.</value></data>
   <data name="TaskExecutionBlockedByOptions" xml:space="preserve"><value>Invalid global, resource, or controller options blocked these tasks: {0}. Reselect the options or correct their input in the options panel.</value></data>
   <data name="TaskSkippedInvalidOptions" xml:space="preserve"><value>Task skipped because its options are invalid: {0}. Reselect the options or correct their input in the options panel.</value></data>
+  <data name="ExportLogSplitArchive" xml:space="preserve">
+      <value>Export log as split archive</value>
+  </data>
 </root>
 
 

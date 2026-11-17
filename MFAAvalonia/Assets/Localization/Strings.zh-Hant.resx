@@ -150,6 +150,9 @@
     <data name="CannotStart" xml:space="preserve">
         <value>無法啟動任務</value>
     </data>
+    <data name="TaskStartValidationFailure" xml:space="preserve">
+        <value>無法啟動任務「{0}」:請查看任務配置:{1}</value>
+    </data>
     <data name="CaptureModeOption" xml:space="preserve">
         <value>捕獲方式</value>
     </data>
@@ -439,10 +442,10 @@
         <value>Webhook 名稱</value>
     </data>
     <data name="ExternalNotificationEmailAccount" xml:space="preserve">
-        <value>電郵 帳戶</value>
+        <value>電郵地址</value>
     </data>
     <data name="ExternalNotificationEmailSecret" xml:space="preserve">
-        <value>電郵 Secret</value>
+        <value>SMTP 授權碼 / 應用程式密碼</value>
     </data>
     <data name="ExternalNotificationEnabled" xml:space="preserve">
         <value>啟用的通知配置</value>
@@ -2308,6 +2311,11 @@
   <data name="OptionDefaultCaseUnavailable" xml:space="preserve"><value>資源指定的預設選項不存在，請檢查資源包或重新選擇。</value></data>
   <data name="TaskExecutionBlockedByOptions" xml:space="preserve"><value>全域、資源或控制器選項無效，已阻止執行任務：{0}。請在選項面板重新選擇或修正輸入。</value></data>
   <data name="TaskSkippedInvalidOptions" xml:space="preserve"><value>任務選項無效，已略過：{0}。請在選項面板重新選擇或修正輸入。</value></data>
+
+  <data name="ExportLogSplitArchive" xml:space="preserve">
+      <value>日誌導出分卷</value>
+  </data>
+ 
 </root>
 
 

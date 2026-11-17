@@ -103,6 +103,9 @@
   <data name="CannotStart" xml:space="preserve">
     <value>タスクを開始できません</value>
   </data>
+  <data name="TaskStartValidationFailure" xml:space="preserve">
+      <value>タスク「{0}」を開始できません:タスク設定を確認してください:{1}</value>
+  </data>
   <data name="CaptureModeOption" xml:space="preserve">
     <value>キャプチャ方式</value>
   </data>
@@ -728,10 +731,10 @@
     <value>Webhook 名</value>
   </data>
   <data name="ExternalNotificationEmailAccount" xml:space="preserve">
-    <value>メールアカウント</value>
+    <value>メールアドレス</value>
   </data>
   <data name="ExternalNotificationEmailSecret" xml:space="preserve">
-    <value>メールシークレット</value>
+    <value>SMTP 認証コード / アプリパスワード</value>
   </data>
   <data name="ExternalNotificationEnabled" xml:space="preserve">
     <value>設定を有効化</value>
@@ -2315,4 +2318,7 @@
   <data name="OptionDefaultCaseUnavailable" xml:space="preserve"><value>リソースで指定された既定の選択肢が存在しません。リソースパッケージを確認するか、別の選択肢を選んでください。</value></data>
   <data name="TaskExecutionBlockedByOptions" xml:space="preserve"><value>グローバル、リソース、またはコントローラーのオプションが無効なため、次のタスクをブロックしました：{0}。オプション画面で選択し直すか、入力を修正してください。</value></data>
   <data name="TaskSkippedInvalidOptions" xml:space="preserve"><value>タスクのオプションが無効なため、スキップしました：{0}。オプション画面で選択し直すか、入力を修正してください。</value></data>
+  <data name="ExportLogSplitArchive" xml:space="preserve">
+    <value>ログを分割アーカイブとしてエクスポート</value>
+  </data>
 </root>

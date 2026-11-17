@@ -158,6 +158,9 @@
     <data name="CannotStart" xml:space="preserve">
         <value>无法启动任务</value>
     </data>
+    <data name="TaskStartValidationFailure" xml:space="preserve">
+        <value>无法启动任务“{0}”:请查看任务配置：{1}</value>
+    </data>
     <data name="CaptureModeOption" xml:space="preserve">
         <value>捕获方式</value>
     </data>
@@ -448,10 +451,10 @@
         <value>Webhook 名称</value>
     </data>
     <data name="ExternalNotificationEmailAccount" xml:space="preserve">
-        <value>邮箱 账户</value>
+        <value>邮箱地址</value>
     </data>
     <data name="ExternalNotificationEmailSecret" xml:space="preserve">
-        <value>邮箱 Secret</value>
+        <value>SMTP 授权码 / 应用密码</value>
     </data>
     <data name="ExternalNotificationEnabled" xml:space="preserve">
         <value>启用的通知配置</value>
@@ -2330,4 +2333,7 @@
   <data name="OptionDefaultCaseUnavailable" xml:space="preserve"><value>资源指定的默认选项不存在，请检查资源包或重新选择。</value></data>
   <data name="TaskExecutionBlockedByOptions" xml:space="preserve"><value>全局、资源或控制器选项无效，已阻止执行任务：{0}。请在选项面板重新选择或修正输入。</value></data>
   <data name="TaskSkippedInvalidOptions" xml:space="preserve"><value>任务选项无效，已跳过：{0}。请在选项面板重新选择或修正输入。</value></data>
+  <data name="ExportLogSplitArchive" xml:space="preserve">
+      <value>日志导出分卷</value>
+  </data>
 </root>
