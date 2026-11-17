@@ -19,11 +19,12 @@ namespace MFAAvalonia.Extensions.MaaFW;
 /// </summary>
 internal static class QueueHold
 {
-    public const string NodeName = "MFAA_QueueHold";
-    public const string ActionName = "MFAA_QueueHoldAction";
+    private static readonly string InternalId = Guid.NewGuid().ToString("N");
+    public static readonly string NodeName = "MFAA_QueueHold_" + InternalId;
+    public static readonly string ActionName = "MFAA_QueueHoldAction_" + InternalId;
 
-    /// <summary>占位最长阻塞时间。正常间隙只有毫秒级，超过说明调度出了问题，退回原行为。</summary>
-    public static readonly TimeSpan SafetyTimeout = TimeSpan.FromMinutes(2);
+    /// <summary>Keep the boundary until release, stop or disposal, including long managed waits.</summary>
+    public static readonly TimeSpan SafetyTimeout = Timeout.InfiniteTimeSpan;
 
     /// <summary>占位检查停止与释放状态的间隔，决定停止响应延迟的上限。</summary>
     public static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(50);
@@ -229,7 +230,7 @@ internal sealed class QueueHoldRegistry
             {
                 if (entry.Released)
                     return _closed ? QueueHoldExit.Closed : QueueHoldExit.Released;
-                var remaining = timeout - stopwatch.Elapsed;
+                var remaining = timeout == Timeout.InfiniteTimeSpan ? poll : timeout - stopwatch.Elapsed;
                 if (remaining <= TimeSpan.Zero)
                 {
                     _entries.Remove(seq);
@@ -387,6 +388,12 @@ internal sealed class QueueHoldCoordinator
             catch (ObjectDisposedException)
             {
                 return true;
+            }
+            catch (Exception)
+            {
+                // The caller must enter its stop/recovery path, rather than
+                // skipping queue completion because a native query failed.
+                return false;
             }
 
             if (!busy)

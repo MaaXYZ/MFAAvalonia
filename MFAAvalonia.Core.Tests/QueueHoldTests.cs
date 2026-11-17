@@ -235,6 +235,20 @@ public class QueueHoldTests
     }
 
     [Fact]
+    public async Task NativeQueryFailureRequestsRecoveryInsteadOfSkippingCompletion()
+    {
+        var ticket = new QueueHoldTicket(1, 1, () => throw new InvalidOperationException("native query failed"));
+        Assert.False(await QueueHoldCoordinator.WaitForExitAsync(ticket, TimeSpan.Zero, Poll));
+    }
+
+    [Fact]
+    public void ResourceNamesDoNotMatchInternalCallbacks()
+    {
+        Assert.False(QueueHold.IsHoldNode("MFAA_QueueHold"));
+        Assert.NotEqual("MFAA_QueueHoldAction", QueueHold.ActionName);
+    }
+
+    [Fact]
     public async Task CancelledWaitReturnsWithoutWaitingForTheTasker()
     {
         using var cancellation = new CancellationTokenSource();
@@ -245,6 +259,35 @@ public class QueueHoldTests
 
         Assert.False(await QueueHoldCoordinator.WaitForExitAsync(ticket, TimeSpan.FromSeconds(5), Poll, cancellation.Token));
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task BootstrapProtectsAnInstantFirstTask()
+    {
+        using var kernel = new FakeKernel(0);
+        var coordinator = new QueueHoldCoordinator();
+        kernel.Registry = coordinator.Registry;
+        coordinator.Replace(coordinator.TryPost(kernel.Append, () => kernel.Running, "{}", out _));
+        // Let the kernel reach the bootstrap before the real task is posted.
+        await Task.Delay(30, TestContext.Current.CancellationToken);
+        var job = kernel.Append("InstantTask", "{}");
+        coordinator.Replace(coordinator.TryPost(kernel.Append, () => kernel.Running, "{}", out _));
+        kernel.Wait(job);
+        Assert.Equal(0, kernel.InactiveCount);
+        Assert.True(await QueueHoldCoordinator.WaitForExitAsync(coordinator.ReleaseOutstanding(), TimeSpan.FromSeconds(5), Poll));
+        Assert.Equal(1, kernel.InactiveCount);
+    }
+
+    [Fact]
+    public async Task UnlimitedHoldStillReleasesExplicitly()
+    {
+        var registry = new QueueHoldRegistry();
+        registry.Register(1);
+        var wait = Task.Run(() => registry.WaitForRelease(1, () => false, Timeout.InfiniteTimeSpan, Poll));
+        await Task.Delay(30, TestContext.Current.CancellationToken);
+        Assert.False(wait.IsCompleted);
+        registry.Release(1);
+        Assert.Equal(QueueHoldExit.Released, await wait.WaitAsync(TimeSpan.FromSeconds(2)));
     }
 
     [Fact]
@@ -320,9 +363,11 @@ public class QueueHoldTests
         private bool _running;
         private bool _stopping;
         private bool _exit;
+        private readonly int _taskDelay;
 
-        public FakeKernel()
+        public FakeKernel(int taskDelay = 20)
         {
+            _taskDelay = taskDelay;
             _worker = new Thread(Work) { IsBackground = true };
             _worker.Start();
         }
@@ -414,7 +459,7 @@ public class QueueHoldTests
                 {
                     lock (_gate)
                         RealTasks.Add(item.Entry);
-                    Thread.Sleep(20);
+                    Thread.Sleep(_taskDelay);
                 }
 
                 lock (_gate)

@@ -4580,6 +4580,10 @@ public class MaaProcessor
     {
         if (maa == null || task == null) return MaaJobStatus.Invalid;
 
+        // Bootstrap the first boundary before posting a potentially instant
+        // real task. Later boundaries are already protected by the previous hold.
+        if (ShouldUseQueueHold(maa) && _queueHold.Outstanding == null)
+            _queueHold.Replace(PostQueueHold(maa, param));
         var job = maa.AppendTask(task, param ?? "{}");
         // 先投真任务、再投它的占位、最后放行上一个占位：内核在任务之间看到的队列始终不空。
         // 真任务没投进去时保留上一个占位，由下一个真任务或队列收尾放行。
@@ -4653,7 +4657,21 @@ public class MaaProcessor
 
         if (!await QueueHoldCoordinator.WaitForExitAsync(ticket, QueueHold.ExitWaitTimeout, TimeSpan.FromMilliseconds(20), token)
             && !token.IsCancellationRequested)
-            LoggerHelper.Warning($"放行队列占位后等待 Tasker 空闲超时（{reason}）：seq={ticket.Seq}, task_id={ticket.JobId}");
+        {
+            LoggerHelper.Warning($"放行队列占位后等待 Tasker 空闲失败（{reason}）：seq={ticket.Seq}, task_id={ticket.JobId}，停止任务执行器");
+            // Do not report successful completion while the window may still
+            // be held inactive. Stop explicitly and let the normal failure path run.
+            Status = MFATask.MFATaskStatus.STOPPED;
+            CancellationTokenSource.SafeCancel();
+            try
+            {
+                await Task.Run(() => MaaTasker?.Stop().Wait());
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Error("队列占位收尾失败", ex);
+            }
+        }
     }
 
     private static bool IsQueueHoldCallback(JObject details)
