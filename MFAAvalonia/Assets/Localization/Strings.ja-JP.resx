@@ -103,6 +103,9 @@
   <data name="CannotStart" xml:space="preserve">
     <value>タスクを開始できません</value>
   </data>
+  <data name="TaskStartValidationFailure" xml:space="preserve">
+      <value>タスク「{0}」を開始できません:タスク設定を確認してください:{1}</value>
+  </data>
   <data name="CaptureModeOption" xml:space="preserve">
     <value>キャプチャ方式</value>
   </data>

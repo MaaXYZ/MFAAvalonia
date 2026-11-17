@@ -752,7 +752,7 @@ public partial class TaskQueueViewModel : ViewModelBase, IDisposable
             if (error != null)
             {
                 task.HasValidationError = true;
-                failedTasks.Add($"{task.Name}: {error}");
+                failedTasks.Add(LangKeys.TaskStartValidationFailure.ToLocalizationFormatted(false, task.Name, error));
             }
         }
 

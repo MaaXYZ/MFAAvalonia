@@ -150,6 +150,9 @@
     <data name="CannotStart" xml:space="preserve">
         <value>無法啟動任務</value>
     </data>
+    <data name="TaskStartValidationFailure" xml:space="preserve">
+        <value>無法啟動任務「{0}」:請查看任務配置:{1}</value>
+    </data>
     <data name="CaptureModeOption" xml:space="preserve">
         <value>捕獲方式</value>
     </data>
