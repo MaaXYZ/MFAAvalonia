@@ -603,7 +603,7 @@ public partial class MaaInterface
         }
 
         /// <summary>
-        /// 验证所有输入字段
+        /// 验证所有输入字段；没有用户值的字段按当前默认值验证
         /// </summary>
         public (bool IsValid, string? ErrorMessage) ValidateAllInputs(Dictionary<string, string?>? data)
         {
@@ -612,7 +612,9 @@ public partial class MaaInterface
             foreach (var input in Inputs)
             {
                 if (string.IsNullOrEmpty(input.Name)) continue;
-                var value = data != null && data.TryGetValue(input.Name, out var v) ? v ?? string.Empty : string.Empty;
+                var value = data != null && data.TryGetValue(input.Name, out var v) && v != null
+                    ? v
+                    : input.Default ?? string.Empty;
                 var result = ValidateInput(input.Name, value);
                 if (!result.IsValid) return result;
             }
@@ -656,11 +658,58 @@ public partial class MaaInterface
         public string? Name { get; set; }
 
         /// <summary>用于 select/switch 类型的选项索引</summary>
-        [JsonProperty("index")]
-        public int? Index { get; set; }
+        [JsonIgnore]
+        public int? Index
+        {
+            get => _index;
+            set
+            {
+                _index = value;
+                _invalidIndex = null;
+            }
+        }
 
-        /// <summary>用于 checkbox 类型的多选 case 名称列表</summary>
-        [JsonProperty("selected_cases")]
+        private int? _index;
+        private JToken? _invalidIndex;
+
+        // Keep malformed legacy values recoverable instead of failing the entire task list.
+        // Value fields left null follow the current resource default and are not written out.
+        [JsonProperty("index", NullValueHandling = NullValueHandling.Ignore)]
+        private JToken? PersistedIndex
+        {
+            get => _invalidIndex?.DeepClone() ?? (_index.HasValue ? new JValue(_index.Value) : null);
+            set
+            {
+                _index = null;
+                _invalidIndex = null;
+                if (value == null || value.Type == JTokenType.Null) return;
+                if (value.Type == JTokenType.Integer && int.TryParse(value.ToString(), out var index))
+                    _index = index;
+                else
+                    _invalidIndex = value.DeepClone();
+            }
+        }
+
+        /// <summary>Client configuration identity; never emitted by the PI string-list converter.</summary>
+        [JsonProperty("selected_case", NullValueHandling = NullValueHandling.Ignore)]
+        public string? SelectedCase { get; set; }
+
+        [JsonIgnore]
+        public bool HasInvalidIndex => _invalidIndex != null;
+
+        [JsonIgnore]
+        public string? SelectionError { get; set; } // Localization key; resolved by the displaying control.
+
+        public void CopySelectionFrom(MaaInterfaceSelectOption source)
+        {
+            _index = source._index;
+            _invalidIndex = source._invalidIndex?.DeepClone();
+            SelectedCase = source.SelectedCase;
+            SelectionError = source.SelectionError;
+        }
+
+        /// <summary>用于 checkbox 类型的多选 case 名称列表；null 跟随当前默认，[] 表示全不选</summary>
+        [JsonProperty("selected_cases", NullValueHandling = NullValueHandling.Ignore)]
         [JsonConverter(typeof(GenericSingleOrListConverter<string>))]
         public List<string>? SelectedCases { get; set; }
 
@@ -684,30 +733,27 @@ public partial class MaaInterface
             _passwordFields.UnionWith(source._passwordFields);
         }
 
-        public void InitializeInputData(MaaInterfaceOption definition)
+        /// <summary>登记该定义的密码字段，保存时加密。不写入任何值：缺失的字段跟随当前默认。</summary>
+        public void MarkPasswordFields(MaaInterfaceOption definition)
         {
-            Data ??= new Dictionary<string, string?>();
             foreach (var input in definition.Inputs ?? [])
-            {
-                if (string.IsNullOrEmpty(input.Name)) continue;
-                if (input.IsPassword) _passwordFields.Add(input.Name);
-                if (!Data.TryGetValue(input.Name, out var value) || value == null)
-                    Data[input.Name] = input.Default ?? string.Empty;
-            }
+                if (input.IsPassword && !string.IsNullOrEmpty(input.Name)) _passwordFields.Add(input.Name);
         }
 
         // Keep runtime values in memory. Only the persistence representation is encrypted.
         // The envelope is self-describing, so loading does not depend on interface load order.
-        [JsonProperty("data")]
+        // A null field follows the current default, so it is not written; an empty dictionary is omitted.
+        [JsonProperty("data", NullValueHandling = NullValueHandling.Ignore)]
         private Dictionary<string, JToken>? PersistedData
         {
             get
             {
                 if (Data == null) return null;
-                return Data.ToDictionary(pair => pair.Key, pair =>
-                    _passwordFields.Contains(pair.Key) && pair.Value != null
+                var persisted = Data.Where(pair => pair.Value != null).ToDictionary(pair => pair.Key, pair =>
+                    _passwordFields.Contains(pair.Key)
                         ? (JToken)new JObject { ["encrypted"] = SimpleEncryptionHelper.Encrypt("pi-password:" + pair.Value) }
-                        : pair.Value == null ? JValue.CreateNull() : new JValue(pair.Value));
+                        : new JValue(pair.Value));
+                return persisted.Count == 0 ? null : persisted;
             }
             set
             {
@@ -725,7 +771,7 @@ public partial class MaaInterface
         }
 
         /// <summary>子配置项列表（当选中某个 case 时会展开的选项）</summary>
-        [JsonProperty("sub_options")]
+        [JsonProperty("sub_options", NullValueHandling = NullValueHandling.Ignore)]
         public List<MaaInterfaceSelectOption>? SubOptions { get; set; }
 
         /// <summary>input 类型生成的 pipeline override（运行时使用）</summary>

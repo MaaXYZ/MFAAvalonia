@@ -25,6 +25,8 @@ public class MaaInterfaceSelectAdvancedConverter(bool serializeAsStringArray) : 
         {
             case JTokenType.Array:
                 var firstElement = token.First;
+                if (firstElement == null)
+                    return new List<MaaInterface.MaaInterfaceSelectAdvanced>();
 
                 if (firstElement?.Type == JTokenType.String)
                 {
@@ -57,6 +59,7 @@ public class MaaInterfaceSelectAdvancedConverter(bool serializeAsStringArray) : 
                     }
                 };
             case JTokenType.None:
+            case JTokenType.Null:
                 return null;
         }
 
@@ -66,6 +69,11 @@ public class MaaInterfaceSelectAdvancedConverter(bool serializeAsStringArray) : 
 
     public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
     {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
         var array = new JArray();
 
         if (value is List<MaaInterface.MaaInterfaceSelectAdvanced> selectOptions)

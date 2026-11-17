@@ -124,6 +124,7 @@ public partial class DragItemViewModel : ObservableObject
         get => _isCheckedWithNull;
         set
         {
+            var previousValue = _isCheckedWithNull;
             if (!_isInitialized)
             {
                 _isInitialized = true;
@@ -136,10 +137,11 @@ public partial class DragItemViewModel : ObservableObject
                 if (InterfaceItem != null)
                     InterfaceItem.Check = _isCheckedWithNull;
 
-                if (ConfigurationManager.IsSwitching) return;
-
-                (OwnerViewModel?.Processor.InstanceConfiguration ?? ConfigurationManager.CurrentInstance).SetValue(ConfigurationKeys.TaskItems,
-                    (OwnerViewModel ?? Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel)?.TaskItemViewModels.Where(m => !m.IsResourceOptionItem).Select(model => model.InterfaceItem).ToList());
+                if (OwnerViewModel != null && !OwnerViewModel.TrySaveTaskItems())
+                {
+                    SetProperty(ref _isCheckedWithNull, previousValue);
+                    if (InterfaceItem != null) InterfaceItem.Check = previousValue;
+                }
             }
         }
     }
@@ -226,7 +228,23 @@ public partial class DragItemViewModel : ObservableObject
     /// <summary>
     /// 指示任务是否同时支持当前资源包与控制器。
     /// </summary>
-    [ObservableProperty] [JsonIgnore] private bool _isTaskSupported = true;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsTaskVisible))]
+    [JsonIgnore] private bool _isTaskSupported = true;
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsTaskVisible))]
+    [NotifyPropertyChangedFor(nameof(CanToggleCheck))]
+    [JsonIgnore] private bool _isDefinitionAvailable = true;
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasUnavailableReason))]
+    [NotifyPropertyChangedFor(nameof(UnavailableReason))]
+    [JsonIgnore] private string? _unavailableReasonKey;
+
+    [JsonIgnore] public string? UnavailableReason => UnavailableReasonKey?.ToLocalization();
+    [JsonIgnore] public bool IsTaskVisible => IsTaskSupported || !IsDefinitionAvailable;
+    [JsonIgnore] public bool CanToggleCheck => !IsResourceOptionItem && IsDefinitionAvailable;
+    [JsonIgnore] public bool HasUnavailableReason => !string.IsNullOrWhiteSpace(UnavailableReason);
+
+    partial void OnIsDefinitionAvailableChanged(bool value) => UpdateTaskSupport();
 
     /// <summary>
     /// 检查任务是否支持指定的资源包
@@ -276,7 +294,7 @@ public partial class DragItemViewModel : ObservableObject
 
     private void UpdateTaskSupport()
     {
-        IsTaskSupported = IsResourceSupported && IsControllerSupported;
+        IsTaskSupported = IsDefinitionAvailable && IsResourceSupported && IsControllerSupported;
     }
 
     private void InitializeSupportStatus()
@@ -300,9 +318,7 @@ public partial class DragItemViewModel : ObservableObject
 
     private string? GetCurrentControllerName()
     {
-        var currentControllerType = (OwnerViewModel ?? Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel)?.CurrentController
-            ?? MaaControllerTypes.None;
-        return MaaInterfaceActivationHelper.ResolveControllerName(MaaProcessor.Interface, currentControllerType);
+        return (OwnerViewModel ?? Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel)?.GetCurrentControllerName();
     }
     
     private void UpdateContent()
@@ -359,6 +375,18 @@ public partial class DragItemViewModel : ObservableObject
         UpdateDisplayName();
     }
 
+    public void CopyRuntimeStateFrom(DragItemViewModel source)
+    {
+        RunState = source.RunState;
+        RunElapsed = source.RunElapsed;
+        CompletedRunCount = source.CompletedRunCount;
+        TotalRunCount = source.TotalRunCount;
+        RunErrorMessage = source.RunErrorMessage;
+        RunStartedAt = source.RunStartedAt;
+        RunCompletedAt = source.RunCompletedAt;
+        RunId = source.RunId;
+    }
+
     private void UpdateIconFromInterfaceItem()
     {
         if (InterfaceItem != null)
@@ -376,6 +404,7 @@ public partial class DragItemViewModel : ObservableObject
     private void OnLanguageChanged(object sender, EventArgs e)
     {
         UpdateContent();
+        OnPropertyChanged(nameof(UnavailableReason));
     }
 
     /// <summary>
@@ -389,13 +418,13 @@ public partial class DragItemViewModel : ObservableObject
         if (IsResourceOptionItem && ResourceItem != null)
         {
             // 克隆资源设置项
-            clone = new DragItemViewModel(ResourceItem) { OwnerViewModel = this.OwnerViewModel };
+            clone = new DragItemViewModel(ResourceItem);
         }
         else
         {
             // 克隆普通任务项
             MaaInterface.MaaInterfaceTask? clonedInterfaceItem = InterfaceItem?.Clone();
-            clone = new(clonedInterfaceItem) { OwnerViewModel = this.OwnerViewModel };
+            clone = new(clonedInterfaceItem);
         }
 
         // Copy all other properties to the new instance
@@ -406,9 +435,12 @@ public partial class DragItemViewModel : ObservableObject
         clone.IsResourceSupported = this.IsResourceSupported;
         clone.IsControllerSupported = this.IsControllerSupported;
         clone.IsTaskSupported = this.IsTaskSupported;
+        clone.IsDefinitionAvailable = this.IsDefinitionAvailable;
+        clone.UnavailableReasonKey = this.UnavailableReasonKey;
         clone.ResolvedIcon = this.ResolvedIcon;
         clone.HasIcon = this.HasIcon;
         clone.IsResourceOptionItem = this.IsResourceOptionItem;
+        clone.OwnerViewModel = this.OwnerViewModel;
 
         return clone;
     }

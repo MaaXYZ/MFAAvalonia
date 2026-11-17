@@ -508,13 +508,7 @@ public static partial class Instances
                         new Converters.UniversalEnumConverter<SukiUI.Enums.SukiBackgroundStyle>());
                     gui.ShouldMinimizeToTray = ConfigurationManager.Current.GetValue(ConfigurationKeys.ShouldMinimizeToTray, false);
                     gui.EnableToastNotification = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableToastNotification, true);
-                    gui.BackgroundImagePath = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImagePath, string.Empty);
-                    gui.BackgroundImageOpacity = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageOpacity, 0.2);
-                    gui.BackgroundImageExtendToTitleBar = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageExtendToTitleBar, false);
-                    gui.BackgroundImagePlacement = GuiSettingsUserControlModel.ReadBackgroundImagePlacement();
-                    gui.BackgroundImageBlurRadius = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageBlurRadius, 32.0, double.NaN);
-                    gui.BackgroundImageLightOpacity = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageLightOpacity, 0.16, double.NaN);
-                    gui.ReloadBackgroundImageModes();
+                    gui.ApplyBackgroundSettings();
                     gui.FontScale = ConfigurationManager.Current.GetValue(ConfigurationKeys.FontScale, FontService.DefaultScale);
 
                     gui.CurrentColorTheme = GuiSettingsUserControlModel.FindColorThemeFromConfig();

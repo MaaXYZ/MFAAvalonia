@@ -1312,22 +1312,32 @@ public static class TelemetryService
         if (string.IsNullOrWhiteSpace(option.Name)) return;
         MaaInterface.MaaInterfaceOption? definition = null;
         MaaProcessor.Interface?.Option?.TryGetValue(option.Name, out definition);
-        if (option.Index.HasValue)
+        // 有定义时按当前取值汇总（没有用户值的项取资源默认）；没有定义时只能照存储原样。
+        if (definition == null)
         {
-            var selectedCase = definition?.Cases?.ElementAtOrDefault(option.Index.Value)?.Name;
-            result[option.Name] = selectedCase ?? option.Index.Value.ToString();
+            if (option.Index.HasValue) result[option.Name] = option.Index.Value.ToString();
+            if (option.SelectedCases is { Count: > 0 }) result[$"{option.Name}.cases"] = string.Join(",", option.SelectedCases);
         }
-        if (option.SelectedCases is { Count: > 0 }) result[$"{option.Name}.cases"] = string.Join(",", option.SelectedCases);
-        if (option.Data != null && definition != null)
+        else if (definition.IsCheckbox)
         {
+            var selectedCases = OptionValues.GetSelectedCases(definition, option);
+            if (selectedCases.Count > 0) result[$"{option.Name}.cases"] = string.Join(",", selectedCases);
+        }
+        else if (definition.IsInput)
+        {
+            var values = OptionValues.GetFieldValues(definition, option);
             foreach (var input in definition.Inputs ?? [])
             {
                 if (input.IsPassword) continue;
-                var value = option.Data.GetValueOrDefault(input.Name ?? string.Empty);
+                var value = values.GetValueOrDefault(input.Name ?? string.Empty);
                 var type = input.PipelineType?.ToLowerInvariant();
                 result[$"{option.Name}.{input.Name}"] = type is "int" or "float" or "bool" ? value ?? string.Empty : string.IsNullOrEmpty(value) ? "empty" : "filled";
             }
         }
+        else if (!definition.IsHotkey && OptionValues.TryGetCaseIndex(definition, option, out var index, out _))
+            result[option.Name] = definition.Cases![index].Name!;
+        else if (option.Index.HasValue)
+            result[option.Name] = option.Index.Value.ToString();
         foreach (var child in option.SubOptions ?? []) AddOptionSummary(result, child);
     }
 

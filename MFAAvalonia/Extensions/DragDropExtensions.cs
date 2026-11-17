@@ -439,6 +439,16 @@ public class DragDropExtensions
 
         if (sourceIndex >= 0 && targetIndex >= 0 && sourceIndex != targetIndex)
         {
+            if (listBox.DataContext is TaskQueueViewModel taskQueue)
+            {
+                var candidate = taskQueue.TaskItemViewModels.ToList();
+                var moved = candidate[sourceIndex];
+                candidate.RemoveAt(sourceIndex);
+                candidate.Insert(targetIndex > sourceIndex ? targetIndex - 1 : targetIndex, moved);
+                taskQueue.TryApplyTaskEdit(candidate);
+                ClearAdorner(listBox);
+                return;
+            }
             if (GetEnableAnimation(listBox))
             {
                 _ = MoveWithAnimation(listBox, items, sourceIndex, targetIndex);

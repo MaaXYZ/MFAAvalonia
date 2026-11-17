@@ -61,15 +61,17 @@ public partial class GuiSettingsUserControlModel : ViewModelBase
     partial void OnEnableToastNotificationChanged(bool value) => HandlePropertyChanged(ConfigurationKeys.EnableToastNotification, value);
 
     // Background Image properties
-    [ObservableProperty] private string? _backgroundImagePath =
-        ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImagePath, string.Empty);
+    private bool _applyingBackground;
+    private string? _loadedBackgroundPath;
+    public bool HasBackgroundUserValues => BackgroundDefaults.Keys.Any(ConfigurationManager.Current.Config.ContainsKey);
+
+    [ObservableProperty] private string? _backgroundImagePath = string.Empty;
 
     [ObservableProperty] private Bitmap? _backgroundImage;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsWindowBackgroundVisible), nameof(IsContentBackgroundVisible))]
-    private bool _backgroundImageExtendToTitleBar =
-        ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageExtendToTitleBar, false);
+    private bool _backgroundImageExtendToTitleBar;
 
     public bool IsWindowBackgroundVisible => HasBackgroundImage && BackgroundImageExtendToTitleBar;
     public bool IsContentBackgroundVisible => HasBackgroundImage && !BackgroundImageExtendToTitleBar;
@@ -77,16 +79,14 @@ public partial class GuiSettingsUserControlModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(BackgroundImageStrength))]
-    private double _backgroundImageOpacity =
-        ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageOpacity, 0.2);
+    private double _backgroundImageOpacity;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(BackgroundImageStrength))]
-    private double _backgroundImageLightOpacity =
-        ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageLightOpacity, 0.16, double.NaN);
+    private double _backgroundImageLightOpacity;
 
-    private ScenicImageMode _lightImageMode = ReadImageMode(ConfigurationKeys.BackgroundImageLightMode, ScenicImageMode.Blurred);
-    private ScenicImageMode _darkImageMode = ReadImageMode(ConfigurationKeys.BackgroundImageDarkMode, ScenicImageMode.SideBlend);
+    private ScenicImageMode _lightImageMode;
+    private ScenicImageMode _darkImageMode;
 
     public bool IsLightBackground => BaseTheme == ThemeVariant.Light;
     public bool IsBackgroundPlacementEnabled => BackgroundImageMode == ScenicImageMode.SideBlend;
@@ -112,42 +112,56 @@ public partial class GuiSettingsUserControlModel : ViewModelBase
         get => IsLightBackground ? _lightImageMode : _darkImageMode;
         set
         {
-            if (value == BackgroundImageMode) return;
-            if (IsLightBackground) _lightImageMode = value;
-            else _darkImageMode = value;
-            HandlePropertyChanged(IsLightBackground ? ConfigurationKeys.BackgroundImageLightMode
+            if (_applyingBackground || value == BackgroundImageMode) return;
+            SaveBackgroundValue(IsLightBackground ? ConfigurationKeys.BackgroundImageLightMode
                 : ConfigurationKeys.BackgroundImageDarkMode, value.ToString());
-            OnPropertyChanged(nameof(BackgroundImageMode));
-            OnPropertyChanged(nameof(IsBackgroundPlacementEnabled));
-            OnPropertyChanged(nameof(BackgroundImagePlacementHint));
         }
     }
 
-    private static ScenicImageMode ReadImageMode(string key, ScenicImageMode fallback)
+    public void ApplyBackgroundSettings()
     {
-        var value = ConfigurationManager.Current.GetValue(key, fallback.ToString());
-        return Enum.TryParse<ScenicImageMode>(value, true, out var mode) && Enum.IsDefined(mode) ? mode : fallback;
+        var settings = ConfigurationManager.Background.Resolve(ConfigurationManager.Current.Config);
+        _applyingBackground = true;
+        try
+        {
+            BackgroundImagePath = settings.ImagePath;
+            BackgroundImageExtendToTitleBar = settings.ExtendToTitleBar;
+            BackgroundImageOpacity = settings.Opacity;
+            BackgroundImageLightOpacity = settings.LightOpacity;
+            BackgroundImagePlacement = settings.Placement;
+            BackgroundImageBlurRadius = settings.BlurRadius;
+            _lightImageMode = settings.LightMode;
+            _darkImageMode = settings.DarkMode;
+            OnPropertyChanged(nameof(BackgroundImageMode));
+            OnPropertyChanged(nameof(BackgroundImageStrength));
+            OnPropertyChanged(nameof(IsBackgroundPlacementEnabled));
+            OnPropertyChanged(nameof(BackgroundImagePlacementHint));
+        }
+        finally { _applyingBackground = false; }
+        LoadBackgroundImage();
+        OnPropertyChanged(nameof(HasBackgroundUserValues));
+        RestoreDefaultBackgroundCommand.NotifyCanExecuteChanged();
     }
 
-    internal void ReloadBackgroundImageModes()
+    private void SaveBackgroundValue(string key, object value)
     {
-        _lightImageMode = ReadImageMode(ConfigurationKeys.BackgroundImageLightMode, ScenicImageMode.Blurred);
-        _darkImageMode = ReadImageMode(ConfigurationKeys.BackgroundImageDarkMode, ScenicImageMode.SideBlend);
-        OnPropertyChanged(nameof(BackgroundImageMode));
-        OnPropertyChanged(nameof(IsBackgroundPlacementEnabled));
-        OnPropertyChanged(nameof(BackgroundImagePlacementHint));
+        if (_applyingBackground) return;
+        var config = ConfigurationManager.Current;
+        config.TryCommitBackground(ConfigurationManager.Background.CreateUserChange(config.Config, key, value));
+        ApplyBackgroundSettings();
     }
 
-    [ObservableProperty] private BackgroundPlacement _backgroundImagePlacement = ReadBackgroundImagePlacement();
+    [ObservableProperty] private BackgroundPlacement _backgroundImagePlacement;
 
-    [ObservableProperty] private double _backgroundImageBlurRadius =
-        ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageBlurRadius, 32.0, double.NaN);
+    [ObservableProperty] private double _backgroundImageBlurRadius;
 
-    internal static BackgroundPlacement ReadBackgroundImagePlacement()
+    [RelayCommand(CanExecute = nameof(HasBackgroundUserValues))]
+    private void RestoreDefaultBackground()
     {
-        var value = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImagePlacement, nameof(BackgroundPlacement.Right));
-        return Enum.TryParse<BackgroundPlacement>(value, true, out var placement) && Enum.IsDefined(placement)
-            ? placement : BackgroundPlacement.Right;
+        if (Instances.RootViewModel.IsRunning) return;
+        var config = ConfigurationManager.Current;
+        config.TryCommitBackground(ConfigurationManager.Background.CreateUserChange(config.Config));
+        ApplyBackgroundSettings();
     }
 
     [ObservableProperty]
@@ -161,24 +175,23 @@ public partial class GuiSettingsUserControlModel : ViewModelBase
 
     partial void OnBackgroundImagePathChanged(string? value)
     {
-        HandlePropertyChanged(ConfigurationKeys.BackgroundImagePath, value ?? string.Empty);
-        LoadBackgroundImage();
+        SaveBackgroundValue(ConfigurationKeys.BackgroundImagePath, value ?? string.Empty);
     }
 
     partial void OnBackgroundImageOpacityChanged(double value) =>
-        HandlePropertyChanged(ConfigurationKeys.BackgroundImageOpacity, value);
+        SaveBackgroundValue(ConfigurationKeys.BackgroundImageOpacity, value);
 
     partial void OnBackgroundImageExtendToTitleBarChanged(bool value) =>
-        HandlePropertyChanged(ConfigurationKeys.BackgroundImageExtendToTitleBar, value);
+        SaveBackgroundValue(ConfigurationKeys.BackgroundImageExtendToTitleBar, value);
 
     partial void OnBackgroundImageLightOpacityChanged(double value) =>
-        HandlePropertyChanged(ConfigurationKeys.BackgroundImageLightOpacity, value);
+        SaveBackgroundValue(ConfigurationKeys.BackgroundImageLightOpacity, value);
 
     partial void OnBackgroundImagePlacementChanged(BackgroundPlacement value) =>
-        HandlePropertyChanged(ConfigurationKeys.BackgroundImagePlacement, value.ToString());
+        SaveBackgroundValue(ConfigurationKeys.BackgroundImagePlacement, value.ToString());
 
     partial void OnBackgroundImageBlurRadiusChanged(double value) =>
-        HandlePropertyChanged(ConfigurationKeys.BackgroundImageBlurRadius, value);
+        SaveBackgroundValue(ConfigurationKeys.BackgroundImageBlurRadius, value);
 
     partial void OnFontScaleChanged(double value)
     {
@@ -226,18 +239,21 @@ public partial class GuiSettingsUserControlModel : ViewModelBase
             OnPropertyChanged(nameof(BackgroundImagePlacementHint));
         };
 
-        // Load background image if path exists
-        LoadBackgroundImage();
+        ApplyBackgroundSettings();
     }
 
     private void LoadBackgroundImage()
     {
+        // Changing strength, placement or theme does not require decoding the image again.
+        if (string.Equals(_loadedBackgroundPath, BackgroundImagePath, StringComparison.Ordinal)) return;
+        _loadedBackgroundPath = BackgroundImagePath;
         Bitmap? image = null;
         try
         {
-            if (!string.IsNullOrEmpty(BackgroundImagePath) && File.Exists(BackgroundImagePath))
+            if (!string.IsNullOrEmpty(BackgroundImagePath))
             {
-                image = new Bitmap(BackgroundImagePath);
+                var path = BackgroundDefaults.ResolveImagePath(BackgroundImagePath, AppPaths.DataRoot);
+                if (File.Exists(path)) image = new Bitmap(path);
             }
         }
         catch
@@ -280,14 +296,15 @@ public partial class GuiSettingsUserControlModel : ViewModelBase
 
         if (files.Count > 0)
         {
-            BackgroundImagePath = files[0].Path.LocalPath;
+            SaveBackgroundValue(ConfigurationKeys.BackgroundImagePath, files[0].Path.LocalPath);
         }
     }
 
     [RelayCommand]
     private void ClearBackgroundImage()
     {
-        BackgroundImagePath = string.Empty;
+        if (Instances.RootViewModel.IsRunning) return;
+        SaveBackgroundValue(ConfigurationKeys.BackgroundImagePath, string.Empty);
     }
 
     [RelayCommand]

@@ -6,12 +6,26 @@ namespace MFAAvalonia.Extensions.MaaFW;
 
 internal static class MaaInterfaceActivationHelper
 {
-    public static string? ResolveControllerName(MaaInterface? maaInterface, MaaControllerTypes controllerType)
+    // Shared with TaskQueueViewModel.GetSelectedControllerDefinition: controller identity
+    // is its normalized name AND backend. Backend order is only a missing-name fallback.
+    public static MaaInterface.MaaResourceController? ResolveControllerDefinition(
+        IEnumerable<MaaInterface.MaaResourceController>? controllers,
+        MaaControllerTypes controllerType,
+        string? controllerName)
     {
-        var controllerTypeKey = controllerType.ToJsonKey();
-        return maaInterface?.Controller?.FirstOrDefault(c =>
-            c.Type != null && c.Type.Equals(controllerTypeKey, StringComparison.OrdinalIgnoreCase))?.Name;
+        controllerName = NormalizeControllerName(controllerName);
+        return controllers?.FirstOrDefault(c => c.ControllerType == controllerType
+                && controllerName != null
+                && string.Equals(NormalizeControllerName(c.Name), controllerName, StringComparison.OrdinalIgnoreCase))
+            ?? controllers?.FirstOrDefault(c => c.ControllerType == controllerType);
     }
+
+    public static string? ResolveControllerName(
+        MaaInterface? maaInterface, MaaControllerTypes controllerType, string? controllerName) =>
+        ResolveControllerDefinition(maaInterface?.Controller, controllerType, controllerName)?.Name;
+
+    internal static string? NormalizeControllerName(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? null : name.Trim();
 
     public static bool IsOptionApplicable(
         MaaInterface? maaInterface,

@@ -7,6 +7,7 @@ using MFAAvalonia.Configuration;
 using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.Converters;
 using MFAAvalonia.ViewModels.Pages;
+using MFAAvalonia.ViewModels.UsersControls.Settings;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -493,6 +494,10 @@ public sealed class MaaProcessorManager
 
             if (defaultConfig != null)
             {
+                defaultConfig.IsLoadedSuccessfully &= ConfigurationManager.Current.IsLoadedSuccessfully;
+                if (activeData.Keys.Any(BackgroundDefaults.IsBackgroundKey)
+                    && !activeData.ContainsKey(BackgroundDefaults.MigrationKey))
+                    defaultConfig.Config.Remove(BackgroundDefaults.MigrationKey);
                 foreach (var kvp in activeData)
                 {
                     defaultConfig.Config[kvp.Key] = kvp.Value;
@@ -822,6 +827,11 @@ public sealed class MaaProcessorManager
     {
         // 先迁移旧的 mfa_*.json 配置文件
         MigrateLegacyConfigs();
+        // The active legacy profile can reintroduce global background keys.
+        // Migrate only after that merge, before resolving the main window.
+        if (ConfigurationManager.MigrateBackgroundDefaults()
+            && MFAAvalonia.Helper.Instances.IsResolved<GuiSettingsUserControlModel>())
+            MFAAvalonia.Helper.Instances.GuiSettingsUserControlModel.ApplyBackgroundSettings();
 
         // 先扫描 instances 目录，获取实际存在的实例文件（这是真实情况）
         var scannedIds = ScanAllInstanceFiles();
@@ -1198,6 +1208,10 @@ public sealed class MaaProcessorManager
             : ConfigurationManager.GetPresetSettings(preset?.Name, preset?.Label, preset?.DisplayName);
         foreach (var value in presetSettings)
             settings[value.Key] = value.Value;
+
+        foreach (var key in settings.Keys.Where(key => BackgroundDefaults.IsBackgroundKey(key)
+                     || BackgroundDefaults.IsMetadataKey(key)).ToArray())
+            settings.Remove(key);
 
         if (settings.Count == 0)
         {
